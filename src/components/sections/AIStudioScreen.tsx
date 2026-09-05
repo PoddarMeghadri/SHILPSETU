@@ -14,6 +14,54 @@ interface AIStudioScreenProps {
   isDark?: boolean;
 }
 
+type DeviceCategory = 'mobile' | 'tablet' | 'pc';
+type AspectRatioOption = '1:1' | '4:3' | '16:9' | '9:16';
+
+const getDeviceCategory = (): DeviceCategory => {
+  if (typeof window === 'undefined') return 'pc';
+  const width = window.innerWidth;
+  if (width < 768) return 'mobile';
+  if (width < 1024) return 'tablet';
+  return 'pc';
+};
+
+const getViewfinderClass = (ratio: AspectRatioOption, device: DeviceCategory): string => {
+  if (device === 'mobile') {
+    switch (ratio) {
+      case '1:1':
+        return 'aspect-square max-w-[340px]';
+      case '4:3':
+        return 'aspect-[4/3] max-w-[360px]';
+      case '9:16':
+      default:
+        return 'aspect-[9/16] max-w-[280px]';
+    }
+  }
+
+  if (device === 'tablet') {
+    switch (ratio) {
+      case '1:1':
+        return 'aspect-square max-w-[420px]';
+      case '4:3':
+        return 'aspect-[4/3] max-w-[540px]';
+      case '16:9':
+      default:
+        return 'aspect-video max-w-[680px]';
+    }
+  }
+
+  // PC / Desktop (>= 1024px)
+  switch (ratio) {
+    case '1:1':
+      return 'aspect-square max-w-[420px]';
+    case '4:3':
+      return 'aspect-[4/3] max-w-[560px]';
+    case '16:9':
+    default:
+      return 'aspect-video max-w-[700px]';
+  }
+};
+
 export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   products,
   onNavigate,
@@ -22,12 +70,13 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   isDark = false,
 }) => {
   const { t } = useTranslation();
+  const [deviceCategory, setDeviceCategory] = useState<DeviceCategory>(getDeviceCategory);
   const [activeTab, setActiveTab] = useState<'camera' | 'gallery'>('camera');
   const [selectedProduct, setSelectedProduct] = useState<ProductItem>(products[0] || {} as ProductItem);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [showGrid, setShowGrid] = useState<boolean>(true);
   const [activeLighting, setActiveLighting] = useState<string>('soft_cinematic');
-  const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:3' | '16:9'>('1:1');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatioOption>('1:1');
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
   const [studioProducts, setStudioProducts] = useState<ProductItem[]>(products);
   const [viewfinderImage, setViewfinderImage] = useState<string>(
@@ -36,12 +85,51 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lightingScrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll lighting presets back to beginning (showing Soft Cinematic first) when ratio changes
+  // Responsive device listener for viewport resize and orientation changes
   useEffect(() => {
-    if (lightingScrollRef.current) {
-      lightingScrollRef.current.scrollLeft = 0;
-    }
+    const handleResize = () => {
+      const cat = getDeviceCategory();
+      setDeviceCategory((prev) => {
+        if (prev !== cat) {
+          if (cat === 'mobile' && aspectRatio === '16:9') {
+            setAspectRatio('9:16');
+          } else if (cat !== 'mobile' && aspectRatio === '9:16') {
+            setAspectRatio('16:9');
+          }
+          return cat;
+        }
+        return prev;
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [aspectRatio]);
+
+  // Ensure aspect ratio is appropriate for current device category
+  useEffect(() => {
+    if (deviceCategory === 'mobile' && aspectRatio === '16:9') {
+      setAspectRatio('9:16');
+    } else if (deviceCategory !== 'mobile' && aspectRatio === '9:16') {
+      setAspectRatio('16:9');
+    }
+  }, [deviceCategory, aspectRatio]);
+
+  // Auto-scroll lighting presets back to beginning (guaranteeing Soft Cinematic is always in full view)
+  useEffect(() => {
+    const scrollToStart = () => {
+      if (lightingScrollRef.current) {
+        lightingScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+      }
+    };
+    scrollToStart();
+    const timer = setTimeout(scrollToStart, 60);
+    return () => clearTimeout(timer);
+  }, [aspectRatio, deviceCategory]);
+
+  const availableRatios = deviceCategory === 'mobile'
+    ? (['1:1', '4:3', '9:16'] as const)
+    : (['1:1', '4:3', '16:9'] as const);
 
   useEffect(() => {
     setStudioProducts(products);
@@ -180,13 +268,10 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
       {activeTab === 'camera' && !isProcessing && (
         <div className="w-full flex flex-col items-center space-y-4">
           <div
-            className={`relative w-full ${
-              aspectRatio === '1:1'
-                ? 'aspect-square max-w-[360px] sm:max-w-[400px]'
-                : aspectRatio === '4:3'
-                ? 'aspect-[4/3] max-w-[460px] sm:max-w-[520px]'
-                : 'aspect-video max-w-[580px] sm:max-w-[640px]'
-            } bg-[#1A1815] rounded-3xl overflow-hidden border-2 border-[#D9A441]/40 shadow-2xl flex flex-col justify-between p-3.5 sm:p-4 transition-all duration-300 ease-out min-h-[350px] sm:min-h-[380px]`}
+            className={`relative w-full ${getViewfinderClass(
+              aspectRatio,
+              deviceCategory
+            )} bg-[#1A1815] rounded-3xl overflow-hidden border-2 border-[#D9A441]/40 shadow-2xl flex flex-col justify-between p-3.5 sm:p-4 transition-all duration-300 ease-out`}
           >
             <img
               src={viewfinderImage}
@@ -201,9 +286,10 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
             {/* Top Camera Controls */}
             <div className="relative z-10 flex items-center justify-between">
               <div className="flex bg-black/60 backdrop-blur-md rounded-full p-1 border border-white/20">
-                {(['1:1', '4:3', '16:9'] as const).map((ratio) => (
+                {availableRatios.map((ratio) => (
                   <button
                     key={ratio}
+                    id={`btn-aspect-${ratio.replace(':', '-')}`}
                     onClick={() => {
                       sound.playTap();
                       setAspectRatio(ratio);
@@ -252,8 +338,8 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
               </div>
             </div>
 
-            {/* Center Focus Box Indicator */}
-            <div className="relative z-10 mx-auto my-auto w-20 h-20 sm:w-24 sm:h-24 border-2 border-dashed border-[#E8B84B] rounded-2xl flex flex-col items-center justify-center pointer-events-none animate-pulse">
+            {/* Center Focus Box Indicator - positioned absolutely so it never consumes vertical flex space or squashes controls */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-20 h-20 sm:w-24 sm:h-24 border-2 border-dashed border-[#E8B84B] rounded-2xl flex flex-col items-center justify-center pointer-events-none animate-pulse">
               <span className="text-[9px] uppercase tracking-widest text-[#E8B84B] font-bold bg-black/70 px-2 py-0.5 rounded">
                 {t('focus_locked', 'Sharp Focus Locked')}
               </span>
@@ -262,35 +348,40 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
               </span>
             </div>
 
-            {/* Bottom Lighting Presets Bar (Always starts at left so Soft Cinematic is in full view across 1:1, 4:3 and 16:9) */}
-            <div
-              ref={lightingScrollRef}
-              className="relative z-10 w-full overflow-x-auto no-scrollbar py-2 px-1 scroll-smooth"
-            >
-              <div className="flex items-center gap-2 px-2 min-w-max justify-start">
-                {[
-                  { id: 'soft_cinematic', label: t('lighting_soft_cinematic', 'Soft Cinematic'), icon: 'wb_incandescent' },
-                  { id: 'clean_neutral', label: t('lighting_direct_sunlight', 'Clean Neutral'), icon: 'wb_sunny' },
-                  { id: 'texture_macro', label: t('lighting_heritage_museum', 'High Detail Macro'), icon: 'texture' },
-                  { id: 'photorealistic', label: t('lighting_boutique_gallery', 'Editorial Polish'), icon: 'auto_awesome' },
-                ].map((light) => (
-                  <button
-                    key={light.id}
-                    id={`btn-lighting-${light.id}`}
-                    onClick={() => {
-                      sound.playTap();
-                      setActiveLighting(light.id);
-                    }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-sans font-medium backdrop-blur-md transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                      activeLighting === light.id
-                        ? 'bg-[#B5451B] text-white border-2 border-[#E8B84B] shadow-md scale-102'
-                        : 'bg-black/75 text-white/95 border border-white/30 hover:bg-black/90'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-sm">{light.icon}</span>
-                    <span className="whitespace-nowrap">{light.label}</span>
-                  </button>
-                ))}
+            {/* Bottom Lighting Presets Bar (Always full clearance, never cut off across 1:1, 4:3, 16:9, and 9:16) */}
+            <div className="relative z-10 w-full pt-1 sm:pt-2">
+              <div
+                ref={lightingScrollRef}
+                className="w-full overflow-x-auto no-scrollbar py-1 scroll-smooth"
+              >
+                <div className="flex items-center gap-2 px-1 sm:px-2 min-w-max justify-start">
+                  {[
+                    { id: 'soft_cinematic', label: t('lighting_soft_cinematic', 'Soft Cinematic'), icon: 'wb_incandescent' },
+                    { id: 'clean_neutral', label: t('lighting_direct_sunlight', 'Clean Neutral'), icon: 'wb_sunny' },
+                    { id: 'texture_macro', label: t('lighting_heritage_museum', 'High Detail Macro'), icon: 'texture' },
+                    { id: 'photorealistic', label: t('lighting_boutique_gallery', 'Editorial Polish'), icon: 'auto_awesome' },
+                  ].map((light) => (
+                    <button
+                      key={light.id}
+                      id={`btn-lighting-${light.id}`}
+                      onClick={() => {
+                        sound.playTap();
+                        setActiveLighting(light.id);
+                        if (light.id === 'soft_cinematic' && lightingScrollRef.current) {
+                          lightingScrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+                        }
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-sans font-medium backdrop-blur-md transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                        activeLighting === light.id
+                          ? 'bg-[#B5451B] text-white border-2 border-[#E8B84B] shadow-md'
+                          : 'bg-black/75 text-white/95 border border-white/30 hover:bg-black/90'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">{light.icon}</span>
+                      <span className="whitespace-nowrap">{light.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
