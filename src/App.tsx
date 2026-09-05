@@ -405,7 +405,7 @@ export function App() {
           }}
         />
 
-        {/* Floating "Tap to Speak" Action Button for SHILPI AI */}
+        {/* Floating "Tap to Interact" Action Button for SHILPI AI */}
         <ShilpiVoiceFAB
           onClick={() => setIsVoiceModalOpen(true)}
           isDark={isDark}

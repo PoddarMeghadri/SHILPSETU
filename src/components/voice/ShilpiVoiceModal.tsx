@@ -869,7 +869,7 @@ export const ShilpiVoiceModal: React.FC<ShilpiVoiceModalProps> = ({
                         ? 'bg-[#B5451B] text-white scale-105 ring-4 ring-[#E8B84B]/40'
                         : 'bg-[#22331E] text-[#E8B84B] hover:scale-105 active:scale-95'
                     }`}
-                    title={isListening ? t('tap_to_execute', 'Tap to finish & execute') : t('tap_to_speak', 'Tap to speak')}
+                    title={isListening ? t('tap_to_execute', 'Tap to finish & execute') : t('tap_to_speak', 'Tap to interact')}
                     id="btn-voice-mic-main"
                   >
                     <span className="material-symbols-outlined text-5xl">
@@ -910,7 +910,7 @@ export const ShilpiVoiceModal: React.FC<ShilpiVoiceModalProps> = ({
                     <p className="text-sm opacity-75 font-sans">
                       {isListening
                         ? t('listening', 'Listening to your voice...')
-                        : t('speak_hint', 'Tap the mic to speak in any of 22 Indian languages')}
+                        : t('speak_hint', 'Tap the mic to interact in any of 22 Indian languages')}
                     </p>
                   )}
 

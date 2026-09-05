@@ -293,7 +293,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     SHILPI AI
                   </p>
                   <p className="text-[10px] text-white/80 truncate mt-0.5">
-                    {t('tap_to_speak', 'Tap to Speak with Shilpi AI')}
+                    {t('tap_to_speak', 'Tap to Interact with Shilpi AI')}
                   </p>
                 </div>
               </button>
