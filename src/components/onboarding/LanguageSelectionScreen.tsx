@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { LanguageCode } from '../../types';
 import { ONBOARDING_LANGUAGES, OnboardingLanguage, getOnboardingLanguage } from '../../data/languages';
 import { ttsService } from '../../services/ttsService';
@@ -41,6 +41,18 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
     };
   }, []);
 
+  // Pre-fetch greeting audio for selected language and key Indic languages for instantaneous playback
+  useEffect(() => {
+    ttsService.preload(activeMeta.code, activeMeta.welcomeGreeting);
+    const popularCodes = ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'gu', 'ur', 'pa', 'kn', 'ml', 'or'];
+    popularCodes.forEach((c) => {
+      const meta = getOnboardingLanguage(c);
+      if (meta) {
+        ttsService.preload(meta.code, meta.welcomeGreeting);
+      }
+    });
+  }, [activeMeta]);
+
   // Filter languages while maintaining the strict sequential order
   const filteredLanguages = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -56,7 +68,7 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
     );
   }, [searchQuery]);
 
-  // Handle vocalizing the greeting using Web Speech API
+  // Handle vocalizing the greeting across all 23 official Indian languages
   const handlePlayGreeting = (langMeta: OnboardingLanguage = activeMeta) => {
     sound.playTap();
     setAudioError(null);
@@ -93,14 +105,15 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
     }
     audioTimeoutRef.current = window.setTimeout(() => {
       setIsPlayingAudio(false);
-    }, 6000);
+    }, 7000);
   };
 
-  // Card click handler: updates selection and triggers real-time preview
+  // Card click handler: updates selection and immediately triggers spoken greeting
   const handleCardClick = (lang: OnboardingLanguage) => {
     sound.playTap();
     setSelectedLang(lang.code);
     setAudioError(null);
+    handlePlayGreeting(lang);
   };
 
   // Continue CTA handler: commits selection and advances
@@ -172,6 +185,40 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
           >
             {activeMeta.headerSubtitle}
           </p>
+
+          {/* Dedicated Spoken Audio Greeting Pill Button */}
+          <div className="mt-3.5 flex flex-col items-center justify-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handlePlayGreeting(activeMeta)}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-serif font-bold transition-all cursor-pointer shadow-xs ${
+                isPlayingAudio
+                  ? 'bg-[#B5451B] text-white ring-2 ring-[#B5451B]/40 scale-102 shadow-md'
+                  : 'bg-[#B5451B]/10 hover:bg-[#B5451B]/20 text-[#B5451B] dark:bg-[#B5451B]/25 dark:text-[#FFA680]'
+              }`}
+              title={activeMeta.audioButtonLabel}
+              aria-label={activeMeta.audioButtonLabel}
+            >
+              <span className="material-symbols-outlined text-base">
+                {isPlayingAudio ? 'graphic_eq' : 'volume_up'}
+              </span>
+              <span>
+                {isPlayingAudio ? activeMeta.welcomeGreeting : activeMeta.audioButtonLabel}
+              </span>
+              {isPlayingAudio && (
+                <span className="flex items-center gap-0.5 ml-1">
+                  <span className="w-1 h-3 bg-white rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1 h-4 bg-white rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1 h-2.5 bg-white rounded-full animate-bounce" />
+                </span>
+              )}
+            </button>
+            {audioError && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 font-sans">
+                {audioError}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Search / Filter bar for convenient lookup */}
@@ -198,11 +245,12 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
 
         {/* 23 Languages Sequential Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-8">
-          {filteredLanguages.map((lang, index) => {
+          {filteredLanguages.map((lang) => {
             const isSelected = selectedLang === lang.code;
             // Original 1-based index in the exact 23 sequence
             const sequentialNumber =
               ONBOARDING_LANGUAGES.findIndex((l) => l.code === lang.code) + 1;
+            const isThisCardPlaying = isSelected && isPlayingAudio;
 
             return (
               <button
@@ -229,7 +277,7 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     {/* Speaker trigger button */}
                     <span
                       role="button"
@@ -237,13 +285,18 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
                       onClick={(e) => {
                         e.stopPropagation();
                         handleCardClick(lang);
-                        handlePlayGreeting(lang);
                       }}
-                      className="w-7 h-7 rounded-full hover:bg-[#B5451B]/15 hover:text-[#B5451B] flex items-center justify-center text-black/50 dark:text-white/50 transition-colors"
+                      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                        isThisCardPlaying
+                          ? 'bg-[#B5451B] text-white scale-110 shadow-xs'
+                          : 'hover:bg-[#B5451B]/15 hover:text-[#B5451B] text-black/50 dark:text-white/50'
+                      }`}
                       title={`Listen in ${lang.englishName}`}
                       aria-label={`Listen in ${lang.englishName}`}
                     >
-                      <span className="material-symbols-outlined text-sm">volume_up</span>
+                      <span className="material-symbols-outlined text-sm">
+                        {isThisCardPlaying ? 'graphic_eq' : 'volume_up'}
+                      </span>
                     </span>
 
                     {/* Selected Checkmark Badge */}

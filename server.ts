@@ -105,6 +105,9 @@ Guidelines:
   }
 });
 
+// In-memory cache for synthesized language audio to guarantee instant playback
+const ttsAudioCache = new Map<string, Buffer>();
+
 // API route for High-Fidelity Multilingual TTS (All 23 Indian Languages)
 app.get('/api/tts', async (req, res) => {
   try {
@@ -115,53 +118,76 @@ app.get('/api/tts', async (req, res) => {
       return res.status(400).json({ error: 'Text query parameter is required' });
     }
 
-    // Phonetic and dialect acoustic map for all 23 official Indian languages
-    const ttsLanguageMap: Record<string, { tl: string; phoneticText?: string }> = {
-      en: { tl: 'en' },
-      hi: { tl: 'hi' },
-      as: { tl: 'bn' }, // Assamese (Eastern Indo-Aryan) acoustic alignment
-      bn: { tl: 'bn' },
-      brx: { tl: 'hi' }, // Bodo (Devanagari script)
-      doi: { tl: 'hi' }, // Dogri (Devanagari script)
-      gu: { tl: 'gu' },
-      kn: { tl: 'kn' },
-      ks: { tl: 'ur' }, // Kashmiri (Perso-Arabic Nastaliq script)
-      kok: { tl: 'hi' }, // Konkani (Devanagari script)
-      mai: { tl: 'hi' }, // Maithili (Devanagari script)
-      ml: { tl: 'ml' },
-      mni: { tl: 'bn' }, // Manipuri (Eastern Indo-Aryan Bengali script)
-      mr: { tl: 'mr' },
-      ne: { tl: 'ne' },
-      or: { tl: 'hi', phoneticText: 'शिल्पसेतुरे आपणङ्कु स्वागत' }, // Odia phonetics
-      pa: { tl: 'pa' },
-      sa: { tl: 'hi' }, // Sanskrit (Devanagari script)
-      sat: { tl: 'hi', phoneticText: 'शिल्पसेतु रे जोहार' }, // Santali phonetics
-      sd: { tl: 'ur' }, // Sindhi (Perso-Arabic script)
-      ta: { tl: 'ta' },
-      te: { tl: 'te' },
-      ur: { tl: 'ur' }, // Indian Urdu
-    };
+    const cacheKey = `${lang}:${text}`;
+    let buffer = ttsAudioCache.get(cacheKey);
 
-    const config = ttsLanguageMap[lang] || { tl: 'hi' };
-    const queryText = config.phoneticText || text;
-    const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${config.tl}&client=tw-ob&q=${encodeURIComponent(queryText)}`;
+    if (!buffer) {
+      // Phonetic and dialect acoustic map for all 23 official Indian languages
+      const ttsLanguageMap: Record<string, { tl: string; phoneticText?: string }> = {
+        en: { tl: 'en' },
+        hi: { tl: 'hi' },
+        as: { tl: 'bn' }, // Assamese (Eastern Indo-Aryan) acoustic alignment
+        bn: { tl: 'bn' },
+        brx: { tl: 'hi' }, // Bodo (Devanagari script)
+        doi: { tl: 'hi' }, // Dogri (Devanagari script)
+        gu: { tl: 'gu' },
+        kn: { tl: 'kn' },
+        ks: { tl: 'ur' }, // Kashmiri (Perso-Arabic Nastaliq script)
+        kok: { tl: 'hi' }, // Konkani (Devanagari script)
+        mai: { tl: 'hi' }, // Maithili (Devanagari script)
+        ml: { tl: 'ml' },
+        mni: { tl: 'bn' }, // Manipuri (Eastern Indo-Aryan Bengali script)
+        mr: { tl: 'mr' },
+        ne: { tl: 'ne' },
+        or: { tl: 'hi', phoneticText: 'शिल्पसेतुरे आपणङ्कु स्वागत' }, // Odia phonetics
+        pa: { tl: 'pa' },
+        sa: { tl: 'hi' }, // Sanskrit (Devanagari script)
+        sat: { tl: 'hi', phoneticText: 'शिल्पसेतु रे जोहार' }, // Santali phonetics
+        sd: { tl: 'ur' }, // Sindhi (Perso-Arabic script)
+        ta: { tl: 'ta' },
+        te: { tl: 'te' },
+        ur: { tl: 'ur' }, // Indian Urdu
+      };
 
-    const response = await fetch(googleTtsUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
+      const config = ttsLanguageMap[lang] || { tl: 'hi' };
+      const queryText = config.phoneticText || text;
+      const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${config.tl}&client=tw-ob&q=${encodeURIComponent(queryText)}`;
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'TTS upstream error' });
+      const response = await fetch(googleTtsUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: 'TTS upstream error' });
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      ttsAudioCache.set(cacheKey, buffer);
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
+    // Response headers for reliable streaming and CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.send(buffer);
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    const range = req.headers.range;
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : buffer.length - 1;
+      const chunksize = end - start + 1;
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${buffer.length}`);
+      res.setHeader('Content-Length', chunksize);
+      return res.end(buffer.slice(start, end + 1));
+    }
+
+    res.setHeader('Content-Length', buffer.length);
+    return res.end(buffer);
   } catch (err: any) {
     console.error('TTS proxy error:', err);
     return res.status(500).json({ error: 'Failed to generate speech audio' });
