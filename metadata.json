@@ -1,0 +1,11 @@
+{
+  "name": "SHILPSETU — Bridge of Craft",
+  "description": "AI-powered mobile app for Indian artisans to photograph, auto-catalog in native languages, dynamically price, sell via GeM and B2B buyers, and share heritage craft stories.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,363 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-serif: "Literata", "Playfair Display", Georgia, serif;
+    --font-sans: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-display: "Literata", "Rozha One", serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #F4ECDE;
+    color: #1A1815;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1, h2, h3, .font-serif-heading {
+    font-family: var(--font-serif);
+  }
+}
+
+/* Khadi Linen and Sand Texture Overlays */
+.khadi-bg {
+  background-color: #F4ECDE;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.035'/%3E%3C/svg%3E");
+}
+
+.charcoal-bg {
+  background-color: #1A1815;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+.forest-card {
+  background-color: #22331E;
+  color: #F4ECDE;
+}
+
+.terracotta-card {
+  background-color: #B5451B;
+  color: #FFFFFF;
+}
+
+.sandstone-card {
+  background-color: #EFE4CF;
+  border: 1px solid rgba(34, 51, 30, 0.1);
+  box-shadow: 0 4px 20px rgba(34, 51, 30, 0.04);
+}
+
+.shadow-artisan {
+  box-shadow: 0px 8px 30px rgba(34, 51, 30, 0.08);
+}
+
+.shadow-gold-glow {
+  box-shadow: 0 8px 32px rgba(232, 184, 75, 0.35);
+}
+
+/* Wax Seal Badge */
+.wax-seal {
+  background: linear-gradient(135deg, #D45B2E, #B5451B);
+  clip-path: polygon(50% 0%, 61% 11%, 76% 9%, 83% 23%, 98% 30%, 94% 45%, 100% 59%, 87% 68%, 85% 83%, 70% 86%, 60% 98%, 45% 94%, 32% 100%, 21% 88%, 7% 86%, 10% 70%, 0% 58%, 7% 43%, 2% 29%, 17% 20%, 23% 7%, 38% 12%);
+  position: relative;
+}
+.wax-seal::after {
+  content: '';
+  position: absolute;
+  top: 4px; left: 4px; right: 4px; bottom: 4px;
+  border: 1px dashed rgba(255,255,255,0.4);
+  border-radius: 50%;
+}
+
+/* Shimmer Skeleton Loader: Ivory to Gold */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.shimmer-gold {
+  position: relative;
+  overflow: hidden;
+  background: #EFE4CF;
+}
+.shimmer-gold::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(232, 184, 75, 0.25) 50%, transparent 100%);
+  animation: shimmer-sweep 1.8s infinite;
+}
+
+/* Potter's Wheel Spinner */
+@keyframes spin-potter {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.animate-spin-potter {
+  animation: spin-potter 3s linear infinite;
+}
+
+/* Woven Grid Overlay for Camera Viewfinder */
+.woven-viewfinder {
+  background-image: 
+    linear-gradient(to right, rgba(217, 164, 65, 0.3) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(217, 164, 65, 0.3) 1px, transparent 1px);
+  background-size: 33.333% 33.333%;
+  border: 1px solid rgba(217, 164, 65, 0.6);
+}
+
+/* Notebook lines for transcript */
+.notebook-ruled {
+  background-image: repeating-linear-gradient(transparent, transparent 31px, rgba(137, 114, 107, 0.2) 31px, rgba(137, 114, 107, 0.2) 32px);
+  line-height: 32px;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ==========================================================================
+   Material Symbols Icons (Bulletproof Protection against i18n font hijacking)
+   ========================================================================== */
+.material-symbols-outlined,
+.material-symbols-rounded,
+.material-symbols-sharp,
+[class*="material-symbols"],
+span.material-symbols-outlined,
+button span.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined' !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  font-size: 24px;
+  line-height: 1 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  display: inline-block;
+  white-space: nowrap !important;
+  word-wrap: normal !important;
+  direction: ltr !important;
+  -webkit-font-feature-settings: 'liga' 1 !important;
+  font-feature-settings: 'liga' 1 !important;
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+.material-symbols-outlined.fill-1 {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24 !important;
+}
+
+/* Waveform bars */
+@keyframes wave-bounce {
+  0%, 100% { height: 6px; }
+  50% { height: 32px; }
+}
+
+.wave-bar {
+  animation: wave-bounce 1.2s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Full-Stack Indic Localization Typography & Anti-Clipping Rules
+   Supports all 22 official scheduled Indian languages + English
+   Applied to document root and text containers without hijacking icon fonts
+   ========================================================================== */
+
+/* Devanagari Script (Hindi, Marathi, Sanskrit, Konkani, Maithili, Dogri, Nepali, Bodo) */
+html[data-script="Devanagari"], body[data-script="Devanagari"],
+html[lang="hi"], html[lang="mr"], html[lang="sa"], html[lang="kok"], html[lang="mai"], html[lang="doi"], html[lang="ne"], html[lang="brx"] {
+  --font-sans: "Noto Sans Devanagari", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Sans Devanagari", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea):is([lang="hi"], [lang="mr"], [lang="sa"], [lang="kok"], [lang="mai"], [lang="doi"], [lang="ne"], [lang="brx"]),
+html[data-script="Devanagari"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Sans Devanagari", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  line-height: 1.62;
+}
+
+/* Bengali Script (Bengali, Assamese, Manipuri) */
+html[data-script="Bengali"], body[data-script="Bengali"],
+html[lang="bn"], html[lang="as"], html[lang="mni"] {
+  --font-sans: "Noto Sans Bengali", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Sans Bengali", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea):is([lang="bn"], [lang="as"], [lang="mni"]),
+html[data-script="Bengali"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Sans Bengali", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  line-height: 1.64;
+}
+
+/* Tamil Script */
+html[data-script="Tamil"], body[data-script="Tamil"], html[lang="ta"] {
+  --font-sans: "Noto Sans Tamil", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Sans Tamil", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea)[lang="ta"],
+html[data-script="Tamil"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Sans Tamil", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  line-height: 1.68;
+}
+
+/* Telugu Script */
+html[data-script="Telugu"], body[data-script="Telugu"], html[lang="te"] {
+  --font-sans: "Noto Sans Telugu", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Sans Telugu", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea)[lang="te"],
+html[data-script="Telugu"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Sans Telugu", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  line-height: 1.68;
+}
+
+/* Kannada Script */
+html[data-script="Kannada"], body[data-script="Kannada"], html[lang="kn"] {
+  --font-sans: "Noto Sans Kannada", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Sans Kannada", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea)[lang="kn"],
+html[data-script="Kannada"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Sans Kannada", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  line-height: 1.68;
+}
+
+/* Malayalam Script */
+html[data-script="Malayalam"], body[data-script="Malayalam"], html[lang="ml"] {
+  --font-sans: "Noto Sans Malayalam", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Sans Malayalam", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea)[lang="ml"],
+html[data-script="Malayalam"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Sans Malayalam", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  line-height: 1.72;
+}
+
+/* Gujarati Script */
+html[data-script="Gujarati"], body[data-script="Gujarati"], html[lang="gu"] {
+  --font-sans: "Noto Sans Gujarati", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Sans Gujarati", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea)[lang="gu"],
+html[data-script="Gujarati"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Sans Gujarati", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  line-height: 1.62;
+}
+
+/* Gurmukhi Script (Punjabi) */
+html[data-script="Gurmukhi"], body[data-script="Gurmukhi"], html[lang="pa"] {
+  --font-sans: "Noto Sans Gurmukhi", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Sans Gurmukhi", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea)[lang="pa"],
+html[data-script="Gurmukhi"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Sans Gurmukhi", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  line-height: 1.64;
+}
+
+/* Oriya Script (Odia) */
+html[data-script="Oriya"], body[data-script="Oriya"], html[lang="or"] {
+  --font-sans: "Noto Sans Oriya", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-serif: "Noto Sans Oriya", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea)[lang="or"],
+html[data-script="Oriya"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Sans Oriya", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  line-height: 1.68;
+}
+
+/* Perso-Arabic Script (Urdu, Kashmiri, Sindhi) */
+html[data-script="Perso-Arabic"], body[data-script="Perso-Arabic"],
+html[lang="ur"], html[lang="ks"], html[lang="sd"] {
+  --font-sans: "Noto Nastaliq Urdu", "Noto Sans Arabic", "Be Vietnam Pro", system-ui, sans-serif;
+  --font-serif: "Noto Nastaliq Urdu", "Literata", serif;
+  font-family: var(--font-sans);
+}
+:is(p, h1, h2, h3, h4, h5, h6, label, input, textarea):is([lang="ur"], [lang="ks"], [lang="sd"]),
+html[data-script="Perso-Arabic"] :is(p, h1, h2, h3, h4, h5, h6, label, input, textarea) {
+  font-family: "Noto Nastaliq Urdu", "Noto Sans Arabic", "Be Vietnam Pro", system-ui, sans-serif;
+  line-height: 1.85;
+}
+
+/* Prevent Matra & Subglyph Text Clipping across Indic Scripts */
+span:not(.material-symbols-outlined), p, h1, h2, h3, h4, h5, h6, button:not(.material-symbols-outlined), label, input, textarea {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ensure badges and small chips do not clip top/bottom accents */
+.badge-text, .chip-text, button > span:not(.material-symbols-outlined) {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+/* ==========================================================================
+   RTL (Right-to-Left) Layout Engine for Urdu, Sindhi, and Kashmiri
+   ========================================================================== */
+
+[dir="rtl"] {
+  text-align: right;
+  direction: rtl;
+}
+
+[dir="rtl"] body {
+  text-align: right;
+}
+
+/* Directional Icon Flips */
+[dir="rtl"] .rtl-flip,
+[dir="rtl"] .material-symbols-outlined.icon-directional,
+[dir="rtl"] span[data-icon="arrow_back"],
+[dir="rtl"] span[data-icon="arrow_forward"],
+[dir="rtl"] span[data-icon="chevron_right"],
+[dir="rtl"] span[data-icon="chevron_left"],
+[dir="rtl"] span[data-icon="navigate_next"],
+[dir="rtl"] span[data-icon="navigate_before"] {
+  transform: scaleX(-1);
+  display: inline-block;
+}
+
+/* Auto margin & positioning flip helpers */
+[dir="rtl"] .text-left {
+  text-align: right;
+}
+
+[dir="rtl"] .text-right {
+  text-align: left;
+}
+
+/* ==========================================================================
+   Ultimate Guard: Guarantee Material Symbols font priority regardless of nesting or language
+   ========================================================================== */
+.material-symbols-outlined,
+.material-symbols-rounded,
+.material-symbols-sharp,
+[class*="material-symbols"],
+span.material-symbols-outlined,
+button span.material-symbols-outlined,
+a span.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined' !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  line-height: 1 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+  word-wrap: normal !important;
+  direction: ltr !important;
+  -webkit-font-feature-settings: 'liga' 1 !important;
+  font-feature-settings: 'liga' 1 !important;
+}
+
+

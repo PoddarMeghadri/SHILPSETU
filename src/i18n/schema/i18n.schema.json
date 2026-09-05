@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ShilpSetu I18n Translation Schema",
+  "description": "Standardized schema for UI and craft domain translation keys across English and 22 scheduled Indian languages",
+  "type": "object",
+  "required": [
+    "meta",
+    "common",
+    "nav",
+    "studio",
+    "cataloger",
+    "pricing",
+    "b2b",
+    "dashboard",
+    "profile",
+    "craft_terms"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["languageCode", "languageName", "nativeName", "script", "direction"],
+      "properties": {
+        "languageCode": {
+          "type": "string",
+          "enum": [
+            "en", "as", "bn", "brx", "doi", "gu", "hi", "kn", "ks", "kok",
+            "mai", "ml", "mni", "mr", "ne", "or", "pa", "sa", "sat", "sd",
+            "ta", "te", "ur"
+          ]
+        },
+        "languageName": { "type": "string" },
+        "nativeName": { "type": "string" },
+        "script": {
+          "type": "string",
+          "enum": [
+            "Devanagari", "Bengali", "Tamil", "Telugu", "Kannada", "Malayalam",
+            "Gujarati", "Gurmukhi", "Oriya", "Perso-Arabic", "Ol-Chiki", "Latin"
+          ]
+        },
+        "direction": { "type": "string", "enum": ["ltr", "rtl"] }
+      }
+    },
+    "common": {
+      "type": "object",
+      "description": "General buttons, actions, alerts, modals, and status tags",
+      "patternProperties": {
+        "^[a-z0-9_]+$": { "type": "string" }
+      }
+    },
+    "nav": {
+      "type": "object",
+      "description": "Header, bottom tab bar, breadcrumbs, and screen titles",
+      "patternProperties": {
+        "^[a-z0-9_]+$": { "type": "string" }
+      }
+    },
+    "studio": {
+      "type": "object",
+      "description": "Camera viewfinder, lighting presets, aspect ratios, and 4K rendering tools",
+      "patternProperties": {
+        "^[a-z0-9_]+$": { "type": "string" }
+      }
+    },
+    "cataloger": {
+      "type": "object",
+      "description": "Speech recognition, voice recording prompts, SEO auto-generation, and catalog inputs",
+      "patternProperties": {
+        "^[a-z0-9_]+$": { "type": "string" }
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "description": "Fair pricing calculator, artisan margin slider, cost breakdowns, and market comparisons",
+      "patternProperties": {
+        "^[a-z0-9_]+$": { "type": "string" }
+      }
+    },
+    "b2b": {
+      "type": "object",
+      "description": "Government e-Marketplace (GeM), institutional tenders, bulk procurement, and escrow",
+      "patternProperties": {
+        "^[a-z0-9_]+$": { "type": "string" }
+      }
+    },
+    "dashboard": {
+      "type": "object",
+      "description": "Business analytics, monthly craft revenue, order tracking, and stock counters",
+      "patternProperties": {
+        "^[a-z0-9_]+$": { "type": "string" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "description": "Artisan heritage profile, lineage, UDYAM registration, gender, and contact preferences",
+      "patternProperties": {
+        "^[a-z0-9_]+$": { "type": "string" }
+      }
+    },
+    "craft_terms": {
+      "type": "object",
+      "description": "Domain-specific terminology for materials, techniques, and artisan lineages",
+      "patternProperties": {
+        "^[a-z0-9_]+$": { "type": "string" }
+      }
+    }
+  }
+}
