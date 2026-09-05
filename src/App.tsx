@@ -78,6 +78,12 @@ export function App() {
     });
   };
 
+  const handleSetTheme = (theme: 'light' | 'dark') => {
+    const nextIsDark = theme === 'dark';
+    setIsDark(nextIsDark);
+    localStorage.setItem('shilpsetu_theme', theme);
+  };
+
   // Sync dark class on document root to decouple from OS preference
   useEffect(() => {
     if (isDark) {
@@ -201,6 +207,7 @@ export function App() {
           onComplete={handleOnboardingComplete}
           isDark={isDark}
           onToggleTheme={handleToggleTheme}
+          onSetTheme={handleSetTheme}
         />
       )}
 

@@ -23,12 +23,14 @@ interface OnboardingFlowProps {
   onComplete: (data: OnboardingUserData) => void;
   isDark?: boolean;
   onToggleTheme?: () => void;
+  onSetTheme?: (theme: 'light' | 'dark') => void;
 }
 
 export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   onComplete,
   isDark = false,
   onToggleTheme,
+  onSetTheme,
 }) => {
   const { language, setLanguage, t } = useLanguage();
 
@@ -181,10 +183,31 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     });
   };
 
+  const handleSelectTheme = (theme: 'light' | 'dark') => {
+    sound.playTap();
+    if (onSetTheme) {
+      onSetTheme(theme);
+    } else if (onToggleTheme) {
+      if ((theme === 'dark' && !isDark) || (theme === 'light' && isDark)) {
+        onToggleTheme();
+      }
+    }
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('shilpsetu_theme', theme);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#F4ECDE] dark:bg-[#121411] text-[#1A1815] dark:text-[#F4ECDE] overflow-y-auto flex flex-col justify-between selection:bg-[#B5451B]/20">
+    <div
+      className={`fixed inset-0 z-50 overflow-y-auto flex flex-col justify-between selection:bg-[#B5451B]/20 transition-colors duration-300 ${
+        isDark ? 'bg-[#121411] text-[#F4ECDE]' : 'bg-[#F4ECDE] text-[#1A1815]'
+      }`}
+    >
       <AnimatePresence mode="wait">
-        {/* STEP 0: SPLASH SCREEN (SHILPSETU LOGO AT CENTER AS IN PICTURE) */}
+        {/* STEP 0: SPLASH / LOGIN SCREEN (SHILPSETU LOGO AT CENTER AS IN PICTURE) */}
         {currentStep === 0 && (
           <motion.div
             key="splash-screen"
@@ -192,13 +215,32 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.5 }}
-            className="min-h-screen w-full flex flex-col items-center justify-between p-6 max-w-xl mx-auto"
+            className="min-h-screen w-full flex flex-col items-center justify-between p-6 max-w-xl mx-auto relative"
           >
-            {/* Top Empty Space */}
-            <div className="h-4" />
+            {/* Top Bar: Light / Dark Mode Toggle Button in Top Right (Like Home Screen Top Bar) */}
+            <div className="w-full flex items-center justify-end pt-2 sm:pt-4 px-2 z-20">
+              <button
+                id="btn-login-theme-toggle"
+                type="button"
+                onClick={() => {
+                  handleSelectTheme(isDark ? 'light' : 'dark');
+                }}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-xs border ${
+                  isDark
+                    ? 'text-[#E8B84B] bg-[#1C221A] hover:bg-[#2D3A2B] border-[#2D3A2B]'
+                    : 'text-[#22331E] bg-[#EFE4CF]/80 hover:bg-[#EAE0CC] border-[#22331E]/10'
+                }`}
+                title={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                aria-label={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  {isDark ? 'light_mode' : 'dark_mode'}
+                </span>
+              </button>
+            </div>
 
             {/* Center ShilpSetu Brand Card */}
-            <div className="flex flex-col items-center text-center my-auto py-8">
+            <div className="flex flex-col items-center text-center my-auto py-6">
               {/* ShilpSetu Logo Emblem */}
               <motion.div
                 initial={{ scale: 0.85, opacity: 0 }}
@@ -223,10 +265,18 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 <h1 className="font-serif font-black text-3xl md:text-4xl text-[#B5451B] tracking-wider uppercase">
                   SHILPSETU
                 </h1>
-                <p className="font-sans font-bold text-xs md:text-sm text-[#22331E] dark:text-[#E8B84B] tracking-[0.18em] uppercase max-w-xs leading-relaxed">
+                <p
+                  className={`font-sans font-bold text-xs md:text-sm tracking-[0.18em] uppercase max-w-xs leading-relaxed ${
+                    isDark ? 'text-[#E8B84B]' : 'text-[#22331E]'
+                  }`}
+                >
                   CONNECTING INDIA'S ARTISANS, PRESERVING HERITAGE
                 </p>
-                <p className="font-serif italic text-xs text-[#872E0E] dark:text-[#FFA680] mt-1">
+                <p
+                  className={`font-serif italic text-xs mt-1 ${
+                    isDark ? 'text-[#FFA680]' : 'text-[#872E0E]'
+                  }`}
+                >
                   "हर हाथ की अपनी पहचान • Har Haath Ki Kahani"
                 </p>
               </motion.div>
@@ -240,11 +290,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               className="w-full pb-6"
             >
               <button
+                id="btn-login-get-started"
                 onClick={() => {
                   sound.playTap();
                   setCurrentStep(1);
                 }}
-                className="w-full py-4 bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 group"
+                className="w-full py-4 bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 group cursor-pointer"
               >
                 <span>Get Started</span>
                 <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">
