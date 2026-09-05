@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { LanguageCode } from '../../types';
 import { ONBOARDING_LANGUAGES, OnboardingLanguage, getOnboardingLanguage } from '../../data/languages';
-import { ttsService } from '../../services/ttsService';
 import { sound } from '../../services/sound';
 import { ShilpSetuLogo } from '../common/ShilpSetuLogo';
 
@@ -20,38 +19,13 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
   isDark = false,
 }) => {
   const [selectedLang, setSelectedLang] = useState<LanguageCode>(initialLanguage);
-  const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
-  const [audioError, setAudioError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const audioTimeoutRef = useRef<number | null>(null);
 
   // Active language metadata for real-time dynamic preview
   const activeMeta: OnboardingLanguage = useMemo(
     () => getOnboardingLanguage(selectedLang),
     [selectedLang]
   );
-
-  // Stop speech when unmounting
-  useEffect(() => {
-    return () => {
-      ttsService.stop();
-      if (audioTimeoutRef.current) {
-        window.clearTimeout(audioTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // Pre-fetch greeting audio for selected language and key Indic languages for instantaneous playback
-  useEffect(() => {
-    ttsService.preload(activeMeta.code, activeMeta.welcomeGreeting);
-    const popularCodes = ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'gu', 'ur', 'pa', 'kn', 'ml', 'or'];
-    popularCodes.forEach((c) => {
-      const meta = getOnboardingLanguage(c);
-      if (meta) {
-        ttsService.preload(meta.code, meta.welcomeGreeting);
-      }
-    });
-  }, [activeMeta]);
 
   // Filter languages while maintaining the strict sequential order
   const filteredLanguages = useMemo(() => {
@@ -68,57 +42,14 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
     );
   }, [searchQuery]);
 
-  // Handle vocalizing the greeting across all 23 official Indian languages
-  const handlePlayGreeting = (langMeta: OnboardingLanguage = activeMeta) => {
-    sound.playTap();
-    setAudioError(null);
-
-    // Stop current speech
-    ttsService.stop();
-    setIsPlayingAudio(true);
-
-    const success = ttsService.speak({
-      text: langMeta.welcomeGreeting,
-      locale: langMeta.bcp47,
-      langCode: langMeta.code,
-      rate: 0.92,
-      onStart: () => {
-        setIsPlayingAudio(true);
-      },
-      onEnd: () => {
-        setIsPlayingAudio(false);
-      },
-      onError: () => {
-        setIsPlayingAudio(false);
-        setAudioError('Audio playback temporarily unavailable');
-      },
-    });
-
-    if (!success) {
-      setIsPlayingAudio(false);
-      setAudioError('Voice audio is unavailable in current preview mode');
-    }
-
-    // Safety timeout in case speech engine hangs
-    if (audioTimeoutRef.current) {
-      window.clearTimeout(audioTimeoutRef.current);
-    }
-    audioTimeoutRef.current = window.setTimeout(() => {
-      setIsPlayingAudio(false);
-    }, 7000);
-  };
-
-  // Card click handler: updates selection and immediately triggers spoken greeting
+  // Card click handler: updates selection
   const handleCardClick = (lang: OnboardingLanguage) => {
     sound.playTap();
     setSelectedLang(lang.code);
-    setAudioError(null);
-    handlePlayGreeting(lang);
   };
 
   // Continue CTA handler: commits selection and advances
   const handleContinue = () => {
-    ttsService.stop();
     sound.playSuccess();
     onSelectLanguage(selectedLang);
   };
@@ -139,11 +70,10 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
-                ttsService.stop();
                 sound.playTap();
                 onBack();
               }}
-              className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 hover:bg-[#B5451B]/10 hover:text-[#B5451B] flex items-center justify-center text-sm transition-colors"
+              className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 hover:bg-[#B5451B]/10 hover:text-[#B5451B] flex items-center justify-center text-sm transition-colors cursor-pointer"
               title="Back to OTP verification"
               aria-label="Back to OTP verification"
             >
@@ -185,40 +115,6 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
           >
             {activeMeta.headerSubtitle}
           </p>
-
-          {/* Dedicated Spoken Audio Greeting Pill Button */}
-          <div className="mt-3.5 flex flex-col items-center justify-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => handlePlayGreeting(activeMeta)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-serif font-bold transition-all cursor-pointer shadow-xs ${
-                isPlayingAudio
-                  ? 'bg-[#B5451B] text-white ring-2 ring-[#B5451B]/40 scale-102 shadow-md'
-                  : 'bg-[#B5451B]/10 hover:bg-[#B5451B]/20 text-[#B5451B] dark:bg-[#B5451B]/25 dark:text-[#FFA680]'
-              }`}
-              title={activeMeta.audioButtonLabel}
-              aria-label={activeMeta.audioButtonLabel}
-            >
-              <span className="material-symbols-outlined text-base">
-                {isPlayingAudio ? 'graphic_eq' : 'volume_up'}
-              </span>
-              <span>
-                {isPlayingAudio ? activeMeta.welcomeGreeting : activeMeta.audioButtonLabel}
-              </span>
-              {isPlayingAudio && (
-                <span className="flex items-center gap-0.5 ml-1">
-                  <span className="w-1 h-3 bg-white rounded-full animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-1 h-4 bg-white rounded-full animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-1 h-2.5 bg-white rounded-full animate-bounce" />
-                </span>
-              )}
-            </button>
-            {audioError && (
-              <p className="text-[11px] text-amber-700 dark:text-amber-400 font-sans">
-                {audioError}
-              </p>
-            )}
-          </div>
         </div>
 
         {/* Search / Filter bar for convenient lookup */}
@@ -236,7 +132,7 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-2.5 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white"
+              className="absolute right-3 top-2.5 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white cursor-pointer"
             >
               <span className="material-symbols-outlined text-base">close</span>
             </button>
@@ -250,7 +146,6 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
             // Original 1-based index in the exact 23 sequence
             const sequentialNumber =
               ONBOARDING_LANGUAGES.findIndex((l) => l.code === lang.code) + 1;
-            const isThisCardPlaying = isSelected && isPlayingAudio;
 
             return (
               <button
@@ -263,51 +158,26 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
                     : 'bg-white dark:bg-[#1C221A] border-[#22331E]/15 dark:border-[#2D3A2B] hover:border-[#B5451B]/50 hover:shadow-xs'
                 }`}
               >
-                {/* Card Top: Number & Active Tick / Audio Preview */}
+                {/* Card Top: Number & Active Tick */}
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md ${
-                        isSelected
-                          ? 'bg-[#B5451B] text-white'
-                          : 'bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/60'
-                      }`}
-                    >
-                      #{sequentialNumber}
-                    </span>
-                  </div>
+                  <span
+                    className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md ${
+                      isSelected
+                        ? 'bg-[#B5451B] text-white'
+                        : 'bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/60'
+                    }`}
+                  >
+                    #{sequentialNumber}
+                  </span>
 
-                  <div className="flex items-center gap-1.5">
-                    {/* Speaker trigger button */}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCardClick(lang);
-                      }}
-                      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                        isThisCardPlaying
-                          ? 'bg-[#B5451B] text-white scale-110 shadow-xs'
-                          : 'hover:bg-[#B5451B]/15 hover:text-[#B5451B] text-black/50 dark:text-white/50'
-                      }`}
-                      title={`Listen in ${lang.englishName}`}
-                      aria-label={`Listen in ${lang.englishName}`}
-                    >
-                      <span className="material-symbols-outlined text-sm">
-                        {isThisCardPlaying ? 'graphic_eq' : 'volume_up'}
-                      </span>
-                    </span>
-
-                    {/* Selected Checkmark Badge */}
-                    {isSelected ? (
-                      <div className="w-6 h-6 rounded-full bg-[#B5451B] text-white flex items-center justify-center shadow-xs">
-                        <span className="material-symbols-outlined text-sm font-bold">check</span>
-                      </div>
-                    ) : (
-                      <div className="w-6 h-6 rounded-full border border-black/15 dark:border-white/15 group-hover:border-[#B5451B]/40" />
-                    )}
-                  </div>
+                  {/* Selected Checkmark Badge */}
+                  {isSelected ? (
+                    <div className="w-6 h-6 rounded-full bg-[#B5451B] text-white flex items-center justify-center shadow-xs">
+                      <span className="material-symbols-outlined text-sm font-bold">check</span>
+                    </div>
+                  ) : (
+                    <div className="w-6 h-6 rounded-full border border-black/15 dark:border-white/15 group-hover:border-[#B5451B]/40" />
+                  )}
                 </div>
 
                 {/* Card Middle: Native Script Name (Prominent Display) */}
