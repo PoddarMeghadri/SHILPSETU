@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --font-serif: "Literata", "Playfair Display", Georgia, serif;
@@ -17,6 +19,22 @@
   h1, h2, h3, .font-serif-heading {
     font-family: var(--font-serif);
   }
+}
+
+/* Enforced Dark Artisan Theme Components (Decoupled from OS mode) */
+.artisan-dark-card {
+  background-color: #241A14 !important;
+  color: #F4ECDE !important;
+}
+
+.artisan-dark-card * {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.artisan-alert-card {
+  background-color: #2A1713 !important;
+  color: #F4ECDE !important;
+  border-color: rgba(181, 69, 27, 0.6) !important;
 }
 
 /* Khadi Linen and Sand Texture Overlays */

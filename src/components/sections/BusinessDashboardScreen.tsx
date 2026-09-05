@@ -190,33 +190,33 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
           </div>
         </div>
 
-        {/* Low-Stock Warning Alert Card (Dynamic) */}
+        {/* Low-Stock Warning Alert Card (Dynamic - Enforced High-Contrast Terracotta Theme) */}
         <div className="lg:col-span-4 flex flex-col justify-center">
-          <div className="bg-[#FFF5F2] dark:bg-[#2A1713] border-2 border-[#B5451B]/40 rounded-3xl p-5 flex flex-col justify-center shadow-xs relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-[#B5451B]/10 rounded-full blur-xl pointer-events-none" />
+          <div className="bg-[#2A1713] border-2 border-[#B5451B]/60 rounded-3xl p-5 flex flex-col justify-center shadow-md relative overflow-hidden text-[#F4ECDE]">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-[#B5451B]/20 rounded-full blur-xl pointer-events-none" />
             <div className="flex items-start gap-3 relative z-10">
               <div className="w-10 h-10 rounded-2xl bg-[#B5451B] text-white flex items-center justify-center shrink-0 shadow-xs">
-                <span className="material-symbols-outlined text-xl animate-pulse">warning</span>
+                <span className="material-symbols-outlined text-xl text-white animate-pulse">warning</span>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                  <h5 className="font-serif font-bold text-sm text-[#B5451B] dark:text-[#FFA680]">
+                  <h5 className="font-serif font-bold text-sm text-[#FFA680]">
                     {t('low_inventory_alert', 'Low Inventory Alert')}
                   </h5>
                   {lowStockProducts.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#B5451B] text-white shrink-0">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#B5451B] text-white shrink-0 shadow-xs">
                       {lowStockProducts.length} {t('low_stock', 'Low Stock')}
                     </span>
                   )}
                 </div>
                 {lowestProduct ? (
                   <>
-                    <p className="text-xs text-[#1A1815] dark:text-[#F4ECDE] opacity-90 font-sans mt-1 leading-relaxed">
-                      <strong className="font-bold text-[#B5451B] dark:text-[#FFA680]">{lowestProduct.title}</strong>{' '}
-                      has only <span className="font-mono font-bold text-sm text-[#B5451B] dark:text-[#FFA680] underline">{lowestProduct.stock} units left</span> in workshop stock.
+                    <p className="text-xs text-[#F4ECDE] opacity-95 font-sans mt-1 leading-relaxed">
+                      <strong className="font-bold text-[#FFA680]">{lowestProduct.title}</strong>{' '}
+                      has only <span className="font-mono font-bold text-sm text-[#E8B84B] underline decoration-[#E8B84B]/70 underline-offset-2">{lowestProduct.stock} units left</span> in workshop stock.
                       {lowStockProducts.length > 1 && (
-                        <span className="block mt-0.5 text-[11px] opacity-80">
-                          Also low: <strong>{lowStockProducts[1].title}</strong> ({lowStockProducts[1].stock} units left).
+                        <span className="block mt-1 text-[11px] text-[#F4ECDE]/85">
+                          Also low: <strong className="text-[#FFA680] font-bold">{lowStockProducts[1].title}</strong> (<span className="text-[#E8B84B] font-bold">{lowStockProducts[1].stock} units left</span>).
                         </span>
                       )}
                     </p>
@@ -227,15 +227,15 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
                         const el = document.getElementById('inventory-manager-section');
                         el?.scrollIntoView({ behavior: 'smooth' });
                       }}
-                      className="mt-3 px-3 py-1.5 rounded-xl bg-[#B5451B] hover:bg-[#9E3913] text-white text-xs font-serif font-bold inline-flex items-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer"
+                      className="mt-3 px-3.5 py-1.5 rounded-xl bg-[#B5451B] hover:bg-[#9E3913] text-white text-xs font-serif font-bold inline-flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
                     >
-                      <span className="material-symbols-outlined text-sm">inventory_2</span>
-                      <span>{t('manage_inventory_now', 'Manage Inventory & Restock')}</span>
-                      <span className="material-symbols-outlined text-xs">arrow_downward</span>
+                      <span className="material-symbols-outlined text-sm text-white">inventory_2</span>
+                      <span className="text-white font-bold">{t('manage_inventory_now', 'Manage Inventory & Restock')}</span>
+                      <span className="material-symbols-outlined text-xs text-white">arrow_downward</span>
                     </button>
                   </>
                 ) : (
-                  <p className="text-xs opacity-80 font-sans mt-1 leading-relaxed">
+                  <p className="text-xs text-[#F4ECDE]/80 font-sans mt-1 leading-relaxed">
                     {t('all_stock_healthy', 'All workshop craft products currently have healthy inventory levels.')}
                   </p>
                 )}
@@ -499,82 +499,82 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
               <div
                 key={prod.id}
                 id={`inventory-card-${prod.id}`}
-                className={`rounded-3xl p-4 border flex flex-col justify-between gap-3 shadow-xs transition-all ${
+                className={`rounded-3xl p-4 border flex flex-col justify-between gap-3 shadow-md transition-all ${
                   isCritical
-                    ? 'border-[#B5451B] ring-2 ring-[#B5451B]/20 bg-[#FFF8F6] dark:bg-[#251512]'
+                    ? 'border-[#B5451B] ring-2 ring-[#B5451B]/30 bg-[#251512] text-[#F4ECDE]'
                     : isLow
-                    ? 'border-[#D9A441] bg-[#FFFDF5] dark:bg-[#231F17]'
+                    ? 'border-[#D9A441] ring-1 ring-[#D9A441]/40 bg-[#241A14] text-[#F4ECDE]'
                     : isDark
                     ? 'bg-[#1C221A] border-[#2D3A2B] text-[#F4ECDE]'
-                    : 'bg-[#EFE4CF] border-[#22331E]/10 text-[#1A1815]'
+                    : 'bg-[#241A14] border-white/10 text-[#F4ECDE]'
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <img
                     src={prod.polishedImageUrl || prod.rawImageUrl}
                     alt={prod.title}
-                    className="w-16 h-16 rounded-2xl object-cover border border-black/10 shrink-0"
+                    className="w-16 h-16 rounded-2xl object-cover border border-white/15 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-1 flex-wrap">
-                      <span className="text-[10px] uppercase tracking-wider font-bold text-[#B5451B]">
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-[#FFA680]">
                         {prod.category}
                       </span>
                       {isCritical ? (
-                        <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-[#B5451B] text-white flex items-center gap-1 animate-pulse">
+                        <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-[#B5451B] text-white flex items-center gap-1 shadow-xs animate-pulse">
                           <span className="w-1.5 h-1.5 rounded-full bg-white" />
                           {t('critical_stock', 'Critical Low')}
                         </span>
                       ) : isLow ? (
-                        <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-[#D9A441] text-[#1A1815]">
+                        <span className="text-[9px] px-2.5 py-0.5 rounded-full font-bold uppercase bg-[#E8B84B] text-[#1A1815] shadow-xs">
                           {t('low_stock', 'Low Stock')}
                         </span>
                       ) : (
-                        <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-[#22331E] text-[#88C498]">
+                        <span className="text-[9px] px-2.5 py-0.5 rounded-full font-bold uppercase bg-[#22331E] text-[#88C498] border border-[#88C498]/30">
                           {t('in_stock', 'In Stock')}
                         </span>
                       )}
                     </div>
-                    <h5 className="font-serif font-bold text-sm truncate mt-1">
+                    <h5 className="font-serif font-bold text-sm truncate mt-1 text-[#F4ECDE]">
                       {prod.title}
                     </h5>
-                    <p className="text-xs opacity-75 font-sans">
+                    <p className="text-xs text-[#F4ECDE]/80 font-sans mt-0.5">
                       ₹{(prod.price ?? 0).toLocaleString('en-IN')} / unit
                     </p>
                   </div>
                 </div>
 
                 {/* Stock Controls & Actions */}
-                <div className="pt-2 border-t border-[#22331E]/10 flex items-center justify-between gap-2 flex-wrap">
+                <div className="pt-2.5 border-t border-white/15 flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => handleStockChange(prod.id, prod.stock ?? 0, -1)}
                       disabled={(prod.stock ?? 0) <= 0}
                       title="Reduce stock by 1"
-                      className="w-7 h-7 rounded-lg border border-black/20 flex items-center justify-center font-bold text-sm disabled:opacity-40 hover:bg-black/10 active:scale-95 cursor-pointer"
+                      className="w-7 h-7 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-[#F4ECDE] flex items-center justify-center font-bold text-sm disabled:opacity-30 active:scale-95 transition-all cursor-pointer"
                     >
                       -
                     </button>
-                    <div className="px-2.5 py-1 rounded-xl bg-black/10 dark:bg-white/10 text-center min-w-[54px]">
+                    <div className="px-2.5 py-1 rounded-xl bg-white/10 border border-white/15 text-center min-w-[56px]">
                       <span
                         className={`font-mono font-bold text-sm ${
                           isCritical
-                            ? 'text-[#B5451B] dark:text-[#FFA680]'
+                            ? 'text-[#FFA680]'
                             : isLow
-                            ? 'text-[#D9A441]'
-                            : 'text-[#22331E] dark:text-[#88C498]'
+                            ? 'text-[#E8B84B]'
+                            : 'text-[#88C498]'
                         }`}
                       >
                         {prod.stock ?? 0}
                       </span>
-                      <span className="text-[9px] block opacity-70 leading-none">units</span>
+                      <span className="text-[9px] block text-[#F4ECDE]/75 font-medium leading-none mt-0.5">units</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleStockChange(prod.id, prod.stock ?? 0, 1)}
                       title="Increase stock by 1"
-                      className="w-7 h-7 rounded-lg border border-black/20 flex items-center justify-center font-bold text-sm hover:bg-black/10 active:scale-95 cursor-pointer"
+                      className="w-7 h-7 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-[#F4ECDE] flex items-center justify-center font-bold text-sm active:scale-95 transition-all cursor-pointer"
                     >
                       +
                     </button>
@@ -584,10 +584,10 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => handleStockChange(prod.id, prod.stock ?? 0, 5)}
-                    className="px-3 py-1.5 rounded-xl bg-[#22331E] hover:bg-[#1A2817] text-[#F4ECDE] text-xs font-serif font-bold flex items-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
+                    className="px-3 py-1.5 rounded-xl bg-[#22331E] hover:bg-[#162313] text-[#F4ECDE] border border-[#88C498]/40 text-xs font-serif font-bold flex items-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
                   >
                     <span className="material-symbols-outlined text-xs text-[#E8B84B]">add_circle</span>
-                    <span>+5 {t('restock', 'Restock')}</span>
+                    <span className="text-[#F4ECDE]">+5 {t('restock', 'Restock')}</span>
                   </button>
                 </div>
               </div>

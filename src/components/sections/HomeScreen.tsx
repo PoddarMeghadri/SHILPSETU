@@ -239,32 +239,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             sound.playTap();
             onNavigate('dashboard');
           }}
-          className="p-3.5 sm:p-4 rounded-2xl bg-[#FFF5F2] dark:bg-[#2A1713] border border-[#B5451B]/40 flex items-center justify-between gap-3 shadow-xs cursor-pointer hover:border-[#B5451B] transition-all"
+          className="p-3.5 sm:p-4 rounded-2xl bg-[#2A1713] border-2 border-[#B5451B]/60 flex items-center justify-between gap-3 shadow-md cursor-pointer hover:border-[#B5451B] transition-all text-[#F4ECDE]"
         >
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-[#B5451B] text-white flex items-center justify-center shrink-0 shadow-xs">
-              <span className="material-symbols-outlined text-xl animate-pulse">inventory_2</span>
+              <span className="material-symbols-outlined text-xl text-white animate-pulse">inventory_2</span>
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-serif font-bold text-xs sm:text-sm text-[#B5451B] dark:text-[#FFA680]">
+                <span className="font-serif font-bold text-xs sm:text-sm text-[#FFA680]">
                   {t('low_inventory_alert', 'Low Inventory Alert')}
                 </span>
-                <span className="text-[10px] bg-[#B5451B] text-white px-2 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-[#B5451B] text-white px-2 py-0.5 rounded-full font-bold shadow-xs">
                   {lowStockItems.length} {t('low_stock', 'Low Stock')}
                 </span>
               </div>
-              <p className="text-xs text-[#1A1815] dark:text-[#F4ECDE] opacity-85 truncate mt-0.5 font-sans">
-                <strong>{lowStockItems[0].title}</strong> has only <span className="font-bold text-[#B5451B] dark:text-[#FFA680]">{lowStockItems[0].stock} units left</span>.
+              <p className="text-xs text-[#F4ECDE] opacity-90 truncate mt-0.5 font-sans">
+                <strong className="text-[#FFA680] font-bold">{lowStockItems[0].title}</strong> has only <span className="font-bold text-[#E8B84B] underline decoration-[#E8B84B]/60 underline-offset-2">{lowStockItems[0].stock} units left</span>.
               </p>
             </div>
           </div>
           <button
             type="button"
-            className="text-xs font-serif font-bold text-[#B5451B] dark:text-[#FFA680] flex items-center gap-1 shrink-0 whitespace-nowrap hover:underline cursor-pointer"
+            className="text-xs font-serif font-bold text-[#FFA680] hover:text-white flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer transition-colors"
           >
             <span>{t('view_and_restock', 'Restock Now')}</span>
-            <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            <span className="material-symbols-outlined text-sm text-[#FFA680]">arrow_forward</span>
           </button>
         </div>
       )}

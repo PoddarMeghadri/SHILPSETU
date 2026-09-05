@@ -78,6 +78,15 @@ export function App() {
     });
   };
 
+  // Sync dark class on document root to decouple from OS preference
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
+
   // Persist language changes
   const handleLanguageChange = (newLang: LanguageCode) => {
     setLanguage(newLang);
