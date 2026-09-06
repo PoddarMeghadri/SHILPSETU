@@ -38,21 +38,22 @@ Follow these instructions to set up the project locally.
 2. Navigate to the project directory
 
 ```bash
-cd SHILPSETU  
+cd SHILPSETU
+```
 
-3.Install dependencies
+**3. Install dependencies**
 Install all required frontend and backend packages:
-
 ```bash
 npm install
+```
 
 4. Set up Environment Variables
 Create a new file named .env in the root folder of the project. Add your necessary configuration variables (update with your actual keys):
 
-Code snippet
+```Code snippet
 PORT=3000
 GEMINI_API_KEY=your_gemini_api_key_here
-
+```
 
 🚀 Running the Application
 This project uses custom scripts to manage the Vite frontend and the Express/esbuild backend.
@@ -60,30 +61,34 @@ This project uses custom scripts to manage the Vite frontend and the Express/esb
 Run in Development Mode:
 Starts the development server using tsx for hot-reloading the backend and Vite for the frontend.
 
-Bash
+```Bash
 npm run dev
+```
 
 Build for Production:
 Builds the Vite frontend and bundles the Express backend (server.ts) into a CommonJS format (dist/server.cjs) using esbuild.
 
-Bash
+```Bash
 npm run build
-
+```
 
 Start Production Server:
 Runs the bundled production server (Make sure to run npm run build first).
 
-Bash
+```Bash
 npm start
-
+```
 
 
 🛠️ Utility Commands
 Check for TypeScript errors (Linting):
 
-Bash
+```Bash
 npm run lint
+```
+
 Clean build directories (Removes dist and compiled files):
 
-Bash
+```Bash
 npm run clean
+```
