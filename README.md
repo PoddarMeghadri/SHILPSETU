@@ -34,17 +34,16 @@ Follow these instructions to set up the project locally.
 1. **Clone the repository**
    ```bash
    git clone [https://github.com/PoddarMeghadri/SHILPSETU.git](https://github.com/PoddarMeghadri/SHILPSETU.git)
-   cd SHILPSETU
 
 2. Navigate to the project directory
 
 ```bash
-cd SHILPSETU
+cd SHILPSETU  
 
 3.Install dependencies
 Install all required frontend and backend packages:
 
-Bash
+```bash
 npm install
 
 4. Set up Environment Variables
