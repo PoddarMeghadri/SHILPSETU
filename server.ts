@@ -1,114 +1,422 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { db } from './server/db.js';
+import {
+  sendOtpToEmail,
+  sendOtpToPhone,
+  verifyOtp,
+  generateToken,
+  authenticateJwt,
+  AuthenticatedRequest,
+  isValidEmail,
+} from './server/auth.js';
+import {
+  generateShilpiReply,
+  enhanceCraftPhoto,
+  extractCatalogFromVoice,
+  generateHeritageStory,
+  generateSocialCaption,
+} from './server/ai.js';
+import { uploadMiddleware, saveBase64Image } from './server/storage.js';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+// Body parsing middleware
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-// API route for Shilpi AI Chat powered by Gemini
+// Static uploads serving
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Health Check
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    version: '1.0.0',
+    db: db.isPostgres() ? 'PostgreSQL' : 'PersistentStore',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/* =========================================================================
+   1. AUTHENTICATION & OTP ENDPOINTS
+   ========================================================================= */
+
+// Request 6-digit OTP (Mandatory Email ID)
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const { email, mobile } = req.body;
+    if (!email || typeof email !== 'string' || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Valid Email ID is strictly mandatory for artisan verification' });
+    }
+
+    const result = await sendOtpToEmail(email, mobile);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to send verification code' });
+  }
+});
+
+// Verify Email OTP and issue JWT session token
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const { email, mobile, otp, artisanDetails } = req.body;
+
+    if (!email || typeof email !== 'string' || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Valid Email ID is strictly mandatory for artisan verification' });
+    }
+
+    if (!otp) {
+      return res.status(400).json({ error: 'Verification code (OTP) is required' });
+    }
+
+    const isValid = await verifyOtp(email, otp);
+    if (!isValid) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    // Lookup existing or create profile by email or mobile
+    let artisan = db.getArtisanByEmail(email) || (mobile ? db.getArtisanByPhone(mobile) : null);
+    if (!artisan && artisanDetails) {
+      artisan = db.upsertArtisan({
+        mobile: mobile || artisanDetails.mobile || '9876543210',
+        fullName: artisanDetails.fullName || 'Artisan',
+        craft: artisanDetails.selectedCraft || 'Traditional Handicrafts',
+        state: artisanDetails.state || 'Uttar Pradesh',
+        city: artisanDetails.city || 'Varanasi',
+        gender: artisanDetails.gender,
+        email: email.trim().toLowerCase(),
+        language: artisanDetails.selectedLanguage || 'hi',
+      });
+    } else if (!artisan) {
+      artisan = db.upsertArtisan({
+        mobile: mobile || '9876543210',
+        fullName: 'Master Artisan',
+        craft: 'Traditional Handicrafts',
+        state: 'Uttar Pradesh',
+        city: 'Varanasi',
+        email: email.trim().toLowerCase(),
+        language: 'hi',
+      });
+    }
+
+    const token = generateToken(artisan);
+    res.json({
+      success: true,
+      token,
+      artisan,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Verification failed' });
+  }
+});
+
+// Get current session artisan
+app.get('/api/auth/me', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  if (!req.artisan) {
+    // Return demo profile if not logged in
+    return res.json({ artisan: db.getArtisanById('artisan_demo') });
+  }
+  const artisan = db.getArtisanById(req.artisan.id) || db.getArtisanByPhone(req.artisan.mobile);
+  res.json({ artisan });
+});
+
+/* =========================================================================
+   2. ARTISAN PROFILE ENDPOINTS
+   ========================================================================= */
+
+app.get('/api/artisan', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  const artisanId = req.artisan?.id || (req.query.id as string) || 'artisan_demo';
+  const profile = db.getArtisanById(artisanId) || db.getArtisanById('artisan_demo');
+  res.json(profile);
+});
+
+app.put('/api/artisan', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  try {
+    const artisanId = req.artisan?.id || req.body.id || 'artisan_demo';
+    const updated = db.upsertArtisan({
+      ...req.body,
+      id: artisanId,
+      mobile: req.body.mobile || req.artisan?.mobile || '9876543210',
+      fullName: req.body.fullName || req.artisan?.fullName || 'Master Artisan',
+    });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to update artisan profile' });
+  }
+});
+
+/* =========================================================================
+   3. PRODUCTS & CATALOG ENDPOINTS
+   ========================================================================= */
+
+app.get('/api/products', (req, res) => {
+  const artisanId = (req.query.artisanId as string) || undefined;
+  const products = db.getProducts(artisanId);
+  res.json(products);
+});
+
+app.post('/api/products', authenticateJwt, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { title, craft, price, stock = 1, imageUrl, story, rawMaterialsCost, laborHours, hourlyRate, marginPercentage, giCertified } = req.body;
+    if (!title || !price) {
+      return res.status(400).json({ error: 'Title and price are required' });
+    }
+
+    const artisanId = req.artisan?.id || 'artisan_demo';
+    const product = db.createProduct({
+      artisanId,
+      title,
+      craft: craft || 'Handicrafts',
+      price: Number(price),
+      stock: Number(stock),
+      imageUrl,
+      story,
+      rawMaterialsCost: Number(rawMaterialsCost || 0),
+      laborHours: Number(laborHours || 0),
+      hourlyRate: Number(hourlyRate || 180),
+      marginPercentage: Number(marginPercentage || 20),
+      giCertified: Boolean(giCertified),
+      isActive: true,
+    });
+    res.status(201).json(product);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to create product' });
+  }
+});
+
+app.put('/api/products/:id', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  try {
+    const updated = db.updateProduct(req.params.id, req.body);
+    if (!updated) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    res.json(updated);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to update product' });
+  }
+});
+
+app.delete('/api/products/:id', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  const success = db.deleteProduct(req.params.id);
+  if (!success) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+  res.json({ success: true });
+});
+
+/* =========================================================================
+   4. ORDERS & GEM B2B TENDERS ENDPOINTS
+   ========================================================================= */
+
+app.get('/api/orders', (req, res) => {
+  const artisanId = (req.query.artisanId as string) || undefined;
+  const orders = db.getOrders(artisanId);
+  res.json(orders);
+});
+
+app.post('/api/orders', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  try {
+    const artisanId = req.artisan?.id || req.body.artisanId || 'artisan_demo';
+    const order = db.createOrder({
+      ...req.body,
+      artisanId,
+      status: req.body.status || 'pending',
+      escrowStatus: req.body.escrowStatus || 'held_in_sbi_escrow',
+    });
+    res.status(201).json(order);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to create order' });
+  }
+});
+
+app.patch('/api/orders/:id/status', (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+    const updated = db.updateOrderStatus(req.params.id, status);
+    if (!updated) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json(updated);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to update order status' });
+  }
+});
+
+app.get('/api/tenders', (req, res) => {
+  const tenders = db.getTenders();
+  res.json(tenders);
+});
+
+app.post('/api/tenders/:id/bid', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  try {
+    const updated = db.updateTenderStatus(req.params.id, 'bid_submitted');
+    if (!updated) {
+      return res.status(404).json({ error: 'Tender not found' });
+    }
+    res.json({ success: true, tender: updated });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to submit tender bid' });
+  }
+});
+
+/* =========================================================================
+   5. REAL AI INTEGRATIONS (GEMINI SERVER-SIDE)
+   ========================================================================= */
+
+// Shilpi AI Chat
 app.post('/api/shilpi-chat', async (req, res) => {
   try {
     const { message, history = [], language = 'en', artisanContext, products } = req.body;
-
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured', fallback: true });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-
-    const lowStockSummary = Array.isArray(products)
-      ? products.filter((p: any) => p && p.stock <= 5).map((p: any) => `${p.title}: ${p.stock} units left`).join(', ')
-      : 'Kutch Hand-Carved Teak Keepsake Chest: 2 units left, Banarasi Zari Handloom Silk Saree: 4 units left';
-
-    const systemInstruction = `You are "SHILPI AI", an intelligent, warm, and empowering conversational AI assistant built into ShilpSetu (India's premier artisan craft enablement platform).
-Artisans talk to you just like they talk to Gemini, ChatGPT, or a trusted workshop advisor.
-
-Artisan Context:
-- Name: ${artisanContext?.name || 'Master Artisan'}
-- Craft: ${artisanContext?.craft || 'Traditional Indian Handicrafts'}
-- Location: ${artisanContext?.location || 'India'}
-- Verified Trust Score: ${artisanContext?.trustScore ?? 98}/100
-- Workshop Inventory Low Stock Items: ${lowStockSummary}
-
-Capabilities you can advise on:
-1. Inventory & Stock: Inform artisans which products are low in stock (specifically Kutch Hand-Carved Teak Keepsake Chest with only 2 units left and Banarasi Zari Handloom Silk Saree with 4 units left) and suggest restocking.
-2. Craft pricing (raw materials + artisan hours * fair living wage + heritage skill premium + fair margin without middleman cuts).
-3. Government e-Marketplace (GeM) registration, institutional B2B procurement tenders, ODOP, GI verification.
-4. 4K Photo Studio lighting, background removal, staging, and packaging guidance.
-5. Multilingual cataloging and craft story writing.
-6. Daily workshop sales, order management, and export advice.
-7. Navigation of ShilpSetu app modules:
-   - "studio" -> AI Photo Studio
-   - "pricing" -> Smart Fair Price Calculator
-   - "cataloger" -> Multilingual Voice Cataloger
-   - "b2b" -> GeM & Institutional Tenders
-   - "dashboard" -> Business Analytics & Stock Inventory
-   - "social" -> WhatsApp/Instagram Marketing Kit
-   - "story" -> Heritage Story Builder
-   - "notifications" -> Alerts & Orders
-
-Guidelines:
-- Support the user in whatever language they write in (Hindi, English, Bengali, Tamil, Telugu, Marathi, Gujarati, etc.).
-- Be respectful, encouraging, clear, and actionable. Use short formatted points or clean paragraphs.
-- If recommending a specific platform tool, mention it naturally (e.g. "[Open Fair Price Calculator]" or "[Manage Inventory]").`;
-
-    // Map conversation history
-    const contents: any[] = [];
-    if (Array.isArray(history)) {
-      for (const h of history.slice(-6)) {
-        if (h && h.content) {
-          contents.push({
-            role: h.role === 'model' || h.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: String(h.content) }],
-          });
-        }
-      }
-    }
-
-    contents.push({
-      role: 'user',
-      parts: [{ text: message }],
+    const reply = await generateShilpiReply({
+      message,
+      history,
+      language,
+      artisanContext,
+      products,
     });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-      },
-    });
+    // Save to chat history if artisanId is known
+    const artisanId = artisanContext?.id || 'artisan_demo';
+    db.addChatMessage(artisanId, 'user', message, language);
+    db.addChatMessage(artisanId, 'assistant', reply, language);
 
-    const reply = response.text || 'Namaste! How can I assist your workshop today?';
-    return res.json({ reply });
-  } catch (error: any) {
-    console.error('Shilpi AI Chat Error:', error);
-    return res.status(500).json({
-      error: error.message || 'Failed to process AI chat request',
-      fallback: true,
-    });
+    res.json({ reply });
+  } catch (err: any) {
+    console.error('Shilpi Chat Error:', err);
+    res.status(500).json({ error: err.message || 'Failed to process chat message' });
   }
 });
 
-// In-memory cache for synthesized language audio to guarantee instant playback
+// Photo Enhancement with Presets
+app.post('/api/photo-enhance', async (req, res) => {
+  try {
+    const { imageBase64, preset = 'golden_hour', craftType } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'imageBase64 is required' });
+    }
+
+    const result = await enhanceCraftPhoto({
+      imageBase64,
+      preset,
+      craftType,
+    });
+    res.json(result);
+  } catch (err: any) {
+    console.error('Photo Enhance Error:', err);
+    res.status(500).json({ error: err.message || 'Photo enhancement failed' });
+  }
+});
+
+// Multilingual Voice-to-Catalog Extractor
+app.post('/api/voice-catalog', async (req, res) => {
+  try {
+    const { audioBase64, transcriptText, language = 'hi' } = req.body;
+    const result = await extractCatalogFromVoice({
+      audioBase64,
+      transcriptText,
+      language,
+    });
+    res.json(result);
+  } catch (err: any) {
+    console.error('Voice Catalog Error:', err);
+    res.status(500).json({ error: err.message || 'Catalog extraction failed' });
+  }
+});
+
+// Multilingual Heritage Story Generator
+app.post('/api/heritage-story', async (req, res) => {
+  try {
+    const { craftTitle, craftType, angle = 'lineage', language = 'hi', artisanName } = req.body;
+    if (!craftTitle) {
+      return res.status(400).json({ error: 'craftTitle is required' });
+    }
+
+    const story = await generateHeritageStory({
+      craftTitle,
+      craftType: craftType || 'Handicrafts',
+      angle,
+      language,
+      artisanName,
+    });
+    res.json(story);
+  } catch (err: any) {
+    console.error('Heritage Story Error:', err);
+    res.status(500).json({ error: err.message || 'Story generation failed' });
+  }
+});
+
+// Multilingual Social Caption Generator
+app.post('/api/social-caption', async (req, res) => {
+  try {
+    const { craftTitle, price, craftType, artisanName, language = 'hi', platform = 'instagram' } = req.body;
+    const result = await generateSocialCaption({
+      craftTitle,
+      price: Number(price) || 1200,
+      craftType: craftType || 'Handicraft',
+      artisanName: artisanName || 'Artisan',
+      language,
+      platform,
+    });
+    res.json(result);
+  } catch (err: any) {
+    console.error('Social Caption Error:', err);
+    res.status(500).json({ error: err.message || 'Caption generation failed' });
+  }
+});
+
+/* =========================================================================
+   6. FILE UPLOAD ENDPOINTS (PERSISTENT STORAGE & VALIDATION)
+   ========================================================================= */
+
+app.post('/api/upload', uploadMiddleware.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file uploaded' });
+    }
+    const publicUrl = `/uploads/${req.file.filename}`;
+    res.json({
+      url: publicUrl,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Upload failed' });
+  }
+});
+
+app.post('/api/upload-base64', async (req, res) => {
+  try {
+    const { imageBase64, prefix = 'craft' } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'imageBase64 is required' });
+    }
+    const url = await saveBase64Image(imageBase64, prefix);
+    res.json({ url });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Base64 image upload failed' });
+  }
+});
+
+/* =========================================================================
+   7. MULTILINGUAL TTS AUDIO PROXY
+   ========================================================================= */
+
 const ttsAudioCache = new Map<string, Buffer>();
 
-// API route for High-Fidelity Multilingual TTS (All 23 Indian Languages)
 app.get('/api/tts', async (req, res) => {
   try {
     const lang = (req.query.lang as string) || 'hi';
@@ -122,31 +430,30 @@ app.get('/api/tts', async (req, res) => {
     let buffer = ttsAudioCache.get(cacheKey);
 
     if (!buffer) {
-      // Phonetic and dialect acoustic map for all 23 official Indian languages
       const ttsLanguageMap: Record<string, { tl: string; phoneticText?: string }> = {
         en: { tl: 'en' },
         hi: { tl: 'hi' },
-        as: { tl: 'bn' }, // Assamese (Eastern Indo-Aryan) acoustic alignment
+        as: { tl: 'bn' },
         bn: { tl: 'bn' },
-        brx: { tl: 'hi' }, // Bodo (Devanagari script)
-        doi: { tl: 'hi' }, // Dogri (Devanagari script)
+        brx: { tl: 'hi' },
+        doi: { tl: 'hi' },
         gu: { tl: 'gu' },
         kn: { tl: 'kn' },
-        ks: { tl: 'ur' }, // Kashmiri (Perso-Arabic Nastaliq script)
-        kok: { tl: 'hi' }, // Konkani (Devanagari script)
-        mai: { tl: 'hi' }, // Maithili (Devanagari script)
+        ks: { tl: 'ur' },
+        kok: { tl: 'hi' },
+        mai: { tl: 'hi' },
         ml: { tl: 'ml' },
-        mni: { tl: 'bn' }, // Manipuri (Eastern Indo-Aryan Bengali script)
+        mni: { tl: 'bn' },
         mr: { tl: 'mr' },
         ne: { tl: 'ne' },
-        or: { tl: 'hi', phoneticText: 'शिल्पसेतुरे आपणङ्कु स्वागत' }, // Odia phonetics
+        or: { tl: 'hi', phoneticText: 'ଶିଳ୍ପସେତୁରେ ଆପଣଙ୍କୁ ସ୍ୱାଗତ' },
         pa: { tl: 'pa' },
-        sa: { tl: 'hi' }, // Sanskrit (Devanagari script)
-        sat: { tl: 'hi', phoneticText: 'शिल्पसेतु रे जोहार' }, // Santali phonetics
-        sd: { tl: 'ur' }, // Sindhi (Perso-Arabic script)
+        sa: { tl: 'hi' },
+        sat: { tl: 'hi', phoneticText: 'शिल्पसेतु रे जोहार' },
+        sd: { tl: 'ur' },
         ta: { tl: 'ta' },
         te: { tl: 'te' },
-        ur: { tl: 'ur' }, // Indian Urdu
+        ur: { tl: 'ur' },
       };
 
       const config = ttsLanguageMap[lang] || { tl: 'hi' };
@@ -155,7 +462,7 @@ app.get('/api/tts', async (req, res) => {
 
       const response = await fetch(googleTtsUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
         },
       });
 
@@ -168,7 +475,6 @@ app.get('/api/tts', async (req, res) => {
       ttsAudioCache.set(cacheKey, buffer);
     }
 
-    // Response headers for reliable streaming and CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Cache-Control', 'public, max-age=86400');
@@ -194,7 +500,10 @@ app.get('/api/tts', async (req, res) => {
   }
 });
 
-// Vite middleware integration
+/* =========================================================================
+   8. VITE MIDDLEWARE & STATIC CLIENT SERVING
+   ========================================================================= */
+
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -211,7 +520,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`ShilpSetu Unified Server running on http://localhost:${PORT}`);
   });
 }
 

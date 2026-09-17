@@ -79,7 +79,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           ? 'bg-[#161B14] border-[#2D3A2B] text-[#F4ECDE]'
           : 'bg-[#ECE0CC]/95 border-[#22331E]/10 text-[#1A1815]'
       }`}
-      aria-label="Desktop and Tablet Sidebar"
+      aria-label={t('desktop_sidebar_label', 'Desktop and Tablet Sidebar')}
     >
       {/* Brand Header with 3-Lined Minimize Button Above */}
       <div
@@ -96,7 +96,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 onNavigate('home');
               }}
               className="flex items-center gap-3 text-left group min-w-0 flex-1 cursor-pointer"
-              title="ShilpSetu — Bridge of Craft"
+              title={t('app_title_tagline', 'ShilpSetu — Bridge of Craft')}
             >
               <div className="shrink-0 transition-transform group-hover:scale-105">
                 <ShilpSetuLogo size="sm" isDark={isDark} />
@@ -119,8 +119,8 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
                   : 'border-[#22331E]/15 bg-white/70 text-[#22331E] hover:bg-white'
               }`}
-              title="Minimize navigation bar"
-              aria-label="Minimize navigation bar"
+              title={t('minimize_nav_bar', 'Minimize navigation bar')}
+              aria-label={t('minimize_nav_bar', 'Minimize navigation bar')}
               id="btn-collapse-sidebar"
             >
               <span className="material-symbols-outlined text-[20px]">menu</span>
@@ -136,8 +136,8 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
                   : 'border-[#22331E]/15 bg-white/70 text-[#22331E] hover:bg-white'
               }`}
-              title="Expand navigation bar"
-              aria-label="Expand navigation bar"
+              title={t('expand_nav_bar', 'Expand navigation bar')}
+              aria-label={t('expand_nav_bar', 'Expand navigation bar')}
               id="btn-expand-sidebar"
             >
               <span className="material-symbols-outlined text-[20px]">menu</span>
@@ -148,7 +148,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 sound.playTap();
                 onNavigate('home');
               }}
-              title="ShilpSetu — Bridge of Craft"
+              title={t('app_title_tagline', 'ShilpSetu — Bridge of Craft')}
               className="cursor-pointer hover:scale-105 transition-transform"
             >
               <ShilpSetuLogo size="xs" isDark={isDark} />
@@ -304,7 +304,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   onOpenVoiceAssistant();
                 }}
                 className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-br from-[#B5451B] to-[#8C2C09] text-white flex items-center justify-center shadow-md hover:brightness-105 active:scale-95 transition-all border border-[#E8B84B]/50 relative group cursor-pointer"
-                title="SHILPI AI — Chat & Voice Assistant"
+                title={t('shilpi_ai_assistant_title', 'SHILPI AI — Chat & Voice Assistant')}
                 id="btn-desktop-shilpi-ai-collapsed"
               >
                 <span className="material-symbols-outlined text-xl text-[#FFEBB3] animate-pulse">

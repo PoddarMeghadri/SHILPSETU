@@ -1,0 +1,137 @@
+{
+  "artisans": {
+    "artisan_9876543210": {
+      "id": "artisan_9876543210",
+      "mobile": "9876543210",
+      "fullName": "Raghavendra Sharma",
+      "craft": "pottery",
+      "state": "Uttar Pradesh",
+      "city": "Varanasi",
+      "gender": "other",
+      "language": "hi",
+      "trustScore": 98,
+      "isVerified": true,
+      "createdAt": "2026-09-17T15:30:16.460Z",
+      "updatedAt": "2026-09-17T15:30:16.460Z"
+    }
+  },
+  "products": {
+    "p-1": {
+      "id": "p-1",
+      "artisanId": "artisan_demo",
+      "title": "Kutch Hand-Carved Teak Keepsake Chest",
+      "craft": "Wood Carving",
+      "price": 3450,
+      "stock": 7,
+      "imageUrl": "https://images.unsplash.com/photo-1607344645866-009c320b5ab8?w=800&auto=format&fit=crop",
+      "story": "Carved using ancestral teak wood chiseling techniques passed down through 4 generations.",
+      "rawMaterialsCost": 1200,
+      "laborHours": 8,
+      "hourlyRate": 180,
+      "marginPercentage": 25,
+      "giCertified": true,
+      "isActive": true,
+      "createdAt": "2026-09-17T14:55:10.470Z",
+      "updatedAt": "2026-09-17T15:26:26.636Z"
+    },
+    "p-2": {
+      "id": "p-2",
+      "artisanId": "artisan_demo",
+      "title": "Banarasi Zari Handloom Silk Saree",
+      "craft": "Handloom Weaving",
+      "price": 8900,
+      "stock": 9,
+      "imageUrl": "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&auto=format&fit=crop",
+      "story": "Woven on pit-looms with pure mulberry silk and electroplated zari warp.",
+      "rawMaterialsCost": 3500,
+      "laborHours": 24,
+      "hourlyRate": 180,
+      "marginPercentage": 20,
+      "giCertified": true,
+      "isActive": true,
+      "createdAt": "2026-09-17T14:55:10.470Z",
+      "updatedAt": "2026-09-17T15:26:30.046Z"
+    },
+    "p-3": {
+      "id": "p-3",
+      "artisanId": "artisan_demo",
+      "title": "Dhokra Brass Tribal Ritual Bell",
+      "craft": "Dhokra Metal Casting",
+      "price": 2200,
+      "stock": 12,
+      "imageUrl": "https://images.unsplash.com/photo-1590736969955-71cc94801759?w=800&auto=format&fit=crop",
+      "story": "Created with 4,000-year-old lost wax casting process using bee wax and river silt core.",
+      "rawMaterialsCost": 650,
+      "laborHours": 6,
+      "hourlyRate": 180,
+      "marginPercentage": 30,
+      "giCertified": true,
+      "isActive": true,
+      "createdAt": "2026-09-17T14:55:10.470Z",
+      "updatedAt": "2026-09-17T14:55:10.470Z"
+    }
+  },
+  "orders": {
+    "ord-8812": {
+      "id": "ord-8812",
+      "artisanId": "artisan_demo",
+      "productId": "p-1",
+      "productTitle": "Kutch Hand-Carved Teak Keepsake Chest",
+      "buyerName": "Ministry of Culture (Govt of India)",
+      "buyerType": "government",
+      "quantity": 15,
+      "unitPrice": 3450,
+      "totalAmount": 51750,
+      "status": "pending",
+      "escrowStatus": "held_in_sbi_escrow",
+      "deliveryBy": "2026-10-10",
+      "createdAt": "2026-09-17T12:55:10.471Z",
+      "updatedAt": "2026-09-17T12:55:10.471Z"
+    },
+    "ord-8813": {
+      "id": "ord-8813",
+      "artisanId": "artisan_demo",
+      "productId": "p-2",
+      "productTitle": "Banarasi Zari Handloom Silk Saree",
+      "buyerName": "Tata Heritage & Luxury Crafts",
+      "buyerType": "corporate",
+      "quantity": 8,
+      "unitPrice": 8900,
+      "totalAmount": 71200,
+      "status": "accepted",
+      "escrowStatus": "held_in_sbi_escrow",
+      "deliveryBy": "2026-10-18",
+      "createdAt": "2026-09-16T14:55:10.471Z",
+      "updatedAt": "2026-09-16T20:55:10.471Z"
+    }
+  },
+  "tenders": {
+    "t-gem-101": {
+      "id": "t-gem-101",
+      "tenderNumber": "GEM/2026/B/891244",
+      "title": "500 Hand-Cast Brass Diyas & Mementos",
+      "organization": "Ministry of Culture & Tourism, Govt of India",
+      "buyerType": "government",
+      "quantity": 500,
+      "maxBudget": 625000,
+      "status": "open",
+      "deadline": "2026-10-15",
+      "description": "Procurement of authentic hand-cast brass ceremonial lamps for national heritage exhibitions.",
+      "createdAt": "2026-09-17T14:55:10.470Z"
+    },
+    "t-corp-202": {
+      "id": "t-corp-202",
+      "tenderNumber": "CORP/ITC/2026/782",
+      "title": "250 Terracotta Artisan Tea Sets",
+      "organization": "ITC WelcomHeritage Luxury Hotels",
+      "buyerType": "corporate",
+      "quantity": 250,
+      "maxBudget": 350000,
+      "status": "open",
+      "deadline": "2026-10-28",
+      "description": "Direct procurement for luxury resort welcome gifting with verified artisan authenticity tags.",
+      "createdAt": "2026-09-17T14:55:10.470Z"
+    }
+  },
+  "chats": {}
+}

@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
-import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas-pro';
 import { sound } from '../../services/sound';
 import { ShilpSetuLogo } from './ShilpSetuLogo';
 import { useTranslation } from '../../services/translations';
@@ -65,7 +65,101 @@ export const PrintableCraftQRCodeModal: React.FC<PrintableCraftQRCodeModalProps>
 
       sound.playSuccess();
     } catch (err) {
-      console.error('Error downloading hangtag:', err);
+      console.warn('html2canvas capture issue, using direct canvas fallback:', err);
+      try {
+        const fallbackCanvas = document.createElement('canvas');
+        fallbackCanvas.width = 600;
+        fallbackCanvas.height = 900;
+        const ctx = fallbackCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#FAF7EE';
+          ctx.fillRect(0, 0, 600, 900);
+
+          ctx.strokeStyle = '#D4A759';
+          ctx.lineWidth = 6;
+          ctx.strokeRect(16, 16, 568, 868);
+
+          ctx.beginPath();
+          ctx.arc(300, 48, 14, 0, Math.PI * 2);
+          ctx.fillStyle = '#E5E5E5';
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = '#D4A759';
+          ctx.stroke();
+
+          ctx.fillStyle = '#B5451B';
+          ctx.font = 'bold 28px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('SHILPSETU', 300, 105);
+
+          ctx.fillStyle = '#2E4638';
+          ctx.font = 'bold 16px sans-serif';
+          ctx.fillText(category.toUpperCase(), 300, 140);
+
+          ctx.fillStyle = '#1A1815';
+          ctx.font = 'bold 22px serif';
+          ctx.fillText(craftTitle, 300, 180);
+
+          ctx.fillStyle = '#666666';
+          ctx.font = '16px serif';
+          ctx.fillText(`Crafted by ${artisanName}`, 300, 215);
+
+          ctx.fillStyle = '#888888';
+          ctx.font = '14px sans-serif';
+          ctx.fillText(artisanLocation, 300, 240);
+
+          const svgEl = labelRef.current.querySelector('svg');
+          if (svgEl) {
+            const svgXml = new XMLSerializer().serializeToString(svgEl);
+            const img = new Image();
+            await new Promise<void>((resolve) => {
+              img.onload = () => {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(175, 275, 250, 250);
+                ctx.strokeStyle = '#E8B84B';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(175, 275, 250, 250);
+                ctx.drawImage(img, 200, 300, 200, 200);
+                resolve();
+              };
+              img.onerror = () => resolve();
+              img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgXml)));
+            });
+          }
+
+          ctx.fillStyle = '#FAF4E8';
+          ctx.fillRect(80, 560, 440, 160);
+          ctx.strokeStyle = 'rgba(34, 51, 30, 0.15)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(80, 560, 440, 160);
+
+          ctx.textAlign = 'left';
+          ctx.fillStyle = '#555555';
+          ctx.font = '14px sans-serif';
+          ctx.fillText(`Materials: ${materials}`, 100, 600);
+          ctx.fillText(`Batch UID: ${batchCode}`, 100, 635);
+
+          ctx.font = 'bold 18px sans-serif';
+          ctx.fillStyle = '#2E4638';
+          ctx.fillText('Fair Value:', 100, 685);
+          ctx.fillStyle = '#B5451B';
+          ctx.font = 'bold 22px monospace';
+          ctx.fillText(`₹${price.toLocaleString('en-IN')}`, 220, 685);
+
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#2E4638';
+          ctx.font = 'bold 14px sans-serif';
+          ctx.fillText('✓ Certified Authentic Handcrafted • Vocal For Local', 300, 770);
+
+          const link = document.createElement('a');
+          link.download = `ShilpSetu_Craft_Hangtag_${craftTitle.replace(/\s+/g, '_')}.png`;
+          link.href = fallbackCanvas.toDataURL('image/png');
+          link.click();
+          sound.playSuccess();
+        }
+      } catch (fallbackErr) {
+        console.error('Error downloading hangtag fallback:', fallbackErr);
+      }
     } finally {
       setIsDownloading(false);
     }

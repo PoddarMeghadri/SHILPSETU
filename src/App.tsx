@@ -21,6 +21,7 @@ import { ShilpiVoiceFAB } from './components/voice/ShilpiVoiceFAB';
 import { ShilpiVoiceModal } from './components/voice/ShilpiVoiceModal';
 import { sound } from './services/sound';
 import { useLanguage } from './context/LanguageContext';
+import { api } from './services/api';
 
 export function App() {
   const { language, setLanguage } = useLanguage();
@@ -69,6 +70,32 @@ export function App() {
   const [activities, setActivities] = useState<ActivityItem[]>(INITIAL_ACTIVITIES);
   const [stories] = useState<StoryAvatar[]>(ARTISAN_STORIES);
 
+  // Sync products and artisan profile from backend
+  useEffect(() => {
+    api.getProducts().then((serverProducts) => {
+      if (serverProducts && serverProducts.length > 0) {
+        setProducts((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          const toAdd = serverProducts.filter((p) => !existingIds.has(p.id));
+          if (toAdd.length === 0) return prev;
+          const merged = [...toAdd, ...prev];
+          localStorage.setItem('shilpsetu_products', JSON.stringify(merged));
+          return merged;
+        });
+      }
+    }).catch(console.warn);
+
+    api.getArtisanProfile().then((serverProfile) => {
+      if (serverProfile) {
+        setArtisan((prev) => {
+          const merged = { ...prev, ...serverProfile };
+          localStorage.setItem('shilpsetu_artisan', JSON.stringify(merged));
+          return merged;
+        });
+      }
+    }).catch(console.warn);
+  }, []);
+
   // Persist theme changes
   const handleToggleTheme = () => {
     setIsDark((prev) => {
@@ -103,6 +130,7 @@ export function App() {
   const handleUpdateArtisan = (updated: ArtisanProfile) => {
     setArtisan(updated);
     localStorage.setItem('shilpsetu_artisan', JSON.stringify(updated));
+    api.updateArtisanProfile(updated).catch(console.warn);
   };
 
   // Persist product stock changes
@@ -114,6 +142,7 @@ export function App() {
       localStorage.setItem('shilpsetu_products', JSON.stringify(updated));
       return updated;
     });
+    api.updateProductStock(productId, newStock).catch(console.warn);
   };
 
   // Scroll listener for sticky app bar styling
@@ -135,6 +164,7 @@ export function App() {
       localStorage.setItem('shilpsetu_products', JSON.stringify(updated));
       return updated;
     });
+    api.createProduct(newProduct).catch(console.warn);
     // Add new activity
     const newActivity: ActivityItem = {
       id: `act-${Date.now()}`,

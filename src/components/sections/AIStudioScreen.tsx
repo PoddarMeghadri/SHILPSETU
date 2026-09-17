@@ -43,10 +43,10 @@ const getViewfinderClass = (ratio: AspectRatioOption, device: DeviceCategory): s
       case '1:1':
         return 'aspect-square max-w-[420px]';
       case '4:3':
-        return 'aspect-[4/3] max-w-[540px]';
+        return 'aspect-[4/3] max-w-[520px]';
       case '16:9':
       default:
-        return 'aspect-video max-w-[680px]';
+        return 'aspect-[16/9] max-w-[680px]';
     }
   }
 
@@ -58,7 +58,7 @@ const getViewfinderClass = (ratio: AspectRatioOption, device: DeviceCategory): s
       return 'aspect-[4/3] max-w-[560px]';
     case '16:9':
     default:
-      return 'aspect-video max-w-[700px]';
+      return 'aspect-[16/9] max-w-[700px]';
   }
 };
 
@@ -253,10 +253,10 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
           
           <div className="space-y-1.5 px-2">
             <h4 className="font-serif font-bold text-base text-white">
-              Professional Studio Product Photography
+              {t('studio_photo_title', 'Professional Studio Product Photography')}
             </h4>
             <p className="text-xs text-white/80 font-sans leading-relaxed">
-              Soft cinematic lighting, 4k resolution, clean neutral background, sharp focus, exact original object preservation, highly detailed native texture, photorealistic enhancement.
+              {t('studio_photo_desc', 'Soft cinematic lighting, 4k resolution, clean neutral background, sharp focus, exact original object preservation, highly detailed native texture, photorealistic enhancement.')}
             </p>
           </div>
 
@@ -272,6 +272,16 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
               aspectRatio,
               deviceCategory
             )} bg-[#1A1815] rounded-3xl overflow-hidden border-2 border-[#D9A441]/40 shadow-2xl flex flex-col justify-between p-3.5 sm:p-4 transition-all duration-300 ease-out`}
+            style={{
+              aspectRatio:
+                aspectRatio === '1:1'
+                  ? '1 / 1'
+                  : aspectRatio === '4:3'
+                  ? '4 / 3'
+                  : aspectRatio === '9:16'
+                  ? '9 / 16'
+                  : '16 / 9',
+            }}
           >
             <img
               src={viewfinderImage}
@@ -481,7 +491,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
                     ₹{(prod.price ?? 1200).toLocaleString('en-IN')}
                   </div>
                   <div className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-xs text-[8px] font-bold text-[#E8B84B] rounded">
-                    4K Studio
+                    {t('studio_4k_badge', '4K Studio')}
                   </div>
                 </div>
 
@@ -541,8 +551,8 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
           setShowSuccess(false);
           onNavigate('b2b');
         }}
-        title="Studio Enhancement Complete!"
-        subtitle="Professional studio product photography, soft cinematic lighting, 4k resolution, clean neutral background, sharp focus, exact original object preservation, highly detailed native texture, photorealistic enhancement."
+        title={t('studio_enhancement_complete', 'Studio Enhancement Complete!')}
+        subtitle={t('studio_photo_desc', 'Soft cinematic lighting, 4k resolution, clean neutral background, sharp focus, exact original object preservation, highly detailed native texture, photorealistic enhancement.')}
         actionText={t('continue_to_sell', 'Continue to Sell')}
         actionLabel={t('continue_to_sell', 'Continue to Sell')}
         isDark={isDark}
