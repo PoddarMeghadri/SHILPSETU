@@ -135,7 +135,7 @@ const defaultInitialProducts: ProductRecord[] = [
     craft: 'Wood Carving',
     price: 3450,
     stock: 2,
-    imageUrl: 'https://images.unsplash.com/photo-1607344645866-009c320b5ab8?w=800&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=800&auto=format&fit=crop&q=80',
     story: 'Carved using ancestral teak wood chiseling techniques passed down through 4 generations.',
     rawMaterialsCost: 1200,
     laborHours: 8,

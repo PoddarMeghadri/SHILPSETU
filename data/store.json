@@ -3,16 +3,17 @@
     "artisan_9876543210": {
       "id": "artisan_9876543210",
       "mobile": "9876543210",
-      "fullName": "Raghavendra Sharma",
-      "craft": "pottery",
+      "fullName": "Master Artisan",
+      "craft": "Traditional Handicrafts",
       "state": "Uttar Pradesh",
       "city": "Varanasi",
       "gender": "other",
+      "email": "zerofpsishere@gmail.com",
       "language": "hi",
       "trustScore": 98,
       "isVerified": true,
       "createdAt": "2026-09-17T15:30:16.460Z",
-      "updatedAt": "2026-09-17T15:30:16.460Z"
+      "updatedAt": "2026-09-17T18:05:31.020Z"
     }
   },
   "products": {

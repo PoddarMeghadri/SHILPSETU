@@ -4,8 +4,17 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const rawClerkKey = process.env.VITE_CLERK_PUBLISHABLE_KEY || '';
+  const sanitizedClerkKey = rawClerkKey
+    .replace(/^VITE_CLERK_PUBLISHABLE_KEY=/, '')
+    .replace(/^["']|["']$/g, '')
+    .trim() || 'pk_test_ZXRlcm5hbC1maXJlZmx5LTgyODYuY2xlcmsuYWNjb3VudHMuZGV2JA';
+
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      'import.meta.env.VITE_CLERK_PUBLISHABLE_KEY': JSON.stringify(sanitizedClerkKey),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

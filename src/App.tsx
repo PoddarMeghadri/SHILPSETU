@@ -61,7 +61,21 @@ export function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map((p: any) => {
+            if (
+              p.polishedImageUrl?.includes('photo-1607344645866') ||
+              p.imageUrl?.includes('photo-1607344645866') ||
+              p.rawImageUrl?.includes('photo-1607344645866')
+            ) {
+              return {
+                ...p,
+                imageUrl: 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=800&auto=format&fit=crop&q=80',
+                polishedImageUrl: 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=800&auto=format&fit=crop&q=80',
+                rawImageUrl: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&auto=format&fit=crop&q=80',
+              };
+            }
+            return p;
+          });
         }
       } catch (_) {}
     }
@@ -75,10 +89,41 @@ export function App() {
     api.getProducts().then((serverProducts) => {
       if (serverProducts && serverProducts.length > 0) {
         setProducts((prev) => {
+          const sanitizedServer = serverProducts.map((p) => {
+            if (
+              (p as any).imageUrl?.includes('photo-1607344645866') ||
+              p.polishedImageUrl?.includes('photo-1607344645866') ||
+              p.rawImageUrl?.includes('photo-1607344645866')
+            ) {
+              return {
+                ...p,
+                rawImageUrl: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&auto=format&fit=crop&q=80',
+                polishedImageUrl: 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=800&auto=format&fit=crop&q=80',
+              };
+            }
+            return p;
+          });
           const existingIds = new Set(prev.map((p) => p.id));
-          const toAdd = serverProducts.filter((p) => !existingIds.has(p.id));
-          if (toAdd.length === 0) return prev;
-          const merged = [...toAdd, ...prev];
+          const toAdd = sanitizedServer.filter((p) => !existingIds.has(p.id));
+          const updatedPrev = prev.map((p) => {
+            if (
+              p.polishedImageUrl?.includes('photo-1607344645866') ||
+              (p as any).imageUrl?.includes('photo-1607344645866') ||
+              p.rawImageUrl?.includes('photo-1607344645866')
+            ) {
+              return {
+                ...p,
+                rawImageUrl: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&auto=format&fit=crop&q=80',
+                polishedImageUrl: 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=800&auto=format&fit=crop&q=80',
+              };
+            }
+            return p;
+          });
+          if (toAdd.length === 0) {
+            localStorage.setItem('shilpsetu_products', JSON.stringify(updatedPrev));
+            return updatedPrev;
+          }
+          const merged = [...toAdd, ...updatedPrev];
           localStorage.setItem('shilpsetu_products', JSON.stringify(merged));
           return merged;
         });

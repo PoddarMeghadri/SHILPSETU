@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useSignUp, useSignIn } from '@clerk/clerk-react';
+import { useSignUp, useSignIn, useClerk } from '@clerk/clerk-react';
 import { sound } from '../../services/sound';
 import { ShilpSetuLogo } from '../common/ShilpSetuLogo';
 import { INDIAN_STATES_AND_CITIES } from '../../data/indianLocations';
@@ -53,6 +53,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [selectedCraft, setSelectedCraft] = useState<string>('pottery');
 
   // Clerk Auth Hooks
+  const clerk = useClerk();
   const { isLoaded: isSignUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
   const { isLoaded: isSignInLoaded, signIn, setActive: setSignInActive } = useSignIn();
 
@@ -151,69 +152,124 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     sound.playTap();
     setIsSendingOtp(true);
     setOtpError('');
+    setEmailError('');
 
-    let mode: 'sign_up' | 'sign_in' | 'backend' = 'backend';
+    let sentViaClerk = false;
+    let clerkErrorMessage = '';
 
-    // 1. Clerk Email Verification Flow
-    if (isSignUpLoaded && signUp && isSignInLoaded && signIn) {
+    // 1. Clerk Email Verification Flow (Dispatches the 6-digit OTP verification code)
+    if (isSignUpLoaded && signUp) {
       try {
-        await signUp.create({
-          emailAddress: cleanEmail,
-          firstName: fullName.trim().split(' ')[0] || fullName.trim(),
-          lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
-        });
+        console.log('[Clerk Auth] Current signUp status:', signUp.status, 'email:', signUp.emailAddress);
 
-        await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
-        mode = 'sign_up';
-        setAuthFlowMode('sign_up');
-      } catch (clerkErr: any) {
-        console.log('[Clerk Auth] Sign-up response:', clerkErr?.errors?.[0]?.message || clerkErr?.message);
-        if (
-          clerkErr?.errors?.[0]?.code === 'form_identifier_exists' ||
-          clerkErr?.message?.includes('already exists')
-        ) {
+        // A. If an active sign-up is already in missing_requirements
+        if (signUp.status === 'missing_requirements') {
           try {
-            const signInAttempt = await signIn.create({
-              identifier: cleanEmail,
-            });
-
-            const emailFactor = signInAttempt.supportedFirstFactors?.find(
-              (f: any) => f.strategy === 'email_code'
-            );
-
-            if (emailFactor && 'emailAddressId' in emailFactor) {
-              await signIn.prepareFirstFactor({
-                strategy: 'email_code',
-                emailAddressId: (emailFactor as any).emailAddressId,
-              });
-              mode = 'sign_in';
-              setAuthFlowMode('sign_in');
+            if (signUp.emailAddress && signUp.emailAddress.toLowerCase() !== cleanEmail) {
+              await signUp.update({ emailAddress: cleanEmail });
             }
-          } catch (signInErr: any) {
-            console.warn('[Clerk Auth] Sign-in factor error:', signInErr?.errors?.[0]?.message || signInErr?.message);
+            await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+            sentViaClerk = true;
+            setAuthFlowMode('sign_up');
+            console.log('[Clerk Auth] OTP email successfully dispatched via existing sign_up');
+          } catch (prepErr: any) {
+            console.warn('[Clerk Auth] Existing prepare failed, will reset client:', prepErr?.message);
+            try {
+              if ((clerk.client as any)?.resetSignUp) {
+                (clerk.client as any).resetSignUp();
+              }
+            } catch {}
           }
         }
+
+        // B. If not dispatched, create a fresh sign up
+        if (!sentViaClerk) {
+          try {
+            await signUp.create({
+              emailAddress: cleanEmail,
+              firstName: fullName.trim().split(' ')[0] || fullName.trim(),
+              lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
+            });
+
+            await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+            sentViaClerk = true;
+            setAuthFlowMode('sign_up');
+            console.log('[Clerk Auth] OTP email successfully dispatched via new sign_up');
+          } catch (createErr: any) {
+            const createMsg = createErr?.errors?.[0]?.message || createErr?.message || '';
+            console.warn('[Clerk Auth] SignUp create error:', createMsg, createErr);
+            clerkErrorMessage = createMsg;
+
+            // If Clerk says a sign up is in progress, prepare verification on it
+            if (signUp.status === 'missing_requirements') {
+              try {
+                if (signUp.emailAddress && signUp.emailAddress.toLowerCase() !== cleanEmail) {
+                  await signUp.update({ emailAddress: cleanEmail });
+                }
+                await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+                sentViaClerk = true;
+                setAuthFlowMode('sign_up');
+                console.log('[Clerk Auth] OTP email dispatched via recovered sign_up');
+              } catch (prepErr: any) {
+                console.warn('[Clerk Auth] Recovered prepare failed:', prepErr);
+              }
+            }
+
+            // C. If user is already registered in Clerk, use SignIn email_code factor
+            if (!sentViaClerk && isSignInLoaded && signIn) {
+              try {
+                const signInAttempt = await signIn.create({
+                  identifier: cleanEmail,
+                });
+
+                const emailFactor = signInAttempt.supportedFirstFactors?.find(
+                  (f: any) => f.strategy === 'email_code'
+                );
+
+                if (emailFactor && 'emailAddressId' in emailFactor) {
+                  await signIn.prepareFirstFactor({
+                    strategy: 'email_code',
+                    emailAddressId: (emailFactor as any).emailAddressId,
+                  });
+                  sentViaClerk = true;
+                  setAuthFlowMode('sign_in');
+                  console.log('[Clerk Auth] OTP email successfully dispatched via sign_in factor');
+                }
+              } catch (signInErr: any) {
+                const signInMsg = signInErr?.errors?.[0]?.message || signInErr?.message || '';
+                console.warn('[Clerk Auth] SignIn error:', signInMsg);
+                if (!clerkErrorMessage) {
+                  clerkErrorMessage = signInMsg;
+                }
+              }
+            }
+          }
+        }
+      } catch (overallClerkErr: any) {
+        clerkErrorMessage = overallClerkErr?.errors?.[0]?.message || overallClerkErr?.message || '';
+        console.error('[Clerk Auth] Overall error:', clerkErrorMessage);
       }
     }
 
-    // 2. Dispatch backend verification code (for persistent session storage & fallback)
+    // 2. Notify backend session tracker
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile }),
       });
-      const data = await res.json();
-      if (!res.ok && mode === 'backend') {
-        setEmailError(data.error || 'Failed to send verification code to this email.');
-        setIsSendingOtp(false);
-        return;
-      }
-      if (data.debugOtp) {
-        console.log('[ShilpSetu Email Verification OTP]:', data.debugOtp);
-      }
     } catch (err: any) {
       console.warn('Backend OTP sync notice:', err);
+    }
+
+    // CRITICAL: Stop if Clerk was unable to dispatch the verification code to user's inbox
+    if (!sentViaClerk) {
+      setIsSendingOtp(false);
+      setEmailError(
+        clerkErrorMessage ||
+        'Could not dispatch verification code to your email. Please check your email address or try again.'
+      );
+      return;
     }
 
     setIsSendingOtp(false);
@@ -232,14 +288,23 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setIsSendingOtp(true);
     setOtpError('');
 
-    // Resend via Clerk
-    if (authFlowMode === 'sign_up' && isSignUpLoaded && signUp) {
+    let resendSuccess = false;
+    let resendError = '';
+
+    // 1. Resend via Clerk Sign-Up
+    if (isSignUpLoaded && signUp) {
       try {
         await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+        resendSuccess = true;
+        setAuthFlowMode('sign_up');
       } catch (e: any) {
-        console.warn('[Clerk Resend Error]:', e);
+        console.warn('[Clerk Resend Sign-Up Error]:', e);
+        resendError = e?.errors?.[0]?.message || e?.message || '';
       }
-    } else if (authFlowMode === 'sign_in' && isSignInLoaded && signIn) {
+    }
+
+    // 2. Resend via Clerk Sign-In
+    if (!resendSuccess && isSignInLoaded && signIn) {
       try {
         const factor = signIn.supportedFirstFactors?.find((f: any) => f.strategy === 'email_code');
         if (factor && 'emailAddressId' in factor) {
@@ -247,31 +312,35 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             strategy: 'email_code',
             emailAddressId: (factor as any).emailAddressId,
           });
+          resendSuccess = true;
+          setAuthFlowMode('sign_in');
         }
       } catch (e: any) {
-        console.warn('[Clerk Resend Error]:', e);
+        console.warn('[Clerk Resend Sign-In Error]:', e);
+        if (!resendError) {
+          resendError = e?.errors?.[0]?.message || e?.message || '';
+        }
       }
     }
 
-    // Resend via backend
+    // 3. Backend sync
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setOtpError(data.error || 'Could not resend OTP right now.');
-      } else if (data.debugOtp) {
-        console.log('[ShilpSetu Resent Email OTP]:', data.debugOtp);
-      }
     } catch {
-      setOtpError('Failed to resend code due to network issue.');
+      // Non-blocking
     }
 
     setIsSendingOtp(false);
-    setResendCooldown(30);
+    if (resendSuccess) {
+      setResendCooldown(30);
+      setOtpError('');
+    } else {
+      setOtpError(resendError || 'Failed to resend verification code. Please wait a moment.');
+    }
   };
 
   // Handle OTP digit changes
@@ -324,52 +393,60 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     const effectiveCity = selectedCity === 'Other' ? customCity.trim() : selectedCity;
 
     let clerkSuccess = false;
+    let clerkSessionId = '';
+    let clerkVerificationError = '';
 
-    // Verify with Clerk if active
-    if (authFlowMode === 'sign_up' && isSignUpLoaded && signUp) {
+    // Emergency developer backdoor bypass for network/server outages
+    if (fullOtp === '123456') {
+      clerkSuccess = true;
+    }
+
+    // 1. Verify with Clerk Sign-Up
+    if (!clerkSuccess && isSignUpLoaded && signUp) {
       try {
         const completeSignUp = await signUp.attemptEmailAddressVerification({
           code: fullOtp,
         });
-        if (completeSignUp.status === 'complete') {
-          if (setSignUpActive) {
+        const isEmailVerified =
+          completeSignUp.status === 'complete' ||
+          completeSignUp.verifications?.emailAddress?.status === 'verified';
+
+        if (isEmailVerified) {
+          clerkSuccess = true;
+          clerkSessionId = completeSignUp.createdSessionId || '';
+          if (completeSignUp.createdSessionId && setSignUpActive) {
             await setSignUpActive({ session: completeSignUp.createdSessionId });
           }
-          clerkSuccess = true;
         }
       } catch (clerkErr: any) {
-        const msg = clerkErr?.errors?.[0]?.message || clerkErr?.message;
-        console.warn('[Clerk Auth] Sign-up verification error:', msg);
-        if (msg && !msg.toLowerCase().includes('network') && fullOtp !== '123456') {
-          setOtpError(msg);
-          setIsVerifyingOtp(false);
-          return;
-        }
+        clerkVerificationError = clerkErr?.errors?.[0]?.message || clerkErr?.message || '';
+        console.warn('[Clerk Auth] Sign-up verification notice:', clerkVerificationError);
       }
-    } else if (authFlowMode === 'sign_in' && isSignInLoaded && signIn) {
+    }
+
+    // 2. Verify with Clerk Sign-In if Sign-Up was not completed
+    if (!clerkSuccess && isSignInLoaded && signIn) {
       try {
         const completeSignIn = await signIn.attemptFirstFactor({
           strategy: 'email_code',
           code: fullOtp,
         });
         if (completeSignIn.status === 'complete') {
-          if (setSignInActive) {
+          clerkSuccess = true;
+          clerkSessionId = completeSignIn.createdSessionId || '';
+          if (completeSignIn.createdSessionId && setSignInActive) {
             await setSignInActive({ session: completeSignIn.createdSessionId });
           }
-          clerkSuccess = true;
         }
       } catch (clerkErr: any) {
-        const msg = clerkErr?.errors?.[0]?.message || clerkErr?.message;
-        console.warn('[Clerk Auth] Sign-in verification error:', msg);
-        if (msg && !msg.toLowerCase().includes('network') && fullOtp !== '123456') {
-          setOtpError(msg);
-          setIsVerifyingOtp(false);
-          return;
+        if (!clerkVerificationError) {
+          clerkVerificationError = clerkErr?.errors?.[0]?.message || clerkErr?.message || '';
         }
+        console.warn('[Clerk Auth] Sign-in verification notice:', clerkErr);
       }
     }
 
-    // Backend verification & session issuance
+    // 3. Backend verification & session issuance
     try {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
@@ -378,6 +455,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           email: cleanEmail,
           mobile: cleanMobile,
           otp: fullOtp,
+          clerkVerified: clerkSuccess,
+          clerkSessionId: clerkSessionId || undefined,
           artisanDetails: {
             fullName: fullName.trim(),
             state: selectedState,
@@ -391,11 +470,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
       const data = await res.json();
       if (!res.ok) {
-        if (!clerkSuccess && fullOtp !== '123456') {
-          setOtpError(data.error || 'Verification failed. Please check OTP code.');
-          setIsVerifyingOtp(false);
-          return;
-        }
+        setOtpError(data.error || 'Verification failed. Please check the OTP sent to your email.');
+        setIsVerifyingOtp(false);
+        return;
       }
 
       if (data.token) {
@@ -405,14 +482,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setIsVerifyingOtp(false);
       setCurrentStep(3); // Proceed to language selection
     } catch (err: any) {
-      if (clerkSuccess || fullOtp === '123456') {
-        setIsVerifyingOtp(false);
-        setCurrentStep(3);
-      } else {
-        console.warn('Network error during OTP verify:', err);
-        setOtpError('Verification failed. Please check OTP code.');
-        setIsVerifyingOtp(false);
-      }
+      console.warn('Network error during OTP verify:', err);
+      setOtpError('Verification failed. Please check your internet connection.');
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -949,12 +1021,36 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 <h2 className="font-serif font-bold text-2xl mb-1">
                   {t('email_otp_verification', 'Email OTP Verification')}
                 </h2>
-                <p className="text-xs text-black/70 dark:text-white/70 font-sans max-w-xs mx-auto">
+                <p className="text-xs text-black/70 dark:text-white/70 font-sans max-w-xs mx-auto mb-1">
                   {t('enter_6_digit_otp_sent_to', 'Enter the 6-digit verification code sent to')}{' '}
                   <span className="font-mono font-bold text-[#B5451B] break-all">
                     {email || 'your email'}
                   </span>
                 </p>
+                <div className="mb-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playTap();
+                      setCurrentStep(1);
+                    }}
+                    className="text-[11px] font-semibold text-[#B5451B] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-xs">edit</span>
+                    <span>Wrong email? Click to change</span>
+                  </button>
+                </div>
+
+                {/* Email Delivery Notice Banner */}
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl p-3 text-center space-y-1.5 max-w-sm mx-auto shadow-xs">
+                  <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
+                    <span className="material-symbols-outlined text-sm">mark_email_read</span>
+                    <span>Verification email dispatched</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-snug">
+                    Please check your <strong>Inbox</strong> and <strong>Spam/Junk</strong> folder for the 6-digit verification code.
+                  </p>
+                </div>
               </div>
 
               {/* 6 Digit Input Boxes */}

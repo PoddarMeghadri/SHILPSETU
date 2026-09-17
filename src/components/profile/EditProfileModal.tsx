@@ -471,9 +471,6 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   <label className="block text-[11px] font-medium opacity-80">
                     {t('reg_mobile_num', 'Registered Mobile Number')} <span className="text-red-500">*</span>
                   </label>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#B5451B]/10 text-[#B5451B] font-bold">
-                    {t('otp_login_badge', 'OTP Login')}
-                  </span>
                 </div>
                 <div className="relative flex items-center">
                   <div className="absolute left-3 flex items-center gap-1 pointer-events-none text-xs font-mono font-bold opacity-75">
@@ -498,29 +495,16 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   />
                 </div>
                 <p className="text-[10px] opacity-60 mt-1">
-                  {t('mobile_help_text', 'Primary mobile number used for OTP verification and GeM / buyer inquiries.')}
+                  {t('mobile_help_text', 'Primary mobile number used for GeM orders and buyer inquiries.')}
                 </p>
               </div>
 
-              {/* 2. Email Address Option */}
+              {/* 2. Email Address */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-[11px] font-medium opacity-80">
-                    {t('email_address', 'Email Address')} <span className="text-[10px] opacity-60 font-normal">{t('optional', '(Optional)')}</span>
+                    {t('email_address', 'Email Address')} <span className="text-red-500">*</span>
                   </label>
-                  {formData.email && formData.email.trim().length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        sound.playTap();
-                        setFormData({ ...formData, email: '' });
-                      }}
-                      className="text-[10px] text-red-500 hover:text-red-600 font-medium underline flex items-center gap-0.5"
-                    >
-                      <span className="material-symbols-outlined text-[11px]">close</span>
-                      <span>{t('remove_email', 'Remove Email')}</span>
-                    </button>
-                  )}
                 </div>
                 <div className="relative flex items-center">
                   <span className="material-symbols-outlined absolute left-3 text-sm opacity-60 pointer-events-none">
@@ -528,6 +512,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   </span>
                   <input
                     type="email"
+                    required
                     value={formData.email || ''}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className={`w-full pl-9 pr-3.5 py-2.5 rounded-2xl border text-xs font-sans focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] ${
@@ -535,11 +520,11 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                         ? 'bg-[#121411] border-[#2D3A2B] text-white'
                         : 'bg-white border-[#22331E]/20 text-[#1A1815]'
                     }`}
-                    placeholder={t('placeholder_email', 'Enter email address (leave empty if not applicable)')}
+                    placeholder={t('placeholder_email', 'Enter email address')}
                   />
                 </div>
                 <p className="text-[10px] opacity-60 mt-1">
-                  {t('email_help_text', 'Optional. If left blank, no email address will be displayed on your profile.')}
+                  {t('email_help_text', 'Primary email address used for 6-digit OTP verification and account security.')}
                 </p>
               </div>
             </div>

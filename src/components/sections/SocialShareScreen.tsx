@@ -107,6 +107,9 @@ export const SocialShareScreen: React.FC<SocialShareScreenProps> = ({
                   <img
                     src={prod.polishedImageUrl}
                     alt={prod.title}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=800&auto=format&fit=crop&q=80';
+                    }}
                     className="w-7 h-7 rounded-xl object-cover"
                   />
                   <span className="truncate max-w-[140px]">{prod.title}</span>

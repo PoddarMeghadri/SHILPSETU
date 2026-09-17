@@ -513,6 +513,9 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
                   <img
                     src={prod.polishedImageUrl || prod.rawImageUrl}
                     alt={prod.title}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=800&auto=format&fit=crop&q=80';
+                    }}
                     className="w-16 h-16 rounded-2xl object-cover border border-white/15 shrink-0"
                   />
                   <div className="min-w-0 flex-1">

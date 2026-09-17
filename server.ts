@@ -23,6 +23,20 @@ import { uploadMiddleware, saveBase64Image } from './server/storage.js';
 
 dotenv.config();
 
+// Sanitize Clerk environment variables in case full 'KEY=value' string was pasted in settings
+if (process.env.VITE_CLERK_PUBLISHABLE_KEY) {
+  process.env.VITE_CLERK_PUBLISHABLE_KEY = process.env.VITE_CLERK_PUBLISHABLE_KEY
+    .replace(/^VITE_CLERK_PUBLISHABLE_KEY=/, '')
+    .replace(/^["']|["']$/g, '')
+    .trim();
+}
+if (process.env.CLERK_SECRET_KEY) {
+  process.env.CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY
+    .replace(/^CLERK_SECRET_KEY=/, '')
+    .replace(/^["']|["']$/g, '')
+    .trim();
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -65,7 +79,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
 // Verify Email OTP and issue JWT session token
 app.post('/api/auth/verify-otp', async (req, res) => {
   try {
-    const { email, mobile, otp, artisanDetails } = req.body;
+    const { email, mobile, otp, artisanDetails, clerkVerified, clerkSessionId } = req.body;
 
     if (!email || typeof email !== 'string' || !isValidEmail(email)) {
       return res.status(400).json({ error: 'Valid Email ID is strictly mandatory for artisan verification' });
@@ -75,9 +89,9 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Verification code (OTP) is required' });
     }
 
-    const isValid = await verifyOtp(email, otp);
+    const isValid = await verifyOtp(email, otp, { clerkVerified, clerkSessionId });
     if (!isValid) {
-      return res.status(400).json({ error: 'Invalid verification code' });
+      return res.status(400).json({ error: 'Invalid verification code. Please check the code sent to your email.' });
     }
 
     // Lookup existing or create profile by email or mobile
