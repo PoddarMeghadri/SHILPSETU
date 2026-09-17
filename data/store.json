@@ -7,13 +7,45 @@
       "craft": "Traditional Handicrafts",
       "state": "Uttar Pradesh",
       "city": "Varanasi",
-      "gender": "other",
-      "email": "zerofpsishere@gmail.com",
+      "gender": "male",
+      "email": "artisan@test.com",
       "language": "hi",
       "trustScore": 98,
       "isVerified": true,
+      "udyamNumber": "UDYAM-UP-75-0029469",
       "createdAt": "2026-09-17T15:30:16.460Z",
-      "updatedAt": "2026-09-17T18:05:31.020Z"
+      "updatedAt": "2026-09-17T19:12:55.893Z"
+    },
+    "artisan_5432654231": {
+      "id": "artisan_5432654231",
+      "mobile": "5432654231",
+      "fullName": "mm",
+      "craft": "Terracotta & Heritage Pottery",
+      "state": "Haryana",
+      "city": "Karnal",
+      "gender": "male",
+      "email": "meghadrihere@gmail.com",
+      "language": "en",
+      "trustScore": 98,
+      "isVerified": true,
+      "udyamNumber": "UDYAM-UP-75-0029418",
+      "createdAt": "2026-09-17T18:08:55.706Z",
+      "updatedAt": "2026-09-17T18:17:56.531Z"
+    },
+    "artisan_6494694646": {
+      "id": "artisan_6494694646",
+      "mobile": "6494694646",
+      "fullName": "Hehe",
+      "craft": "Traditional Handicrafts",
+      "state": "Tamil Nadu",
+      "city": "Coimbatore",
+      "gender": "male",
+      "email": "test@test.com",
+      "language": "en",
+      "trustScore": 98,
+      "isVerified": true,
+      "createdAt": "2026-09-17T19:05:56.480Z",
+      "updatedAt": "2026-09-17T19:05:56.480Z"
     }
   },
   "products": {
@@ -33,7 +65,7 @@
       "giCertified": true,
       "isActive": true,
       "createdAt": "2026-09-17T14:55:10.470Z",
-      "updatedAt": "2026-09-17T15:26:26.636Z"
+      "updatedAt": "2026-09-17T18:14:27.819Z"
     },
     "p-2": {
       "id": "p-2",

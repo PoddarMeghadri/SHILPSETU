@@ -96,6 +96,24 @@ export async function sendOtpToEmail(
     }
   }
 
+  // Also trigger Supabase Auth OTP mailer if Supabase credentials are functional
+  try {
+    const supabase = getSupabaseAuthClient();
+    const { error: supaErr } = await supabase.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+    if (supaErr) {
+      console.warn('[Supabase Auth OTP Notice]:', supaErr.message);
+    } else {
+      console.log('[Supabase Auth] Email OTP successfully requested for:', normalizedEmail);
+    }
+  } catch (supaErr: any) {
+    console.warn('[Supabase Auth Dispatch Notice]:', supaErr?.message);
+  }
+
   return {
     success: true,
     message: `Verification code sent successfully to ${normalizedEmail}. Please check your inbox and spam folder.`,
