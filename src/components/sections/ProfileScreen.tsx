@@ -175,18 +175,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         }`}
       >
         {/* Decorative Background Glow */}
-        <div className={`absolute -top-10 -right-10 w-32 h-32 rounded-full blur-xl pointer-events-none ${
-          isAdminMode ? 'bg-[#059669]/15' : 'bg-[#B5451B]/15'
-        }`} />
+        <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#B5451B]/15 rounded-full blur-xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col items-center">
           {/* Avatar with gold ring, Blue Verified Badge & edit badge */}
           <div className="relative mb-3 group">
-            <div className={`w-24 h-24 rounded-full p-1 shadow-md ${
-              isAdminMode
-                ? 'bg-gradient-to-tr from-[#059669] via-[#E8B84B] to-[#047857]'
-                : 'bg-gradient-to-tr from-[#B5451B] via-[#E8B84B] to-[#2E4638]'
-            }`}>
+            <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-[#B5451B] via-[#E8B84B] to-[#2E4638] shadow-md">
               <img
                 src={artisan.avatarUrl || DEFAULT_AVATAR}
                 alt={artisan.name}
@@ -216,11 +210,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <div className="flex items-center gap-2 mb-2">
             <button
               onClick={() => profilePhotoInputRef.current?.click()}
-              className={`px-2.5 py-1 text-[11px] font-bold rounded-full border flex items-center gap-1 transition-colors ${
-                isAdminMode
-                  ? 'bg-[#059669]/15 hover:bg-[#059669]/25 text-[#059669] dark:text-[#6EE7B7] border-[#059669]/30'
-                  : 'bg-[#B5451B]/10 hover:bg-[#B5451B]/20 text-[#B5451B] dark:text-[#FFA680] border-[#B5451B]/30'
-              }`}
+              className="px-2.5 py-1 bg-[#B5451B]/10 hover:bg-[#B5451B]/20 text-[#B5451B] dark:text-[#FFA680] text-[11px] font-bold rounded-full border border-[#B5451B]/30 flex items-center gap-1 transition-colors"
             >
               <span className="material-symbols-outlined text-xs">add_a_photo</span>
               <span>{t('change_photo', 'Change Photo')}</span>
@@ -239,9 +229,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <h3 className="font-serif font-bold text-2xl">{artisan.name}</h3>
             <BlueVerifiedBadge size={20} />
           </div>
-          <p className={`text-xs font-serif font-semibold mt-0.5 ${
-            isAdminMode ? 'text-[#059669] dark:text-[#6EE7B7]' : 'text-[#B5451B]'
-          }`}>
+          <p className="text-xs font-serif font-semibold text-[#B5451B] mt-0.5">
             {t('artisan_default_title', artisan.title)}
           </p>
           <div className="text-xs opacity-80 font-sans mt-0.5 flex items-center justify-center gap-1.5 flex-wrap">
@@ -251,11 +239,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             {artisan.gender && (
               <>
                 <span>•</span>
-                <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                  isAdminMode
-                    ? 'bg-[#059669]/15 text-[#059669] dark:text-[#6EE7B7]'
-                    : 'bg-[#B5451B]/10 text-[#B5451B] dark:text-[#FFA680]'
-                }`}>
+                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#B5451B]/10 text-[#B5451B] dark:text-[#FFA680]">
                   <span className="material-symbols-outlined text-xs">
                     {artisan.gender === 'male' ? 'male' : artisan.gender === 'female' ? 'female' : 'transgender'}
                   </span>
@@ -271,13 +255,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <div className="flex items-center justify-center gap-2.5 text-[11px] opacity-85 mt-1.5 font-mono flex-wrap">
               {artisan.mobile && artisan.mobile.trim().length > 0 && (
                 <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 border border-[#22331E]/10 dark:border-white/10">
-                  <span className={`material-symbols-outlined text-xs ${isAdminMode ? 'text-[#059669] dark:text-[#6EE7B7]' : 'text-[#B5451B]'}`}>call</span>
+                  <span className="material-symbols-outlined text-xs text-[#B5451B]">call</span>
                   <span>+91 {artisan.mobile}</span>
                 </span>
               )}
               {artisan.email && artisan.email.trim().length > 0 && (
                 <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 border border-[#22331E]/10 dark:border-white/10 truncate max-w-[200px]">
-                  <span className={`material-symbols-outlined text-xs ${isAdminMode ? 'text-[#059669] dark:text-[#6EE7B7]' : 'text-[#B5451B]'}`}>mail</span>
+                  <span className="material-symbols-outlined text-xs text-[#B5451B]">mail</span>
                   <span className="truncate">{artisan.email.trim()}</span>
                 </span>
               )}
@@ -294,18 +278,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <span className="material-symbols-outlined text-xs">check_circle</span>
               {t('gem_govt_vendor', 'GeM Govt. Vendor')}
             </span>
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border font-mono ${
-              isAdminMode
-                ? 'bg-[#E8B84B]/20 text-[#059669] dark:text-[#6EE7B7] border-[#E8B84B]/40'
-                : 'bg-[#E8B84B]/20 text-[#B5451B] border-[#E8B84B]/40'
-            }`}>
+            <span className="px-2.5 py-0.5 bg-[#E8B84B]/20 text-[#B5451B] rounded-full text-[10px] font-bold uppercase border border-[#E8B84B]/40 font-mono">
               {artisan.udyamNumber || 'UDYAM-UP-0029182'}
             </span>
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border flex items-center gap-1 ${
-              isAdminMode
-                ? 'bg-[#059669]/15 text-[#059669] dark:text-[#6EE7B7] border-[#059669]/30'
-                : 'bg-[#B5451B]/15 text-[#B5451B] dark:text-[#FFA680] border-[#B5451B]/30'
-            }`}>
+            <span className="px-2.5 py-0.5 bg-[#B5451B]/15 text-[#B5451B] dark:text-[#FFA680] rounded-full text-[10px] font-bold uppercase border border-[#B5451B]/30 flex items-center gap-1">
               <span className="material-symbols-outlined text-xs">star</span>
               {t('trust_score', 'Trust Score')}: {artisan.trustScore ?? 98}/100
             </span>
@@ -322,15 +298,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               sound.playTap();
               setIsEditModalOpen(true);
             }}
-            className={`mt-4 px-4 py-2 rounded-2xl font-serif font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all ${
-              isAdminMode
-                ? 'bg-[#059669]/15 hover:bg-[#059669]/25 text-[#059669] dark:text-[#6EE7B7] border border-[#059669]/30'
-                : 'bg-[#B5451B]/15 hover:bg-[#B5451B]/25 text-[#B5451B] dark:text-[#FFA680] border border-[#B5451B]/30'
-            }`}
+            className="mt-4 px-4 py-2 rounded-2xl bg-[#B5451B]/15 hover:bg-[#B5451B]/25 text-[#B5451B] dark:text-[#FFA680] border border-[#B5451B]/30 font-serif font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all"
           >
-            <span className="material-symbols-outlined text-sm">edit</span>
-            <span>{t('edit_profile', 'Edit Profile & Lineage')}</span>
-          </button>
             <span className="material-symbols-outlined text-sm">edit</span>
             <span>{t('edit_profile', 'Edit Profile & Lineage')}</span>
           </button>

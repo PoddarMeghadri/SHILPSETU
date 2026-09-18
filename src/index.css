@@ -405,54 +405,6 @@ html.admin-mode .bg-artisan-primary,
   background-color: #059669 !important;
 }
 
-/* Translucent background tints in Admin Mode (must override the solid rule above) */
-html.admin-mode [class*="bg-[#B5451B]/5"],
-.admin-mode [class*="bg-[#B5451B]/5"] {
-  background-color: rgba(5, 150, 105, 0.05) !important;
-}
-html.admin-mode [class*="bg-[#B5451B]/10"],
-.admin-mode [class*="bg-[#B5451B]/10"] {
-  background-color: rgba(5, 150, 105, 0.1) !important;
-}
-html.admin-mode [class*="bg-[#B5451B]/15"],
-.admin-mode [class*="bg-[#B5451B]/15"] {
-  background-color: rgba(5, 150, 105, 0.15) !important;
-}
-html.admin-mode [class*="bg-[#B5451B]/20"],
-.admin-mode [class*="bg-[#B5451B]/20"] {
-  background-color: rgba(5, 150, 105, 0.2) !important;
-}
-html.admin-mode [class*="bg-[#B5451B]/25"],
-.admin-mode [class*="bg-[#B5451B]/25"] {
-  background-color: rgba(5, 150, 105, 0.25) !important;
-}
-html.admin-mode [class*="bg-[#B5451B]/30"],
-.admin-mode [class*="bg-[#B5451B]/30"] {
-  background-color: rgba(5, 150, 105, 0.3) !important;
-}
-html.admin-mode [class*="bg-[#B5451B]/40"],
-.admin-mode [class*="bg-[#B5451B]/40"] {
-  background-color: rgba(5, 150, 105, 0.4) !important;
-}
-html.admin-mode [class*="bg-[#B5451B]/50"],
-.admin-mode [class*="bg-[#B5451B]/50"] {
-  background-color: rgba(5, 150, 105, 0.5) !important;
-}
-html.admin-mode [class*="bg-[#B5451B]/60"],
-.admin-mode [class*="bg-[#B5451B]/60"] {
-  background-color: rgba(5, 150, 105, 0.6) !important;
-}
-
-/* Translucent hover states */
-html.admin-mode [class*="hover:bg-[#B5451B]/20"]:hover,
-.admin-mode [class*="hover:bg-[#B5451B]/20"]:hover {
-  background-color: rgba(5, 150, 105, 0.2) !important;
-}
-html.admin-mode [class*="hover:bg-[#B5451B]/25"]:hover,
-.admin-mode [class*="hover:bg-[#B5451B]/25"]:hover {
-  background-color: rgba(5, 150, 105, 0.25) !important;
-}
-
 html.admin-mode [class*="hover:bg-[#9C3A14]"]:hover,
 .admin-mode [class*="hover:bg-[#9C3A14]"]:hover,
 html.admin-mode [class*="hover:bg-[#9E3913]"]:hover,
@@ -462,7 +414,6 @@ html.admin-mode [class*="hover:bg-[#872E0E]"]:hover,
   background-color: #047857 !important;
 }
 
-/* Text colors in Admin Mode */
 html.admin-mode [class*="text-[#B5451B]"],
 .admin-mode [class*="text-[#B5451B]"],
 html.admin-mode [class*="text-[#9E3913]"],
@@ -472,34 +423,6 @@ html.admin-mode [class*="text-[#872E0E]"],
 html.admin-mode .text-artisan-primary,
 .admin-mode .text-artisan-primary {
   color: #059669 !important;
-}
-
-/* Ensure bright, accessible text contrast in dark admin mode */
-html.dark.admin-mode [class*="text-[#B5451B]"],
-html.dark .admin-mode [class*="text-[#B5451B]"],
-html.dark.admin-mode [class*="dark:text-[#FFA680]"],
-html.dark .admin-mode [class*="dark:text-[#FFA680]"],
-html.dark.admin-mode [class*="text-[#FFA680]"],
-html.dark .admin-mode [class*="text-[#FFA680]"] {
-  color: #6EE7B7 !important;
-}
-
-/* Translucent borders in Admin Mode */
-html.admin-mode [class*="border-[#B5451B]/20"],
-.admin-mode [class*="border-[#B5451B]/20"] {
-  border-color: rgba(5, 150, 105, 0.2) !important;
-}
-html.admin-mode [class*="border-[#B5451B]/30"],
-.admin-mode [class*="border-[#B5451B]/30"] {
-  border-color: rgba(5, 150, 105, 0.3) !important;
-}
-html.admin-mode [class*="border-[#B5451B]/40"],
-.admin-mode [class*="border-[#B5451B]/40"] {
-  border-color: rgba(5, 150, 105, 0.4) !important;
-}
-html.admin-mode [class*="border-[#B5451B]/60"],
-.admin-mode [class*="border-[#B5451B]/60"] {
-  border-color: rgba(5, 150, 105, 0.6) !important;
 }
 
 html.admin-mode [class*="border-[#B5451B]"],
