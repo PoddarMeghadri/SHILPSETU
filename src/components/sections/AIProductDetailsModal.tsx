@@ -48,22 +48,34 @@ export const AIProductDetailsModal: React.FC<AIProductDetailsModalProps> = ({
   const [liveTranscript, setLiveTranscript] = useState('');
   const [speechSupported, setSpeechSupported] = useState(true);
 
+  // Track whether artisan explicitly cleared the fields so text never comes back unexpectedly
+  const [isTitleCleared, setIsTitleCleared] = useState(false);
+  const [isDescriptionCleared, setIsDescriptionCleared] = useState(false);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+  // Track whether initial draft was populated for this modal session
+  const hasInitializedRef = useRef<boolean>(false);
 
-  // Reset or initialize defaults when modal opens
+  // Initialize defaults ONCE when modal opens; do NOT overwrite when user clears the text
   useEffect(() => {
     if (isOpen) {
-      if (!title) {
+      if (!hasInitializedRef.current) {
+        hasInitializedRef.current = true;
+        setIsTitleCleared(false);
+        setIsDescriptionCleared(false);
         setTitle('Handcrafted Heritage Craft (4K Studio)');
-      }
-      if (!description) {
         setDescription(
           `Captured in AI Studio with ${lightingFilterName} lighting, 4K texture preservation, and neutral background.`
         );
       }
+    } else {
+      // When modal is closed, reset the flag so next photo capture starts fresh
+      hasInitializedRef.current = false;
+      setIsTitleCleared(false);
+      setIsDescriptionCleared(false);
     }
-  }, [isOpen, lightingFilterName, title, description]);
+  }, [isOpen, lightingFilterName]);
 
   // Check speech support
   useEffect(() => {
@@ -219,7 +231,7 @@ export const AIProductDetailsModal: React.FC<AIProductDetailsModalProps> = ({
       stock: Number(stock) || 1,
       rawImageUrl: capturedImage,
       polishedImageUrl: capturedImage,
-      description: description.trim() || 'Enhanced with AI Studio 4K lighting and preserved craftsmanship.',
+      description: description.trim(),
       materials: materials.split(',').map((m) => m.trim()).filter(Boolean),
       hoursWorked: 8,
       materialCost: Math.round((Number(price) || 1200) * 0.35),
@@ -359,29 +371,55 @@ export const AIProductDetailsModal: React.FC<AIProductDetailsModalProps> = ({
               <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
                 {t('craft_title', 'Craft Title')} <span className="text-red-500">*</span>
               </label>
-              {speechSupported && (
-                <button
-                  type="button"
-                  onClick={() => startVoiceInput('title')}
-                  className="text-[10px] text-[#B5451B] hover:underline flex items-center gap-0.5 font-medium"
-                >
-                  <span className="material-symbols-outlined text-xs">mic</span>
-                  <span>Speak Title</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {title.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTitle('');
+                      setIsTitleCleared(true);
+                    }}
+                    className="text-[10px] text-black/60 dark:text-white/60 hover:text-red-500 flex items-center gap-0.5"
+                    title="Clear title"
+                  >
+                    <span className="material-symbols-outlined text-xs">close</span>
+                    <span>Clear</span>
+                  </button>
+                )}
+                {speechSupported && (
+                  <button
+                    type="button"
+                    onClick={() => startVoiceInput('title')}
+                    className="text-[10px] text-[#B5451B] hover:underline flex items-center gap-0.5 font-medium"
+                  >
+                    <span className="material-symbols-outlined text-xs">mic</span>
+                    <span>Speak Title</span>
+                  </button>
+                )}
+              </div>
             </div>
-            <input
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Handcrafted Terracotta Urli Vase"
-              className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-serif font-medium focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] ${
-                isDark
-                  ? 'bg-[#121411] border-[#2D3A2B] text-white'
-                  : 'bg-white border-[#22331E]/20 text-[#1A1815]'
-              }`}
-            />
+            <div className="relative">
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setTitle(val);
+                  if (val === '') {
+                    setIsTitleCleared(true);
+                  } else {
+                    setIsTitleCleared(false);
+                  }
+                }}
+                placeholder="e.g. Handcrafted Terracotta Urli Vase"
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-serif font-medium focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] ${
+                  isDark
+                    ? 'bg-[#121411] border-[#2D3A2B] text-white'
+                    : 'bg-white border-[#22331E]/20 text-[#1A1815]'
+                }`}
+              />
+            </div>
           </div>
 
           {/* Craft Category */}
@@ -457,21 +495,45 @@ export const AIProductDetailsModal: React.FC<AIProductDetailsModalProps> = ({
               <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
                 {t('story_desc', 'Story & Description')}
               </label>
-              {speechSupported && (
-                <button
-                  type="button"
-                  onClick={() => startVoiceInput('description')}
-                  className="text-[10px] text-[#B5451B] hover:underline flex items-center gap-0.5 font-medium"
-                >
-                  <span className="material-symbols-outlined text-xs">mic</span>
-                  <span>Speak Description</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {description.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDescription('');
+                      setIsDescriptionCleared(true);
+                    }}
+                    className="text-[10px] text-black/60 dark:text-white/60 hover:text-red-500 flex items-center gap-0.5"
+                    title="Clear description"
+                  >
+                    <span className="material-symbols-outlined text-xs">close</span>
+                    <span>Clear</span>
+                  </button>
+                )}
+                {speechSupported && (
+                  <button
+                    type="button"
+                    onClick={() => startVoiceInput('description')}
+                    className="text-[10px] text-[#B5451B] hover:underline flex items-center gap-0.5 font-medium"
+                  >
+                    <span className="material-symbols-outlined text-xs">mic</span>
+                    <span>Speak Description</span>
+                  </button>
+                )}
+              </div>
             </div>
             <textarea
               rows={3}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setDescription(val);
+                if (val === '') {
+                  setIsDescriptionCleared(true);
+                } else {
+                  setIsDescriptionCleared(false);
+                }
+              }}
               placeholder="Describe heritage technique, natural materials, and artisan story..."
               className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-sans focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] ${
                 isDark

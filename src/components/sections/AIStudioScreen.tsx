@@ -123,6 +123,13 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
   const [isFlashOn, setIsFlashOn] = useState<boolean>(false);
   const [showScreenFlash, setShowScreenFlash] = useState<boolean>(false);
+  const [cameraPermissionStatus, setCameraPermissionStatus] = useState<'prompt' | 'granted' | 'denied' | 'unknown'>('unknown');
+  const [availableBackCameras, setAvailableBackCameras] = useState<
+    { deviceId: string; label: string; isMain: boolean }[]
+  >([]);
+  const [selectedBackCameraId, setSelectedBackCameraId] = useState<string | null>(null);
+  const [isStartingCamera, setIsStartingCamera] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   // Post-capture Details Modal States (Typing or Voice)
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
@@ -133,6 +140,10 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lightingScrollRef = useRef<HTMLDivElement>(null);
+  const isFlashOnRef = useRef<boolean>(false);
+  isFlashOnRef.current = isFlashOn;
+  const isStartingCameraRef = useRef<boolean>(false);
+  const hasSelectedSpecificLensRef = useRef<boolean>(false);
 
   // Responsive device listener for viewport resize and orientation changes
   useEffect(() => {
@@ -188,43 +199,369 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
     }
   }, [products, selectedProduct]);
 
-  // Camera Management
-  const startCamera = async (facing: 'environment' | 'user') => {
+  // Reliable triple-flash & torch constraint applier for mobile hardware
+  const applyTorchConstraint = async (track: MediaStreamTrack, enabled: boolean): Promise<boolean> => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const caps: any = track.getCapabilities ? track.getCapabilities() : {};
+      console.log('[AI Studio] Active Camera Capabilities:', caps);
+
+      // On phones with dual or triple-flash arrays (e.g. Infinix, Tecno, Realme, Vivo, Xiaomi, Motorola),
+      // different vendor Camera2 HALs expose the multi-LED array under different keys:
+      // 1) torch: true
+      // 2) fillLightMode: 'flash' | 'torch'
+      // 3) advanced array with { torch: true, fillLightMode: 'flash' }
+      // 4) advanced array with { torch: true, fillLightMode: 'torch' }
+      // 5) direct track.applyConstraints({ advanced: [{ torch: true }] })
+      // 6) direct track.applyConstraints({ torch: true })
+      // To ensure all 3 LEDs receive driving current, we test each pattern and apply both root and advanced forms.
+      const attempts = enabled
+        ? [
+            // Combo 1: Simultaneous multi-LED full strobe/torch trigger
+            { torch: true, fillLightMode: 'flash' },
+            // Combo 2: Combined torch + torch fill mode
+            { torch: true, fillLightMode: 'torch' },
+            // Combo 3: Pure torch
+            { torch: true },
+            // Combo 4: Pure fillLightMode flash
+            { fillLightMode: 'flash' },
+            // Combo 5: Pure fillLightMode torch
+            { fillLightMode: 'torch' },
+          ]
+        : [
+            { torch: false, fillLightMode: 'off' },
+            { torch: false },
+            { fillLightMode: 'off' },
+          ];
+
+      let anySuccess = false;
+
+      // Method A: Try advanced array constraints
+      for (const attempt of attempts) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (track as any).applyConstraints({
+            advanced: [attempt],
+          });
+          anySuccess = true;
+          console.log('[AI Studio] Multi-flash constraint applied via advanced:', attempt);
+          break;
+        } catch (_) {
+          // Try next combination
+        }
+      }
+
+      // Method B: Try direct top-level constraint if advanced didn't succeed or to reinforce all LEDs
+      if (enabled) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (track as any).applyConstraints({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            advanced: [{ torch: true }, { fillLightMode: 'flash' } as any],
+          });
+          anySuccess = true;
+        } catch (_) {}
+
+        if (!anySuccess) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (track as any).applyConstraints({ torch: true });
+            anySuccess = true;
+          } catch (_) {}
+        }
+      } else {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (track as any).applyConstraints({ torch: false });
+        } catch (_) {}
+      }
+
+      return anySuccess;
+    } catch (err: any) {
+      console.warn('[AI Studio] Multi-flash application notice:', err?.message || err);
+      return false;
+    }
+  };
+
+  // Discover and catalog all available rear camera sensors to isolate the Main Camera (with triple-flash)
+  const discoverCameraLenses = async (activeTrack?: MediaStreamTrack) => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+      console.log('[AI Studio] Enumerated camera sensors:', videoDevices);
+
+      // Filter for rear/back cameras
+      const backSensors = videoDevices.filter((d) => {
+        const lbl = (d.label || '').toLowerCase();
+        // Disqualify front sensors
+        if (
+          lbl.includes('front') ||
+          lbl.includes('user') ||
+          lbl.includes('selfie') ||
+          lbl.includes('camera 1') ||
+          lbl.includes('camera2 1')
+        ) {
+          return false;
+        }
+        // Accept rear sensors
+        return (
+          lbl.includes('back') ||
+          lbl.includes('rear') ||
+          lbl.includes('environment') ||
+          lbl.includes('camera 0') ||
+          lbl.includes('camera2 0') ||
+          lbl.includes('0') ||
+          lbl === ''
+        );
+      });
+
+      // Sort: Camera 0 / "0, facing back" / Main camera ALWAYS gets index 0
+      // In Android Camera2 API, Camera 0 is the primary sensor that commands the full multi-LED / triple flash!
+      backSensors.sort((a, b) => {
+        const aLbl = a.label.toLowerCase();
+        const bLbl = b.label.toLowerCase();
+        const aIsMain =
+          aLbl.includes(' 0') ||
+          aLbl.includes('camera 0') ||
+          aLbl.includes('camera2 0') ||
+          aLbl.includes('main');
+        const bIsMain =
+          bLbl.includes(' 0') ||
+          bLbl.includes('camera 0') ||
+          bLbl.includes('camera2 0') ||
+          bLbl.includes('main');
+        if (aIsMain && !bIsMain) return -1;
+        if (!aIsMain && bIsMain) return 1;
+        return 0;
+      });
+
+      const formatted = backSensors.map((d, index) => ({
+        deviceId: d.deviceId,
+        label: d.label || `Back Camera ${index + 1}`,
+        isMain: index === 0,
+      }));
+
+      setAvailableBackCameras(formatted);
+
+      if (formatted.length > 0 && !selectedBackCameraId) {
+        setSelectedBackCameraId(formatted[0].deviceId);
+      }
+
+      // If active track is currently using a secondary sensor (like ultra-wide or macro) instead of the main sensor,
+      // switch to the Main Camera (Camera 0) so the 3-flash array activates
+      if (
+        cameraFacingMode === 'environment' &&
+        !hasSelectedSpecificLensRef.current &&
+        formatted.length > 1 &&
+        activeTrack &&
+        activeTrack.getSettings().deviceId !== formatted[0].deviceId
+      ) {
+        console.log('[AI Studio] Promoting to primary rear camera (Camera 0) for triple-flash array');
+        hasSelectedSpecificLensRef.current = true;
+        setSelectedBackCameraId(formatted[0].deviceId);
+        setTimeout(() => {
+          startCamera('environment', formatted[0].deviceId);
+        }, 100);
+      }
+    } catch (err) {
+      console.warn('[AI Studio] Lens enumeration error:', err);
+    }
+  };
+
+  // Robust Camera Startup with hardware release delays, race-condition locking, and automatic retry
+  const startCamera = async (
+    facing: 'environment' | 'user' = cameraFacingMode,
+    targetDeviceId?: string
+  ) => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       setIsCameraActive(false);
+      setCameraError('Camera API not supported in this browser.');
       return;
     }
 
-    // Stop current stream if running
+    // Mutex locking: prevent overlapping parallel calls
+    if (isStartingCameraRef.current) {
+      console.log('[AI Studio] Camera startup already in progress, avoiding collision');
+      return;
+    }
+    isStartingCameraRef.current = true;
+    setIsStartingCamera(true);
+    setCameraError(null);
+
+    // 1. Cleanly stop old stream & wait for Android Camera Service hardware release
     if (streamRef.current) {
+      const oldTrack = streamRef.current.getVideoTracks()[0];
+      if (oldTrack) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (oldTrack as any).applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+        } catch (_) {}
+      }
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      // Critical delay: Android cameraserver needs ~150ms to release hardware lock before next acquire
+      await new Promise((resolve) => setTimeout(resolve, 150));
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facing,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
+      const chosenBackId =
+        targetDeviceId || (facing === 'environment' ? selectedBackCameraId : null);
+
+      // Build progressive constraint list
+      const candidateList: MediaStreamConstraints[] = [];
+
+      if (facing === 'environment' && chosenBackId) {
+        // Option 1: Explicit Target Device ID (Main Back Camera with triple flash)
+        candidateList.push({
+          video: {
+            deviceId: { exact: chosenBackId },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: false,
+        });
+        candidateList.push({
+          video: {
+            deviceId: { exact: chosenBackId },
+          },
+          audio: false,
+        });
+      }
+
+      if (facing === 'environment') {
+        // Option 2: High-res environment facing mode
+        candidateList.push({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: false,
+        });
+        // Option 3: Exact environment
+        candidateList.push({
+          video: {
+            facingMode: { exact: 'environment' },
+          },
+          audio: false,
+        });
+        // Option 4: Simple environment
+        candidateList.push({
+          video: {
+            facingMode: 'environment',
+          },
+          audio: false,
+        });
+      } else {
+        // Front Camera
+        candidateList.push({
+          video: {
+            facingMode: { ideal: 'user' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: false,
+        });
+        candidateList.push({
+          video: {
+            facingMode: 'user',
+          },
+          audio: false,
+        });
+      }
+
+      // Generic Fallback
+      candidateList.push({
+        video: true,
         audio: false,
       });
 
+      let stream: MediaStream | null = null;
+      let lastErr: any = null;
+
+      for (let i = 0; i < candidateList.length; i++) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(candidateList[i]);
+          if (stream) break;
+        } catch (err: any) {
+          lastErr = err;
+          // If Android returned NotReadableError or AbortError, hardware was momentarily busy
+          if (err?.name === 'NotReadableError' || err?.name === 'AbortError') {
+            await new Promise((r) => setTimeout(r, 250));
+          }
+        }
+      }
+
+      // If still failed and it was hardware contention (NotReadableError), perform one automatic retry after 400ms
+      if (!stream && (lastErr?.name === 'NotReadableError' || lastErr?.name === 'AbortError')) {
+        console.log('[AI Studio] Android camera was busy, running delayed recovery retry...');
+        await new Promise((r) => setTimeout(r, 400));
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: facing === 'environment' ? { facingMode: 'environment' } : true,
+            audio: false,
+          });
+        } catch (retryErr: any) {
+          lastErr = retryErr;
+        }
+      }
+
+      if (!stream) {
+        setIsCameraActive(false);
+        if (lastErr?.name === 'NotAllowedError' || lastErr?.name === 'PermissionDeniedError') {
+          setCameraPermissionStatus('denied');
+          setCameraError('Camera access was denied. Please allow camera in browser site settings.');
+        } else {
+          setCameraError('Camera sensor is currently busy or unavailable. Tap below to retry.');
+        }
+        return;
+      }
+
       streamRef.current = stream;
+      setCameraPermissionStatus('granted');
+      setCameraError(null);
+
+      // Attach stream to video element
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => {});
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('[AI Studio] Auto-play deferred to user gesture:', playErr);
+        }
       }
       setIsCameraActive(true);
+
+      const activeTrack = stream.getVideoTracks()[0];
+      if (activeTrack) {
+        // Enumerate devices to populate lenses list and check for primary camera
+        discoverCameraLenses(activeTrack);
+
+        // If flash was turned on, apply multi-flash / triple-flash immediately
+        if (isFlashOnRef.current) {
+          await applyTorchConstraint(activeTrack, true);
+        }
+      }
     } catch (err: any) {
-      console.warn('Camera access error/denied:', err?.message);
+      console.warn('[AI Studio] Camera startup exception:', err?.name, err?.message);
       setIsCameraActive(false);
+      setCameraError(err?.message || 'Unable to start camera.');
+    } finally {
+      isStartingCameraRef.current = false;
+      setIsStartingCamera(false);
     }
   };
 
   const stopCamera = () => {
     if (streamRef.current) {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (track as any).applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+        } catch (_) {}
+      }
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
@@ -235,48 +572,125 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
     setIsFlashOn(false);
   };
 
-  // Launch camera when in camera tab; stop when leaving
+  // Switch specifically between rear camera lenses (Main with Triple Flash vs Auxiliary)
+  const handleSelectLens = async (deviceId: string) => {
+    sound.playTap();
+    hasSelectedSpecificLensRef.current = true;
+    setSelectedBackCameraId(deviceId);
+    await startCamera('environment', deviceId);
+  };
+
+  // Launch camera when in camera tab; listen to browser permissions & focus
   useEffect(() => {
+    let permissionStatusObj: PermissionStatus | null = null;
+    let pollInterval: any = null;
+
+    const tryActivateCamera = () => {
+      if (activeTab === 'camera' && !streamRef.current) {
+        console.log('[AI Studio] Immediate camera startup triggered');
+        startCamera(cameraFacingMode, selectedBackCameraId || undefined);
+      }
+    };
+
     if (activeTab === 'camera') {
-      startCamera(cameraFacingMode);
+      startCamera(cameraFacingMode, selectedBackCameraId || undefined);
     } else {
       stopCamera();
     }
+
+    // Check and observe browser camera permissions
+    if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'camera' as PermissionName })
+        .then((status) => {
+          permissionStatusObj = status;
+          setCameraPermissionStatus(status.state as any);
+          if (status.state === 'granted') {
+            tryActivateCamera();
+          }
+          status.onchange = () => {
+            setCameraPermissionStatus(status.state as any);
+            // If user previously saw permission prompt and now granted it, immediately start camera
+            if (status.state === 'granted') {
+              tryActivateCamera();
+            }
+          };
+        })
+        .catch(() => {});
+    }
+
+    // Polling backup: Check if permission changed from prompt/denied to granted while user was on page
+    if (activeTab === 'camera') {
+      pollInterval = setInterval(() => {
+        if (!streamRef.current && typeof navigator !== 'undefined' && navigator.permissions?.query) {
+          navigator.permissions
+            .query({ name: 'camera' as PermissionName })
+            .then((s) => {
+              if (s.state === 'granted' && !streamRef.current) {
+                setCameraPermissionStatus('granted');
+                tryActivateCamera();
+              }
+            })
+            .catch(() => {});
+        }
+      }, 1000);
+    }
+
+    // When window re-gains focus (e.g. user allowed camera in browser prompt/settings and returned)
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        tryActivateCamera();
+      }
+    };
+    window.addEventListener('focus', handleFocusOrVisible);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+
     return () => {
+      if (pollInterval) clearInterval(pollInterval);
+      if (permissionStatusObj) {
+        permissionStatusObj.onchange = null;
+      }
+      window.removeEventListener('focus', handleFocusOrVisible);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
       stopCamera();
     };
   }, [activeTab]);
+
+  // Ensure video element always stays bound to streamRef
+  useEffect(() => {
+    if (videoRef.current && streamRef.current && videoRef.current.srcObject !== streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isCameraActive]);
 
   // Turn / Flip Camera between rear (environment) and front (user)
   const handleFlipCamera = async () => {
     sound.playTap();
     const nextFacing = cameraFacingMode === 'environment' ? 'user' : 'environment';
     setCameraFacingMode(nextFacing);
-    await startCamera(nextFacing);
+    await startCamera(
+      nextFacing,
+      nextFacing === 'environment' ? selectedBackCameraId || undefined : undefined
+    );
   };
 
-  // Toggle Flash / Torch with device capability check
+  // Toggle Flash / Torch with triple-flash device support
   const handleToggleFlash = async () => {
     sound.playTap();
     const nextFlash = !isFlashOn;
     setIsFlashOn(nextFlash);
+    isFlashOnRef.current = nextFlash;
 
+    // If stream is active, apply multi-LED torch constraint immediately to physical LEDs
     if (streamRef.current) {
       const track = streamRef.current.getVideoTracks()[0];
       if (track) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const caps: any = track.getCapabilities ? track.getCapabilities() : {};
-          if (caps.torch) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (track as any).applyConstraints({
-              advanced: [{ torch: nextFlash }],
-            });
-          }
-        } catch (err) {
-          console.warn('Torch constraint warning:', err);
-        }
+        await applyTorchConstraint(track, nextFlash);
       }
+    } else {
+      // If camera is not yet active, start camera so flash activates
+      startCamera(cameraFacingMode, selectedBackCameraId || undefined);
     }
   };
 
@@ -443,28 +857,83 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
                   : '16 / 9',
             }}
           >
-            {/* Live Camera Video Feed or Fallback Craft Image */}
-            {isCameraActive ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                style={{ filter: currentPreset.cssFilter }}
-                className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 ${
-                  cameraFacingMode === 'user' ? 'scale-x-[-1]' : ''
-                }`}
-              />
-            ) : (
-              <img
-                src={viewfinderImage}
-                alt="Live Viewfinder"
-                style={{ filter: currentPreset.cssFilter }}
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = RELIABLE_CRAFT_FALLBACK;
-                }}
-                className="absolute inset-0 w-full h-full object-cover opacity-90 transition-all duration-300"
-              />
+            {/* Live Camera Video Feed (Always mounted so videoRef and media stream bind immediately) */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ filter: currentPreset.cssFilter }}
+              onLoadedMetadata={() => {
+                videoRef.current?.play().catch(() => {});
+              }}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                isCameraActive ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              } ${cameraFacingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+            />
+
+            {/* Connecting Spinner Overlay */}
+            {isStartingCamera && (
+              <div className="absolute inset-0 z-25 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center">
+                <div className="w-10 h-10 border-3 border-[#E8B84B] border-t-transparent rounded-full animate-spin mb-2" />
+                <p className="text-xs font-serif font-bold text-white">
+                  {cameraFacingMode === 'environment'
+                    ? 'Connecting to Back Camera...'
+                    : 'Connecting to Front Camera...'}
+                </p>
+                <p className="text-[10px] text-white/70 mt-0.5">
+                  Synchronizing multi-sensor lenses and flash hardware
+                </p>
+              </div>
+            )}
+
+            {/* Fallback & Tap-to-Activate View when camera is inactive or awaiting permission */}
+            {!isCameraActive && !isStartingCamera && (
+              <div
+                onClick={() => startCamera(cameraFacingMode, selectedBackCameraId || undefined)}
+                className="absolute inset-0 w-full h-full cursor-pointer group z-10"
+                title="Tap to activate camera"
+              >
+                <img
+                  src={viewfinderImage}
+                  alt="Live Viewfinder"
+                  style={{ filter: currentPreset.cssFilter }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = RELIABLE_CRAFT_FALLBACK;
+                  }}
+                  className="w-full h-full object-cover opacity-80 transition-all duration-300 group-hover:opacity-90"
+                />
+                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center p-4 text-center">
+                  <div className="w-12 h-12 rounded-full bg-[#B5451B] text-white flex items-center justify-center mb-2 shadow-lg group-hover:scale-110 transition-transform">
+                    <span className="material-symbols-outlined text-2xl">photo_camera</span>
+                  </div>
+                  <p className="text-xs font-serif font-bold text-white">
+                    {cameraPermissionStatus === 'denied'
+                      ? 'Camera Permission Needed'
+                      : cameraError
+                      ? 'Retry Back Camera'
+                      : 'Tap to Activate Back Camera'}
+                  </p>
+                  <p className="text-[10px] text-white/80 mt-0.5 max-w-[230px]">
+                    {cameraPermissionStatus === 'denied'
+                      ? 'Please allow camera in your browser site settings and tap here'
+                      : cameraError
+                      ? cameraError
+                      : 'Provide camera permission to preview live crafts'}
+                  </p>
+                  <div className="mt-2.5 px-3 py-1 rounded-full bg-[#E8B84B] text-[#1A1815] text-[10px] font-bold shadow-md hover:bg-[#d4a53d] transition-colors">
+                    Start Back Camera
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Flash Active Notification Badge */}
+            {isFlashOn && (
+              <div className="absolute top-14 left-3.5 z-30 flex items-center gap-1.5 px-3 py-1 rounded-full bg-linear-to-r from-[#E8B84B] via-[#F59E0B] to-[#E8B84B] text-[#1A1815] text-[10px] font-bold shadow-lg animate-pulse border border-white/40">
+                <span className="material-symbols-outlined text-sm font-bold">bolt</span>
+                <span>FLASH ACTIVE</span>
+              </div>
             )}
 
             {/* Screen Flash Overlay Effect */}
@@ -478,24 +947,51 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
             )}
 
             {/* Top Camera Controls Bar */}
-            <div className="relative z-20 flex items-center justify-between gap-2">
-              {/* Aspect Ratio Selector */}
-              <div className="flex bg-black/60 backdrop-blur-md rounded-full p-1 border border-white/20">
-                {availableRatios.map((ratio) => (
-                  <button
-                    key={ratio}
-                    id={`btn-aspect-${ratio.replace(':', '-')}`}
-                    onClick={() => {
-                      sound.playTap();
-                      setAspectRatio(ratio);
-                    }}
-                    className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-full transition-colors cursor-pointer ${
-                      aspectRatio === ratio ? 'bg-[#E8B84B] text-[#1A1815]' : 'text-white/80 hover:text-white'
-                    }`}
-                  >
-                    {ratio}
-                  </button>
-                ))}
+            <div className="relative z-20 flex items-center justify-between gap-1 sm:gap-2">
+              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                {/* Aspect Ratio Selector */}
+                <div className="flex bg-black/60 backdrop-blur-md rounded-full p-1 border border-white/20">
+                  {availableRatios.map((ratio) => (
+                    <button
+                      key={ratio}
+                      id={`btn-aspect-${ratio.replace(':', '-')}`}
+                      onClick={() => {
+                        sound.playTap();
+                        setAspectRatio(ratio);
+                      }}
+                      className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-full transition-colors cursor-pointer ${
+                        aspectRatio === ratio ? 'bg-[#E8B84B] text-[#1A1815]' : 'text-white/80 hover:text-white'
+                      }`}
+                    >
+                      {ratio}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Multi-Lens Selector for Triple-Camera Phones */}
+                {cameraFacingMode === 'environment' && availableBackCameras.length > 1 && (
+                  <div className="flex bg-black/70 backdrop-blur-md rounded-full p-0.5 border border-white/20 text-[10px]">
+                    {availableBackCameras.map((cam, idx) => {
+                      const isSelected =
+                        selectedBackCameraId === cam.deviceId || (!selectedBackCameraId && idx === 0);
+                      return (
+                        <button
+                          key={cam.deviceId || idx}
+                          type="button"
+                          onClick={() => handleSelectLens(cam.deviceId)}
+                          className={`px-2 py-0.5 rounded-full font-medium transition-all ${
+                            isSelected
+                              ? 'bg-[#E8B84B] text-[#1A1815] font-bold shadow-xs'
+                              : 'text-white/80 hover:text-white'
+                          }`}
+                          title={cam.label}
+                        >
+                          {cam.isMain ? 'Main (3-Flash)' : `Lens ${idx + 1}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons: Grid, Turn Camera, Flash */}
@@ -530,13 +1026,14 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
                 {/* Flash Toggle */}
                 <button
                   type="button"
+                  id="btn-viewfinder-flash"
                   onClick={handleToggleFlash}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md border cursor-pointer transition-colors ${
+                  className={`w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md border cursor-pointer transition-all ${
                     isFlashOn
-                      ? 'bg-[#E8B84B] text-[#1A1815] border-[#E8B84B] shadow-sm'
-                      : 'bg-black/60 text-white border-white/20'
+                      ? 'bg-[#E8B84B] text-[#1A1815] border-[#E8B84B] shadow-md ring-2 ring-[#E8B84B]/60'
+                      : 'bg-black/60 text-white border-white/20 hover:bg-black/80'
                   }`}
-                  title={isFlashOn ? 'Flash On (Torch Enabled)' : 'Flash Off'}
+                  title={isFlashOn ? 'Flash Active' : 'Flash Off'}
                 >
                   <span className="material-symbols-outlined text-base">
                     {isFlashOn ? 'flash_on' : 'flash_off'}

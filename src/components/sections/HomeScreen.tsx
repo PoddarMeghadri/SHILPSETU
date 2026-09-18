@@ -35,59 +35,45 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-28 md:pb-12 pt-2 px-3 sm:px-6 lg:px-8 space-y-6">
-      {/* Top Welcome & Artisan Status Header (Seamless without enclosing dark card) */}
-      <div className="flex items-center justify-between gap-4 py-1.5 sm:py-2 px-0.5">
-        <div className="flex items-center gap-3 sm:gap-3.5">
-          <div className="relative shrink-0">
-            <img
-              src={artisan.avatarUrl}
-              alt={artisan.name}
-              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-[#E8B84B] shadow-xs"
-            />
-            <span
-              className="absolute -bottom-1 -right-1 flex items-center justify-center drop-shadow-xs"
-              title="Official Blue Verified Master Artisan"
-            >
-              <BlueVerifiedBadge size={20} />
-            </span>
-          </div>
-          <div>
-            <h2
-              className={`font-serif font-bold text-xl sm:text-2xl leading-tight tracking-tight ${
-                isDark ? 'text-[#F4ECDE]' : 'text-[#143B33]'
-              }`}
-            >
-              {t('namaste', 'Namaste')}, {artisan.name.split(' ')[0]}
-            </h2>
-            <p
-              className={`text-xs sm:text-sm font-sans mt-0.5 leading-normal ${
-                isDark ? 'text-[#C5BDB0]' : 'text-[#57534E]'
-              }`}
-            >
-              {artisan.craft.split('&')[0].trim()} • {artisan.location.split(',')[0].trim()}
-            </p>
-          </div>
-        </div>
-
-        {/* Heritage Trust Badge Pill (Centered as in second screenshot) */}
+      {/* Top Welcome Header with Artisan Avatar */}
+      <div className="flex items-center gap-3.5 py-1.5 sm:py-2 px-0.5">
         <button
+          type="button"
           onClick={() => {
             sound.playTap();
             onNavigate('profile');
           }}
-          className={`flex flex-col items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-2xl border transition-all shrink-0 cursor-pointer shadow-xs active:scale-95 ${
-            isDark
-              ? 'bg-[#1C221A] border-[#2D3A2B] hover:bg-[#252E22]'
-              : 'bg-[#EFE5D3] border-[#DECDB3] hover:bg-[#E8DCC6]'
-          }`}
+          className="relative shrink-0 cursor-pointer focus:outline-hidden group"
+          title={t('view_artisan_profile', 'View Artisan Profile')}
         >
-          <span className="text-[10px] sm:text-[11px] uppercase font-bold tracking-wider text-[#A03515] dark:text-[#FFA680] leading-none">
-            {t('trust_score', 'Trust Score')}
-          </span>
-          <span className="font-serif font-bold text-sm sm:text-base text-[#D48B08] dark:text-[#E8B84B] mt-1 leading-none">
-            {artisan.trustScore ?? 98}/100 ★
+          <img
+            src={artisan.avatarUrl}
+            alt={artisan.name}
+            className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-[#E8B84B] shadow-xs group-hover:scale-105 transition-transform"
+          />
+          <span
+            className="absolute -bottom-1 -right-1 flex items-center justify-center drop-shadow-xs"
+            title="Official Blue Verified Master Artisan"
+          >
+            <BlueVerifiedBadge size={20} />
           </span>
         </button>
+        <div>
+          <h2
+            className={`font-serif font-bold text-xl sm:text-2xl leading-tight tracking-tight ${
+              isDark ? 'text-[#F4ECDE]' : 'text-[#143B33]'
+            }`}
+          >
+            {t('namaste', 'Namaste')}, {artisan.name.split(' ')[0]}
+          </h2>
+          <p
+            className={`text-xs sm:text-sm font-sans mt-0.5 leading-normal ${
+              isDark ? 'text-[#C5BDB0]' : 'text-[#57534E]'
+            }`}
+          >
+            {artisan.craft.split('&')[0].trim()} • {artisan.location.split(',')[0].trim()}
+          </p>
+        </div>
       </div>
 
       {/* Hero Action Card (Bento Terracotta Card) */}
