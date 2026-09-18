@@ -130,6 +130,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   const [selectedBackCameraId, setSelectedBackCameraId] = useState<string | null>(null);
   const [isStartingCamera, setIsStartingCamera] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCapturing, setIsCapturing] = useState<boolean>(false);
 
   // Post-capture Details Modal States (Typing or Voice)
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
@@ -199,86 +200,53 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
     }
   }, [products, selectedProduct]);
 
-  // Reliable triple-flash & torch constraint applier for mobile hardware
+  // Reliable torch constraint applier for mobile hardware
   const applyTorchConstraint = async (track: MediaStreamTrack, enabled: boolean): Promise<boolean> => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const caps: any = track.getCapabilities ? track.getCapabilities() : {};
-      console.log('[AI Studio] Active Camera Capabilities:', caps);
-
-      // On phones with dual or triple-flash arrays (e.g. Infinix, Tecno, Realme, Vivo, Xiaomi, Motorola),
-      // different vendor Camera2 HALs expose the multi-LED array under different keys:
-      // 1) torch: true
-      // 2) fillLightMode: 'flash' | 'torch'
-      // 3) advanced array with { torch: true, fillLightMode: 'flash' }
-      // 4) advanced array with { torch: true, fillLightMode: 'torch' }
-      // 5) direct track.applyConstraints({ advanced: [{ torch: true }] })
-      // 6) direct track.applyConstraints({ torch: true })
-      // To ensure all 3 LEDs receive driving current, we test each pattern and apply both root and advanced forms.
-      const attempts = enabled
-        ? [
-            // Combo 1: Simultaneous multi-LED full strobe/torch trigger
-            { torch: true, fillLightMode: 'flash' },
-            // Combo 2: Combined torch + torch fill mode
-            { torch: true, fillLightMode: 'torch' },
-            // Combo 3: Pure torch
-            { torch: true },
-            // Combo 4: Pure fillLightMode flash
-            { fillLightMode: 'flash' },
-            // Combo 5: Pure fillLightMode torch
-            { fillLightMode: 'torch' },
-          ]
-        : [
-            { torch: false, fillLightMode: 'off' },
-            { torch: false },
-            { fillLightMode: 'off' },
-          ];
-
-      let anySuccess = false;
-
-      // Method A: Try advanced array constraints
-      for (const attempt of attempts) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (track as any).applyConstraints({
-            advanced: [attempt],
-          });
-          anySuccess = true;
-          console.log('[AI Studio] Multi-flash constraint applied via advanced:', attempt);
-          break;
-        } catch (_) {
-          // Try next combination
-        }
+      if (!track || track.readyState !== 'live') {
+        console.warn('[AI Studio] Cannot apply torch: track not live');
+        return false;
       }
 
-      // Method B: Try direct top-level constraint if advanced didn't succeed or to reinforce all LEDs
-      if (enabled) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (track as any).applyConstraints({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            advanced: [{ torch: true }, { fillLightMode: 'flash' } as any],
-          });
-          anySuccess = true;
-        } catch (_) {}
+      console.log('[AI Studio] Applying torch constraint, enabled =', enabled, 'track:', track.label);
 
-        if (!anySuccess) {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (track as any).applyConstraints({ torch: true });
-            anySuccess = true;
-          } catch (_) {}
-        }
-      } else {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (track as any).applyConstraints({ torch: false });
-        } catch (_) {}
+      // Attempt 1: Standard W3C advanced constraint (Chromium / Android standard)
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (track as any).applyConstraints({
+          advanced: [{ torch: enabled }],
+        });
+        console.log('[AI Studio] Torch successfully applied via advanced: [{ torch: ' + enabled + ' }]');
+        return true;
+      } catch (errAdv) {
+        console.warn('[AI Studio] advanced [{ torch }] failed:', errAdv);
       }
 
-      return anySuccess;
+      // Attempt 2: Direct root constraint (vendor WebViews & custom Chromium builds)
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (track as any).applyConstraints({
+          torch: enabled,
+        });
+        console.log('[AI Studio] Torch successfully applied via root torch: ' + enabled);
+        return true;
+      } catch (errRoot) {
+        console.warn('[AI Studio] root torch failed:', errRoot);
+      }
+
+      // Attempt 3: Vendor fillLightMode if supported
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (track as any).applyConstraints({
+          advanced: [{ fillLightMode: enabled ? 'torch' : 'off' } as any],
+        });
+        console.log('[AI Studio] Torch applied via fillLightMode');
+        return true;
+      } catch (errFill) {}
+
+      return false;
     } catch (err: any) {
-      console.warn('[AI Studio] Multi-flash application notice:', err?.message || err);
+      console.warn('[AI Studio] applyTorchConstraint notice:', err?.message || err);
       return false;
     }
   };
@@ -538,9 +506,15 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
         // Enumerate devices to populate lenses list and check for primary camera
         discoverCameraLenses(activeTrack);
 
-        // If flash was turned on, apply multi-flash / triple-flash immediately
+        // If flash was turned on by user, activate physical torch immediately
         if (isFlashOnRef.current) {
-          await applyTorchConstraint(activeTrack, true);
+          console.log('[AI Studio] Flash is active, engaging physical torch...');
+          applyTorchConstraint(activeTrack, true);
+          setTimeout(() => {
+            if (isFlashOnRef.current && activeTrack.readyState === 'live') {
+              applyTorchConstraint(activeTrack, true);
+            }
+          }, 250);
         }
       }
     } catch (err: any) {
@@ -675,38 +649,174 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
     );
   };
 
-  // Toggle Flash / Torch with triple-flash device support
+  // Toggle Flash / Torch Mode
   const handleToggleFlash = async () => {
     sound.playTap();
     const nextFlash = !isFlashOn;
     setIsFlashOn(nextFlash);
     isFlashOnRef.current = nextFlash;
 
-    // If stream is active, apply multi-LED torch constraint immediately to physical LEDs
     if (streamRef.current) {
       const track = streamRef.current.getVideoTracks()[0];
       if (track) {
+        console.log('[AI Studio] Toggling physical torch to:', nextFlash);
         await applyTorchConstraint(track, nextFlash);
       }
     } else {
-      // If camera is not yet active, start camera so flash activates
+      // If camera is not yet active, start camera (torch will activate once stream starts)
       startCamera(cameraFacingMode, selectedBackCameraId || undefined);
     }
   };
 
-  // Capture frame from active video stream (or fallback) with active lighting filter applied
-  const captureFrame = (uploadedUrl?: string): string => {
+  // Helper to convert ImageCapture Blob to filtered high-resolution DataURL
+  const processBlobToDataUrl = async (
+    blob: Blob,
+    filter: string,
+    isUserFacing: boolean
+  ): Promise<string> => {
     const canvas = canvasRef.current || document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Method A: Modern high-performance createImageBitmap
+    if (typeof createImageBitmap === 'function') {
+      try {
+        const bitmap = await createImageBitmap(blob);
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        if (ctx) {
+          if (filter && filter !== 'none') {
+            ctx.filter = filter;
+          }
+          if (isUserFacing) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+          }
+          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/jpeg', 0.95);
+        }
+      } catch (bitmapErr) {
+        console.warn('[AI Studio] createImageBitmap failed, falling back to Image element:', bitmapErr);
+      }
+    }
+
+    // Method B: HTMLImageElement with Blob URL
+    return new Promise((resolve) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(blob);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        if (ctx) {
+          if (filter && filter !== 'none') {
+            ctx.filter = filter;
+          }
+          if (isUserFacing) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.95));
+        } else {
+          resolve(objectUrl);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        // Method C: FileReader base64 fallback
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(viewfinderImage);
+        reader.readAsDataURL(blob);
+      };
+      img.src = objectUrl;
+    });
+  };
+
+  // Capture photo using native W3C ImageCapture API (triggering synchronous multi-LED flash burst)
+  // with graceful HTML5 video canvas snapshot fallback
+  const captureFrame = async (uploadedUrl?: string): Promise<string> => {
+    if (uploadedUrl) {
+      return uploadedUrl;
+    }
+
     const currentPreset =
       LIGHTING_PRESETS.find((p) => p.id === activeLighting) || LIGHTING_PRESETS[0];
 
-    if (!uploadedUrl && isCameraActive && videoRef.current && videoRef.current.videoWidth > 0) {
+    // Method 1: Native W3C ImageCapture API
+    // This instructs native Android / mobile HAL to fire ALL flash LEDs (multi-LED / dual-tone)
+    // synchronously at full driving current for high-intensity exposure, matching the native camera app.
+    if (
+      typeof window !== 'undefined' &&
+      'ImageCapture' in window &&
+      isCameraActive &&
+      streamRef.current
+    ) {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track && track.readyState === 'live') {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const imageCapture = new (window as any).ImageCapture(track);
+          let photoBlob: Blob | null = null;
+
+          if (isFlashOnRef.current) {
+            console.log('[AI Studio] Triggering exposure with synchronous multi-LED flash burst...');
+            try {
+              // Primary W3C standard: fillLightMode 'flash' triggers the multi-LED exposure burst
+              photoBlob = await imageCapture.takePhoto({ fillLightMode: 'flash' });
+            } catch (errFlash) {
+              console.warn('[AI Studio] takePhoto fillLightMode flash threw, trying on:', errFlash);
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                photoBlob = await imageCapture.takePhoto({ fillLightMode: 'on' as any });
+              } catch (errOn) {
+                console.warn('[AI Studio] takePhoto fillLightMode on threw, trying auto:', errOn);
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  photoBlob = await imageCapture.takePhoto({ fillLightMode: 'auto' as any });
+                } catch (errAuto) {
+                  console.warn('[AI Studio] takePhoto fillLightMode auto threw, trying unconstrained:', errAuto);
+                  photoBlob = await imageCapture.takePhoto();
+                }
+              }
+            }
+          } else {
+            console.log('[AI Studio] Capturing photo with flash disengaged...');
+            try {
+              photoBlob = await imageCapture.takePhoto({ fillLightMode: 'off' });
+            } catch (_) {
+              photoBlob = await imageCapture.takePhoto();
+            }
+          }
+
+          if (photoBlob) {
+            console.log('[AI Studio] Native photo captured successfully, size:', photoBlob.size);
+            return await processBlobToDataUrl(
+              photoBlob,
+              currentPreset.cssFilter,
+              cameraFacingMode === 'user'
+            );
+          }
+        } catch (imgCapError) {
+          console.warn(
+            '[AI Studio] ImageCapture takePhoto failed, falling back to canvas video snapshot:',
+            imgCapError
+          );
+        }
+      }
+    }
+
+    // Method 2: Graceful Fallback - HTML5 Video Canvas Snapshot
+    const canvas = canvasRef.current || document.createElement('canvas');
+    if (isCameraActive && videoRef.current && videoRef.current.videoWidth > 0) {
       const video = videoRef.current;
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.filter = currentPreset.cssFilter;
+        if (currentPreset.cssFilter && currentPreset.cssFilter !== 'none') {
+          ctx.filter = currentPreset.cssFilter;
+        }
         if (cameraFacingMode === 'user') {
           ctx.translate(canvas.width, 0);
           ctx.scale(-1, 1);
@@ -716,28 +826,37 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
       }
     }
 
-    return uploadedUrl || viewfinderImage;
+    return viewfinderImage;
   };
 
   // Handle Capture button click
-  const handleCapture = (capturedImageOverride?: string) => {
+  const handleCapture = async (capturedImageOverride?: string) => {
+    if (isCapturing || isProcessing) return;
+    setIsCapturing(true);
+
     sound.playShutter();
 
-    // Trigger visual screen flash effect
+    // Trigger visual screen flash effect (serves as immediate visual feedback and screen-flash fallback)
     setShowScreenFlash(true);
     setTimeout(() => setShowScreenFlash(false), 220);
 
-    const imageResult = captureFrame(capturedImageOverride);
-    setPendingCapturedImage(imageResult);
+    try {
+      const imageResult = await captureFrame(capturedImageOverride);
+      setPendingCapturedImage(imageResult);
+      setIsProcessing(true);
 
-    setIsProcessing(true);
-
-    setTimeout(() => {
+      setTimeout(() => {
+        setIsProcessing(false);
+        setIsCapturing(false);
+        sound.playSuccess();
+        // Open Product Details Modal where artisan can type or speak details
+        setShowDetailsModal(true);
+      }, 1200);
+    } catch (err) {
+      console.error('[AI Studio] handleCapture error:', err);
+      setIsCapturing(false);
       setIsProcessing(false);
-      sound.playSuccess();
-      // Open Product Details Modal where artisan can type or speak details
-      setShowDetailsModal(true);
-    }, 1200);
+    }
   };
 
   // Custom photo upload simulation
@@ -1121,7 +1240,10 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
             {/* Master Capture Button */}
             <button
               onClick={() => handleCapture()}
-              className="w-20 h-20 rounded-full bg-[#B5451B] border-4 border-[#F4ECDE] shadow-xl flex items-center justify-center text-white active:scale-90 transition-transform group cursor-pointer"
+              disabled={isCapturing || isProcessing}
+              className={`w-20 h-20 rounded-full bg-[#B5451B] border-4 border-[#F4ECDE] shadow-xl flex items-center justify-center text-white transition-transform group cursor-pointer ${
+                isCapturing || isProcessing ? 'opacity-80 cursor-not-allowed' : 'active:scale-90'
+              }`}
               title={t('capture_photo', 'Capture Photo')}
               id="btn-viewfinder-shutter"
             >
