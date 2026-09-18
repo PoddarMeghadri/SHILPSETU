@@ -5,6 +5,7 @@ import { StoryViewerModal } from '../common/StoryViewerModal';
 import { BlueVerifiedBadge } from '../common/SocialIcons';
 import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
+import { useAdminMode } from '../../context/AdminModeContext';
 
 interface HomeScreenProps {
   artisan: ArtisanProfile;
@@ -27,6 +28,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   isDark = false,
 }) => {
   const { t } = useTranslation();
+  const { isAdminMode } = useAdminMode();
   const [activeStory, setActiveStory] = useState<StoryItem | null>(null);
 
   const lowStockItems = products
@@ -76,12 +78,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
       </div>
 
-      {/* Hero Action Card (Bento Terracotta Card) */}
+      {/* Hero Action Card (Bento Terracotta Card / Emerald Card in Admin Mode) */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#B5451B] via-[#9E3913] to-[#7F2A0B] p-6 lg:p-8 text-white shadow-xl border border-[#E8B84B]/30"
+        className={`relative overflow-hidden rounded-3xl p-6 lg:p-8 text-white shadow-xl border border-[#E8B84B]/30 ${
+          isAdminMode
+            ? 'bg-gradient-to-br from-[#059669] via-[#047857] to-[#064E3B]'
+            : 'bg-gradient-to-br from-[#B5451B] via-[#9E3913] to-[#7F2A0B]'
+        }`}
       >
         {/* Decorative Background Elements */}
         <div className="absolute top-0 right-0 -mt-6 -mr-6 w-36 h-36 rounded-full bg-[#E8B84B]/20 blur-2xl pointer-events-none" />
@@ -163,7 +169,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </p>
           <div className="flex items-baseline gap-1.5 mt-1">
             <span className="font-serif font-bold text-xl sm:text-2xl lg:text-3xl">{products.length}</span>
-            <span className="text-[11px] text-[#B5451B] font-bold shrink-0">+3 {t('new_tag', 'new')}</span>
+            <span className={`text-[11px] font-bold shrink-0 ${
+              isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+            }`}>
+              +3 {t('new_tag', 'new')}
+            </span>
           </div>
         </div>
 
@@ -179,8 +189,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {t('pending_orders', 'Pending Orders')}
           </p>
           <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="font-serif font-bold text-xl sm:text-2xl lg:text-3xl text-[#B5451B]">4</span>
-            <span className="text-[10px] text-[#B5451B] font-bold shrink-0">{t('ready_tag', 'Ready')}</span>
+            <span className={`font-serif font-bold text-xl sm:text-2xl lg:text-3xl ${
+              isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+            }`}>
+              4
+            </span>
+            <span className={`text-[10px] font-bold shrink-0 ${
+              isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+            }`}>
+              {t('ready_tag', 'Ready')}
+            </span>
           </div>
         </div>
 
@@ -225,32 +243,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             sound.playTap();
             onNavigate('dashboard');
           }}
-          className="p-3.5 sm:p-4 rounded-2xl bg-[#2A1713] border-2 border-[#B5451B]/60 flex items-center justify-between gap-3 shadow-md cursor-pointer hover:border-[#B5451B] transition-all text-[#F4ECDE]"
+          className={`p-3.5 sm:p-4 rounded-2xl flex items-center justify-between gap-3 shadow-md cursor-pointer transition-all text-[#F4ECDE] ${
+            isAdminMode
+              ? 'bg-[#0B2E21] border-2 border-[#059669]/60 hover:border-[#059669]'
+              : 'bg-[#2A1713] border-2 border-[#B5451B]/60 hover:border-[#B5451B]'
+          }`}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-[#B5451B] text-white flex items-center justify-center shrink-0 shadow-xs">
+            <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
+              isAdminMode ? 'bg-[#059669]' : 'bg-[#B5451B]'
+            }`}>
               <span className="material-symbols-outlined text-xl text-white animate-pulse">inventory_2</span>
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-serif font-bold text-xs sm:text-sm text-[#FFA680]">
+                <span className={`font-serif font-bold text-xs sm:text-sm ${
+                  isAdminMode ? 'text-[#6EE7B7]' : 'text-[#FFA680]'
+                }`}>
                   {t('low_inventory_alert', 'Low Inventory Alert')}
                 </span>
-                <span className="text-[10px] bg-[#B5451B] text-white px-2 py-0.5 rounded-full font-bold shadow-xs">
+                <span className={`text-[10px] text-white px-2 py-0.5 rounded-full font-bold shadow-xs ${
+                  isAdminMode ? 'bg-[#059669]' : 'bg-[#B5451B]'
+                }`}>
                   {lowStockItems.length} {t('low_stock', 'Low Stock')}
                 </span>
               </div>
               <p className="text-xs text-[#F4ECDE] opacity-90 truncate mt-0.5 font-sans">
-                <strong className="text-[#FFA680] font-bold">{lowStockItems[0].title}</strong> has only <span className="font-bold text-[#E8B84B] underline decoration-[#E8B84B]/60 underline-offset-2">{lowStockItems[0].stock} units left</span>.
+                <strong className={`font-bold ${isAdminMode ? 'text-[#6EE7B7]' : 'text-[#FFA680]'}`}>{lowStockItems[0].title}</strong> has only <span className="font-bold text-[#E8B84B] underline decoration-[#E8B84B]/60 underline-offset-2">{lowStockItems[0].stock} units left</span>.
               </p>
             </div>
           </div>
           <button
             type="button"
-            className="text-xs font-serif font-bold text-[#FFA680] hover:text-white flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer transition-colors"
+            className={`text-xs font-serif font-bold flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer transition-colors ${
+              isAdminMode ? 'text-[#6EE7B7] hover:text-white' : 'text-[#FFA680] hover:text-white'
+            }`}
           >
             <span>{t('view_and_restock', 'Restock Now')}</span>
-            <span className="material-symbols-outlined text-sm text-[#FFA680]">arrow_forward</span>
+            <span className={`material-symbols-outlined text-sm ${isAdminMode ? 'text-[#6EE7B7]' : 'text-[#FFA680]'}`}>arrow_forward</span>
           </button>
         </div>
       )}
@@ -263,10 +293,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isDark ? 'text-[#F4ECDE]' : 'text-[#22331E]'
             }`}
           >
-            <span className="material-symbols-outlined text-xl text-[#B5451B]">auto_stories</span>
+            <span className={`material-symbols-outlined text-xl ${
+              isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+            }`}>auto_stories</span>
             {t('artisan_stories', 'Artisan Stories')}
           </h3>
-          <span className="text-xs text-[#B5451B] font-semibold">
+          <span className={`text-xs font-semibold ${
+            isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+          }`}>
             {t('tap_to_view', 'Tap to view')}
           </span>
         </div>
@@ -281,8 +315,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             className="flex flex-col items-center gap-1.5 shrink-0 group"
           >
             <div
-              className={`w-16 h-16 rounded-full border-2 border-dashed border-[#B5451B] flex items-center justify-center text-[#B5451B] transition-colors shadow-xs ${
-                isDark ? 'bg-[#1C221A] hover:bg-[#252E22]' : 'bg-[#EFE4CF] hover:bg-[#EAE0CC]'
+              className={`w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center transition-colors shadow-xs ${
+                isAdminMode
+                  ? isDark ? 'border-[#059669] text-[#6EE7B7] bg-[#1C221A] hover:bg-[#252E22]' : 'border-[#059669] text-[#059669] bg-[#E8F5E9] hover:bg-[#C8E6C9]'
+                  : isDark ? 'border-[#B5451B] text-[#B5451B] bg-[#1C221A] hover:bg-[#252E22]' : 'border-[#B5451B] text-[#B5451B] bg-[#EFE4CF] hover:bg-[#EAE0CC]'
               }`}
             >
               <span className="material-symbols-outlined text-2xl">add</span>
@@ -306,6 +342,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 className={`w-16 h-16 rounded-full p-0.5 transition-transform group-hover:scale-105 ${
                   story.isViewed
                     ? 'bg-[#22331E]/20'
+                    : isAdminMode
+                    ? 'bg-gradient-to-tr from-[#059669] via-[#E8B84B] to-[#047857]'
                     : 'bg-gradient-to-tr from-[#B5451B] via-[#E8B84B] to-[#22331E]'
                 }`}
               >
@@ -339,7 +377,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           >
             {t('workshop_suite', 'Craft Workshop Suite')}
           </h3>
-          <span className="text-xs text-[#B5451B] font-sans font-bold">
+          <span className={`text-xs font-sans font-bold ${
+            isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+          }`}>
             {t('seven_ai_modules', '7 Modules')}
           </span>
         </div>
@@ -396,12 +436,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 : 'bg-[#EFE4CF] hover:bg-[#EAE0CC] border-[#22331E]/10'
             }`}
           >
-            <div className="w-10 h-10 rounded-2xl bg-[#B5451B] text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform mb-3 shrink-0">
+            <div className={`w-10 h-10 rounded-2xl text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform mb-3 shrink-0 ${
+              isAdminMode ? 'bg-[#059669]' : 'bg-[#B5451B]'
+            }`}>
               <span className="material-symbols-outlined text-2xl">mic</span>
             </div>
             <div className="flex flex-col flex-1 justify-between min-w-0">
               <div>
-                <span className="text-[9px] uppercase font-bold tracking-wider text-[#B5451B] block mb-1">
+                <span className={`text-[9px] uppercase font-bold tracking-wider block mb-1 ${
+                  isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+                }`}>
                   {t('module_2', 'Module 2')}
                 </span>
                 <h4
@@ -436,7 +480,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
             <div className="flex flex-col flex-1 justify-between min-w-0">
               <div>
-                <span className="text-[9px] uppercase font-bold tracking-wider text-[#B5451B] block mb-1">
+                <span className={`text-[9px] uppercase font-bold tracking-wider block mb-1 ${
+                  isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+                }`}>
                   {t('module_3', 'Module 3')}
                 </span>
                 <h4
@@ -471,7 +517,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
             <div className="flex flex-col flex-1 justify-between min-w-0">
               <div>
-                <span className="text-[9px] uppercase font-bold tracking-wider text-[#B5451B] block mb-1">
+                <span className={`text-[9px] uppercase font-bold tracking-wider block mb-1 ${
+                  isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+                }`}>
                   {t('module_4', 'Module 4')}
                 </span>
                 <h4
@@ -501,12 +549,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 : 'bg-[#EFE4CF] hover:bg-[#EAE0CC] border-[#22331E]/10'
             }`}
           >
-            <div className="w-10 h-10 rounded-2xl bg-[#7F2A0B] text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform mb-3 shrink-0">
+            <div className={`w-10 h-10 rounded-2xl text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform mb-3 shrink-0 ${
+              isAdminMode ? 'bg-[#047857]' : 'bg-[#7F2A0B]'
+            }`}>
               <span className="material-symbols-outlined text-2xl">monitoring</span>
             </div>
             <div className="flex flex-col flex-1 justify-between min-w-0">
               <div>
-                <span className="text-[9px] uppercase font-bold tracking-wider text-[#B5451B] block mb-1">
+                <span className={`text-[9px] uppercase font-bold tracking-wider block mb-1 ${
+                  isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+                }`}>
                   {t('module_5', 'Module 5')}
                 </span>
                 <h4
@@ -541,7 +593,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
             <div className="flex flex-col flex-1 justify-between min-w-0">
               <div>
-                <span className="text-[9px] uppercase font-bold tracking-wider text-[#B5451B] block mb-1">
+                <span className={`text-[9px] uppercase font-bold tracking-wider block mb-1 ${
+                  isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+                }`}>
                   {t('module_6', 'Module 6')}
                 </span>
                 <h4
@@ -576,7 +630,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
             <div className="flex flex-col flex-1 justify-between min-w-0">
               <div>
-                <span className="text-[9px] uppercase font-bold tracking-wider text-[#B5451B] block mb-1">
+                <span className={`text-[9px] uppercase font-bold tracking-wider block mb-1 ${
+                  isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+                }`}>
                   {t('module_7', 'Module 7')}
                 </span>
                 <h4
@@ -603,7 +659,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               isDark ? 'text-[#F4ECDE]' : 'text-[#22331E]'
             }`}
           >
-            <span className="material-symbols-outlined text-xl text-[#B5451B]">history</span>
+            <span className={`material-symbols-outlined text-xl ${
+              isAdminMode ? (isDark ? 'text-[#6EE7B7]' : 'text-[#059669]') : 'text-[#B5451B]'
+            }`}>history</span>
             {t('recent_activity', 'Recent Workshop Activity')}
           </h3>
           <span className="text-xs opacity-70 font-sans font-bold">
@@ -627,7 +685,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     className="w-11 h-11 rounded-2xl object-cover border border-current/10 shrink-0"
                   />
                 ) : (
-                  <div className="w-11 h-11 rounded-2xl bg-[#B5451B] text-white flex items-center justify-center shadow-xs shrink-0">
+                  <div className={`w-11 h-11 rounded-2xl text-white flex items-center justify-center shadow-xs shrink-0 ${
+                    isAdminMode ? 'bg-[#059669]' : 'bg-[#B5451B]'
+                  }`}>
                     <span className="material-symbols-outlined text-xl">draw</span>
                   </div>
                 )}
@@ -646,7 +706,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </div>
 
               {act.statusTag && (
-                <span className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full bg-[#B5451B]/15 text-[#B5451B] border border-[#B5451B]/20 whitespace-nowrap">
+                <span className={`shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full border whitespace-nowrap ${
+                  isAdminMode
+                    ? isDark
+                      ? 'bg-[#059669]/25 text-[#6EE7B7] border-[#059669]/40'
+                      : 'bg-[#059669]/15 text-[#047857] border-[#059669]/30'
+                    : 'bg-[#B5451B]/15 text-[#B5451B] dark:text-[#FFA680] border-[#B5451B]/20'
+                }`}>
                   {t(`act_${act.id.replace(/-/g, '_')}_tag`, act.statusTag)}
                 </span>
               )}

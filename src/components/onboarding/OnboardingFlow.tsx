@@ -6,6 +6,7 @@ import { ShilpSetuLogo } from '../common/ShilpSetuLogo';
 import { INDIAN_STATES_AND_CITIES } from '../../data/indianLocations';
 import { LanguageCode } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAdminMode } from '../../context/AdminModeContext';
 import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { CRAFT_OPTIONS, getLocalizedCraftName, getEnterWorkshopLabel } from '../../data/crafts';
 
@@ -34,6 +35,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   onSetTheme,
 }) => {
   const { language, setLanguage, t } = useLanguage();
+  const { isAdminMode, enterAdminMode, exitAdminMode } = useAdminMode();
+
+  // Admin Mode Prompt Modal State
+  const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
+  const [adminCodeInput, setAdminCodeInput] = useState<string>('');
+  const [adminCodeError, setAdminCodeError] = useState<string>('');
+  const [showAdminCodePassword, setShowAdminCodePassword] = useState<boolean>(false);
 
   // Step 0: Splash / Logo Center Screen
   // Step 1: Personal Details (Full Name*, Mobile*, Email)
@@ -151,6 +159,18 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
 
     sound.playTap();
+
+    // Isolated Mock Auth: In Admin Mode, completely bypass all calls to Clerk and Supabase auth APIs
+    if (isAdminMode) {
+      setIsSendingOtp(false);
+      setOtpError('');
+      setEmailError('');
+      setOtpDigits(['', '', '', '', '', '']);
+      setResendNotice('Admin Mode: Network calls bypassed. Enter code 000000');
+      setCurrentStep(2);
+      return;
+    }
+
     setIsSendingOtp(true);
     setOtpError('');
     setEmailError('');
@@ -294,6 +314,18 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     if (!cleanEmail) return;
 
     sound.playTap();
+
+    if (isAdminMode) {
+      sound.playSuccess();
+      setOtpDigits(['', '', '', '', '', '']);
+      setOtpError('');
+      setResendNotice('Admin Mode: Use verification code 000000');
+      setTimeout(() => {
+        otpInputRefs.current[0]?.focus();
+      }, 50);
+      return;
+    }
+
     setIsSendingOtp(true);
     setOtpError('');
     setResendNotice('');
@@ -461,6 +493,61 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     let clerkSuccess = false;
     let clerkSessionId = '';
     let clerkVerificationError = '';
+
+    // Enforce isolated Admin Mode OTP validation (No Clerk / No Supabase calls)
+    if (isAdminMode) {
+      if (fullOtp !== '000000') {
+        sound.playError();
+        setOtpError('Invalid verification code');
+        setIsVerifyingOtp(false);
+        return;
+      }
+
+      // Hardcoded Admin Mode OTP 000000 accepted!
+      sound.playSuccess();
+      setIsVerifyingOtp(false);
+      setOtpError('');
+      setResendNotice('');
+
+      const adminMockToken = `admin_bypass_session_${Date.now()}_mock`;
+      localStorage.setItem('shilpsetu_token', adminMockToken);
+      localStorage.setItem('shilpsetu_auth_done', 'true');
+
+      const adminProfile: OnboardingUserData = {
+        fullName: fullName.trim() || 'Admin Artisan',
+        gender,
+        state: selectedState || 'Delhi',
+        city: effectiveCity || 'New Delhi',
+        mobile: cleanMobile || '9999999999',
+        email: cleanEmail || 'admin@shilpsetu.in',
+        selectedCraft: selectedCraft || 'pottery',
+        selectedLanguage: language,
+      };
+
+      try {
+        localStorage.setItem(
+          'shilpsetu_artisan',
+          JSON.stringify({
+            name: adminProfile.fullName,
+            gender: adminProfile.gender,
+            state: adminProfile.state,
+            city: adminProfile.city,
+            mobile: adminProfile.mobile,
+            email: adminProfile.email,
+            selectedLanguage: adminProfile.selectedLanguage,
+            craft: 'Heritage Craft Curation & Governance',
+            title: 'System Administrator & Master Curator',
+            location: `${adminProfile.city}, ${adminProfile.state}`,
+            isVerified: true,
+            trustScore: 100,
+          })
+        );
+      } catch {}
+
+      // Direct them immediately to the main dashboard!
+      onComplete(adminProfile);
+      return;
+    }
 
     // Emergency developer backdoor bypass for network/server outages (instant zero-network access)
     if (fullOtp === '123456') {
@@ -702,8 +789,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 overflow-y-auto flex flex-col justify-between selection:bg-[#B5451B]/20 transition-colors duration-300 ${
-        isDark ? 'bg-[#121411] text-[#F4ECDE]' : 'bg-[#F4ECDE] text-[#1A1815]'
+      className={`fixed inset-0 z-50 overflow-y-auto flex flex-col justify-between transition-colors duration-300 ${
+        isAdminMode ? 'selection:bg-emerald-600/20' : 'selection:bg-[#B5451B]/20'
+      } ${
+        isDark ? 'bg-[#121212] text-[#F4ECDE]' : 'bg-[#F4ECDE] text-[#1A1815]'
       }`}
     >
       <AnimatePresence mode="wait">
@@ -715,10 +804,44 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.5 }}
-            className="min-h-screen w-full flex flex-col items-center justify-between p-6 max-w-xl mx-auto relative"
+            className={`min-h-screen w-full flex flex-col items-center justify-between p-6 max-w-xl mx-auto relative transition-colors duration-300 ${
+              isDark ? 'bg-[#121212] text-[#F4ECDE]' : 'bg-[#F4ECDE] text-[#1A1815]'
+            }`}
           >
-            {/* Top Bar: Light / Dark Mode Toggle Button in Top Right (Like Home Screen Top Bar) */}
-            <div className="w-full flex items-center justify-end pt-2 sm:pt-4 px-2 z-20">
+            {/* Top Bar: Discreet Admin Mode Trigger at Top Left, Light/Dark Toggle at Top Right */}
+            <div className="w-full flex items-center justify-between pt-2 sm:pt-4 px-2 z-20">
+              {/* Discreet Admin Mode Trigger */}
+              <div className="flex items-center gap-2">
+                <button
+                  id="btn-admin-bypass-trigger"
+                  type="button"
+                  onClick={() => {
+                    sound.playTap();
+                    setAdminCodeInput('');
+                    setAdminCodeError('');
+                    setShowAdminModal(true);
+                  }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer ${
+                    isAdminMode
+                      ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 shadow-xs'
+                      : 'text-neutral-500 hover:text-neutral-300 opacity-50 hover:opacity-100'
+                  }`}
+                  title={isAdminMode ? 'Admin Bypass Mode Active (Click to manage)' : 'Admin Access'}
+                  aria-label="Admin Access"
+                >
+                  <span className="material-symbols-outlined text-base">
+                    {isAdminMode ? 'admin_panel_settings' : 'shield'}
+                  </span>
+                </button>
+                {isAdminMode && (
+                  <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-[#059669] text-white rounded-md shadow-xs flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse" />
+                    Admin
+                  </span>
+                )}
+              </div>
+
+              {/* Light / Dark Mode Toggle Button */}
               <button
                 id="btn-login-theme-toggle"
                 type="button"
@@ -727,8 +850,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 }}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-xs border ${
                   isDark
-                    ? 'text-[#E8B84B] bg-[#1C221A] hover:bg-[#2D3A2B] border-[#2D3A2B]'
-                    : 'text-[#22331E] bg-[#EFE4CF]/80 hover:bg-[#EAE0CC] border-[#22331E]/10'
+                    ? 'text-[#E8B84B] bg-[#1A1A1A] hover:bg-[#252525] border-[#E8B84B]/30'
+                    : isAdminMode
+                    ? 'text-[#059669] bg-[#E8F5E9] hover:bg-[#C8E6C9] border-[#059669]/30'
+                    : 'text-[#B5451B] bg-[#FAF6EE] hover:bg-[#EFE4CF] border-[#B5451B]/30'
                 }`}
                 title={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
                 aria-label={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
@@ -741,7 +866,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
             {/* Center ShilpSetu Brand Card */}
             <div className="flex flex-col items-center text-center my-auto py-6">
-              {/* ShilpSetu Logo Emblem */}
+              {/* ShilpSetu Logo Emblem - Exact original artwork preserved without tint */}
               <motion.div
                 initial={{ scale: 0.85, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -755,34 +880,48 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 <ShilpSetuLogo size="2xl" className="w-full h-full" />
               </motion.div>
 
-              {/* Title & Tagline matching provided image */}
+              {/* Title & Tagline: Emerald in Admin Mode, Signature Terracotta Orange for Normal User */}
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.4, duration: 0.5 }}
                 className="space-y-2.5"
               >
-                <h1 className="font-serif font-black text-3xl md:text-4xl text-[#B5451B] tracking-wider uppercase">
-                  {t('app_title', 'SHILPSETU')}
-                </h1>
-                <p
-                  className={`font-sans font-bold text-xs md:text-sm tracking-[0.18em] uppercase max-w-xs leading-relaxed ${
-                    isDark ? 'text-[#E8B84B]' : 'text-[#22331E]'
-                  }`}
-                >
+                <div className="flex flex-col items-center justify-center gap-1">
+                  <div className="flex items-center justify-center gap-2.5">
+                    <h1
+                      className={`font-serif font-black text-3xl md:text-4xl tracking-wider uppercase ${
+                        isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                      }`}
+                    >
+                      {t('app_title', 'SHILPSETU')}
+                    </h1>
+                    {isAdminMode && (
+                      <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-[#059669] text-white rounded-md shadow-xs flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse" />
+                        ADMIN
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <p className={`font-sans font-bold text-xs md:text-sm tracking-[0.18em] uppercase max-w-xs leading-relaxed ${
+                  isDark ? 'text-[#E8B84B]' : 'text-[#8C6B1B]'
+                }`}>
                   {t('tagline_header', "CONNECTING INDIA'S ARTISANS, PRESERVING HERITAGE")}
                 </p>
                 <p
                   className={`font-serif italic text-xs mt-1 ${
-                    isDark ? 'text-[#FFA680]' : 'text-[#872E0E]'
+                    isAdminMode
+                      ? isDark ? 'text-[#A7F3D0]' : 'text-[#047857]'
+                      : isDark ? 'text-[#FFA680]' : 'text-[#B5451B]'
                   }`}
                 >
-                  {t('app_tagline', '"हर हाथ की अपनी पहचान • Har Haath Ki Kahani"')}
+                  "Every Hand Has A Story"
                 </p>
               </motion.div>
             </div>
 
-            {/* Bottom Continue Action */}
+            {/* Bottom Continue Action - Emerald Green in Admin Mode, Terracotta Orange in Normal Mode */}
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -795,7 +934,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   sound.playTap();
                   setCurrentStep(1);
                 }}
-                className="w-full py-4 bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                className={`w-full py-4 text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 group cursor-pointer ${
+                  isAdminMode
+                    ? 'bg-[#059669] hover:bg-[#047857]'
+                    : 'bg-[#B5451B] hover:bg-[#9C3A14]'
+                }`}
               >
                 <span>{t('get_started_btn', 'Get Started')}</span>
                 <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">
@@ -818,22 +961,52 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           >
             <div>
               {/* Header */}
-              <div className="flex items-center gap-3 pt-2 mb-6">
-                <button
-                  onClick={() => {
-                    sound.playTap();
-                    setCurrentStep(0);
-                  }}
-                  className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center text-sm"
-                >
-                  <span className="material-symbols-outlined text-lg">arrow_back</span>
-                </button>
-                <div className="flex items-center gap-2">
-                  <ShilpSetuLogo size="xs" />
-                  <span className="font-serif font-bold text-base text-[#B5451B]">
-                    {t('app_title', 'SHILPSETU')}
-                  </span>
+              <div className="flex items-center justify-between pt-2 mb-6">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playTap();
+                      setCurrentStep(0);
+                    }}
+                    className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center text-sm cursor-pointer hover:bg-black/10 dark:hover:bg-white/15 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-lg">arrow_back</span>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <ShilpSetuLogo size="xs" isDark={isDark} />
+                    <span
+                      className={`font-serif font-bold text-base ${
+                        isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                      }`}
+                    >
+                      {t('app_title', 'SHILPSETU')}
+                    </span>
+                    {isAdminMode && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-[#059669] text-white rounded-md shadow-xs">
+                        Admin
+                      </span>
+                    )}
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectTheme(isDark ? 'light' : 'dark')}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-xs border ${
+                    isDark
+                      ? 'text-[#E8B84B] bg-[#1A1A1A] hover:bg-[#252525] border-[#E8B84B]/30'
+                      : isAdminMode
+                      ? 'text-[#059669] bg-[#E8F5E9] hover:bg-[#C8E6C9] border-[#059669]/30'
+                      : 'text-[#B5451B] bg-[#FAF6EE] hover:bg-[#EFE4CF] border-[#B5451B]/30'
+                  }`}
+                  title={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                  aria-label={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                >
+                  <span className="material-symbols-outlined text-base">
+                    {isDark ? 'light_mode' : 'dark_mode'}
+                  </span>
+                </button>
               </div>
 
               <div className="mb-6">
@@ -849,11 +1022,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               <form onSubmit={handleProceedToOtp} className="space-y-4">
                 {/* Full Name (MANDATORY) */}
                 <div>
-                  <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] mb-1.5">
+                  <label
+                    className={`block text-xs font-bold font-serif uppercase tracking-wider mb-1.5 ${
+                      isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                    }`}
+                  >
                     {t('full_name_label', 'Full Name')} <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3.5 top-3 text-[#B5451B] text-lg">
+                    <span
+                      className={`material-symbols-outlined absolute left-3.5 top-3 text-lg ${
+                        isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                      }`}
+                    >
                       person
                     </span>
                     <input
@@ -865,7 +1046,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         if (nameError) setNameError('');
                       }}
                       placeholder={t('enter_full_name', 'Enter your full name')}
-                      className={`w-full pl-10 pr-4 py-3 rounded-2xl border text-sm font-serif focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] transition-all ${
+                      className={`w-full pl-10 pr-4 py-3 rounded-2xl border text-sm font-serif focus:outline-hidden focus:ring-2 transition-all ${
+                        isAdminMode ? 'focus:ring-[#059669]' : 'focus:ring-[#B5451B]'
+                      } ${
                         nameError
                           ? 'border-red-500 bg-red-50 dark:bg-red-950/20'
                           : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-white dark:bg-[#1C221A]'
@@ -879,7 +1062,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
                 {/* Gender Selection: Male, Female, Others */}
                 <div>
-                  <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] mb-1.5">
+                  <label
+                    className={`block text-xs font-bold font-serif uppercase tracking-wider mb-1.5 ${
+                      isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                    }`}
+                  >
                     {t('gender', 'Gender')} <span className="text-red-500">*</span>
                   </label>
                   <div className="grid grid-cols-3 gap-2">
@@ -899,7 +1086,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           }}
                           className={`flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl border text-xs font-serif transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-[#B5451B] text-white border-[#B5451B] shadow-md scale-[1.02]'
+                              ? isAdminMode
+                                ? 'bg-[#059669] text-white border-[#059669] shadow-md scale-[1.02]'
+                                : 'bg-[#B5451B] text-white border-[#B5451B] shadow-md scale-[1.02]'
                               : isDark
                               ? 'bg-[#1C221A] border-[#2D3A2B] text-white/80 hover:bg-[#252E22]'
                               : 'bg-white border-[#22331E]/20 text-[#1A1815] hover:bg-[#FAF4E8]'
@@ -916,11 +1105,21 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 {/* State & City / Craft Cluster (MANDATORY - USER SELECTED) */}
                 <div className="space-y-3 p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-[#22331E]/10 dark:border-white/10">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] flex items-center gap-1.5">
+                    <span
+                      className={`text-xs font-bold font-serif uppercase tracking-wider flex items-center gap-1.5 ${
+                        isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                      }`}
+                    >
                       <span className="material-symbols-outlined text-base">location_on</span>
                       <span>{t('artisan_location', 'Artisan Location')}</span>
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#B5451B]/10 text-[#B5451B]">
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isAdminMode
+                          ? 'bg-[#059669]/10 text-[#059669]'
+                          : 'bg-[#B5451B]/10 text-[#B5451B]'
+                      }`}
+                    >
                       {t('mandatory', 'Mandatory')}
                     </span>
                   </div>
@@ -931,7 +1130,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       {t('select_state', 'State')} <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <span className="material-symbols-outlined absolute left-3 top-2.5 text-[#B5451B] text-base pointer-events-none">
+                      <span
+                        className={`material-symbols-outlined absolute left-3 top-2.5 text-base pointer-events-none ${
+                          isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                        }`}
+                      >
                         travel_explore
                       </span>
                       <select
@@ -945,7 +1148,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           if (stateError) setStateError('');
                           if (cityError) setCityError('');
                         }}
-                        className={`w-full pl-9 pr-8 py-2.5 rounded-xl border text-xs font-serif appearance-none focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] transition-all ${
+                        className={`w-full pl-9 pr-8 py-2.5 rounded-xl border text-xs font-serif appearance-none focus:outline-hidden focus:ring-2 transition-all ${
+                          isAdminMode ? 'focus:ring-[#059669]' : 'focus:ring-[#B5451B]'
+                        } ${
                           stateError
                             ? 'border-red-500 bg-red-50 dark:bg-red-950/20 text-red-900 dark:text-red-200'
                             : isDark
@@ -975,7 +1180,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       {t('city_or_village', 'City / Village')} <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <span className="material-symbols-outlined absolute left-3 top-2.5 text-[#B5451B] text-base pointer-events-none">
+                      <span
+                        className={`material-symbols-outlined absolute left-3 top-2.5 text-base pointer-events-none ${
+                          isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                        }`}
+                      >
                         location_city
                       </span>
                       <select
@@ -988,7 +1197,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           if (val !== 'Other') setCustomCity('');
                           if (cityError) setCityError('');
                         }}
-                        className={`w-full pl-9 pr-8 py-2.5 rounded-xl border text-xs font-serif appearance-none focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] transition-all disabled:opacity-50 ${
+                        className={`w-full pl-9 pr-8 py-2.5 rounded-xl border text-xs font-serif appearance-none focus:outline-hidden focus:ring-2 transition-all disabled:opacity-50 ${
+                          isAdminMode ? 'focus:ring-[#059669]' : 'focus:ring-[#B5451B]'
+                        } ${
                           cityError
                             ? 'border-red-500 bg-red-50 dark:bg-red-950/20 text-red-900 dark:text-red-200'
                             : isDark
@@ -1018,7 +1229,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     {/* Custom City input if 'Other' selected */}
                     {selectedCity === 'Other' && (
                       <div className="mt-2 relative">
-                        <span className="material-symbols-outlined absolute left-3 top-2 text-[#B5451B] text-sm pointer-events-none">
+                        <span
+                          className={`material-symbols-outlined absolute left-3 top-2 text-sm pointer-events-none ${
+                            isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                          }`}
+                        >
                           edit_location
                         </span>
                         <input
@@ -1030,7 +1245,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                             if (cityError) setCityError('');
                           }}
                           placeholder={t('type_city_village', 'Type your city or village name')}
-                          className={`w-full pl-8 pr-3 py-2 rounded-xl border text-xs font-serif focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] ${
+                          className={`w-full pl-8 pr-3 py-2 rounded-xl border text-xs font-serif focus:outline-hidden focus:ring-2 ${
+                            isAdminMode ? 'focus:ring-[#059669]' : 'focus:ring-[#B5451B]'
+                          } ${
                             isDark
                               ? 'bg-[#121411] border-[#2D3A2B] text-white'
                               : 'bg-white border-[#22331E]/20 text-[#1A1815]'
@@ -1047,7 +1264,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
                 {/* Mobile Number (MANDATORY) */}
                 <div>
-                  <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] mb-1.5">
+                  <label
+                    className={`block text-xs font-bold font-serif uppercase tracking-wider mb-1.5 ${
+                      isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                    }`}
+                  >
                     {t('mobile_number', 'Mobile Number')} <span className="text-red-500">*</span>
                   </label>
                   <div className="flex gap-2">
@@ -1056,7 +1277,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       <span className="font-mono text-xs">+91</span>
                     </div>
                     <div className="relative flex-1">
-                      <span className="material-symbols-outlined absolute left-3.5 top-3 text-[#B5451B] text-lg">
+                      <span
+                        className={`material-symbols-outlined absolute left-3.5 top-3 text-lg ${
+                          isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                        }`}
+                      >
                         phone_iphone
                       </span>
                       <input
@@ -1070,7 +1295,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           if (mobileError) setMobileError('');
                         }}
                         placeholder={t('enter_10_digit_mobile', 'Enter 10-digit mobile number')}
-                        className={`w-full pl-10 pr-4 py-3 rounded-2xl border text-sm font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] transition-all ${
+                        className={`w-full pl-10 pr-4 py-3 rounded-2xl border text-sm font-mono tracking-wider focus:outline-hidden focus:ring-2 transition-all ${
+                          isAdminMode ? 'focus:ring-[#059669]' : 'focus:ring-[#B5451B]'
+                        } ${
                           mobileError
                             ? 'border-red-500 bg-red-50 dark:bg-red-950/20'
                             : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-white dark:bg-[#1C221A]'
@@ -1090,16 +1317,30 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 {/* Email Address (MANDATORY FOR CLERK VERIFICATION) */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] flex items-center gap-1">
+                    <label
+                      className={`text-xs font-bold font-serif uppercase tracking-wider flex items-center gap-1 ${
+                        isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                      }`}
+                    >
                       <span>{t('email_address', 'Email Address')}</span>
                       <span className="text-red-500">*</span>
                     </label>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#B5451B]/10 text-[#B5451B]">
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isAdminMode
+                          ? 'bg-[#059669]/10 text-[#059669]'
+                          : 'bg-[#B5451B]/10 text-[#B5451B]'
+                      }`}
+                    >
                       {t('mandatory', 'Mandatory')}
                     </span>
                   </div>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3.5 top-3 text-[#B5451B] text-lg">
+                    <span
+                      className={`material-symbols-outlined absolute left-3.5 top-3 text-lg ${
+                        isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                      }`}
+                    >
                       mail
                     </span>
                     <input
@@ -1111,7 +1352,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         if (emailError) setEmailError('');
                       }}
                       placeholder={t('enter_email_mandatory', 'Enter email address (e.g. artisan@craft.in)')}
-                      className={`w-full pl-10 pr-4 py-3 rounded-2xl border text-sm font-sans focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] transition-all ${
+                      className={`w-full pl-10 pr-4 py-3 rounded-2xl border text-sm font-sans focus:outline-hidden focus:ring-2 transition-all ${
+                        isAdminMode ? 'focus:ring-[#059669]' : 'focus:ring-[#B5451B]'
+                      } ${
                         emailError
                           ? 'border-red-500 bg-red-50 dark:bg-red-950/20'
                           : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-white dark:bg-[#1C221A]'
@@ -1145,7 +1388,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 type="button"
                 disabled={isSendingOtp}
                 onClick={handleProceedToOtp}
-                className="w-full py-4 bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className={`w-full py-4 text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${
+                  isAdminMode
+                    ? 'bg-[#059669] hover:bg-[#047857]'
+                    : 'bg-[#B5451B] hover:bg-[#9C3A14]'
+                }`}
               >
                 {isSendingOtp ? (
                   <>
@@ -1175,34 +1422,74 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           >
             <div>
               {/* Back button and header */}
-              <div className="flex items-center gap-3 pt-2 mb-6">
-                <button
-                  onClick={() => {
-                    sound.playTap();
-                    setCurrentStep(1);
-                  }}
-                  className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center text-sm"
-                >
-                  <span className="material-symbols-outlined text-lg">arrow_back</span>
-                </button>
-                <div className="flex items-center gap-2">
-                  <ShilpSetuLogo size="xs" />
-                  <span className="font-serif font-bold text-base text-[#B5451B]">
-                    {t('app_title', 'SHILPSETU')} AUTH
-                  </span>
+              <div className="flex items-center justify-between pt-2 mb-6">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playTap();
+                      setCurrentStep(1);
+                    }}
+                    className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center text-sm cursor-pointer hover:bg-black/10 dark:hover:bg-white/15 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-lg">arrow_back</span>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <ShilpSetuLogo size="xs" isDark={isDark} />
+                    <span
+                      className={`font-serif font-bold text-base ${
+                        isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                      }`}
+                    >
+                      {t('app_title', 'SHILPSETU')} AUTH
+                    </span>
+                    {isAdminMode && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-[#059669] text-white rounded-md shadow-xs">
+                        Admin
+                      </span>
+                    )}
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectTheme(isDark ? 'light' : 'dark')}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-xs border ${
+                    isDark
+                      ? 'text-[#E8B84B] bg-[#1A1A1A] hover:bg-[#252525] border-[#E8B84B]/30'
+                      : isAdminMode
+                      ? 'text-[#059669] bg-[#E8F5E9] hover:bg-[#C8E6C9] border-[#059669]/30'
+                      : 'text-[#B5451B] bg-[#FAF6EE] hover:bg-[#EFE4CF] border-[#B5451B]/30'
+                  }`}
+                  title={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                  aria-label={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                >
+                  <span className="material-symbols-outlined text-base">
+                    {isDark ? 'light_mode' : 'dark_mode'}
+                  </span>
+                </button>
               </div>
 
               <div className="text-center mb-6">
-                <div className="w-16 h-16 rounded-full bg-[#B5451B]/15 text-[#B5451B] flex items-center justify-center mx-auto mb-3 shadow-inner">
-                  <span className="material-symbols-outlined text-3xl">mark_email_read</span>
+                <div
+                  className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner ${
+                    isAdminMode ? 'bg-[#059669]/15 text-[#059669]' : 'bg-[#B5451B]/15 text-[#B5451B]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-3xl">
+                    {isAdminMode ? 'admin_panel_settings' : 'mark_email_read'}
+                  </span>
                 </div>
                 <h2 className="font-serif font-bold text-2xl mb-1">
-                  {t('email_otp_verification', 'Email OTP Verification')}
+                  {isAdminMode ? 'Admin Verification' : t('email_otp_verification', 'Email OTP Verification')}
                 </h2>
                 <p className="text-xs text-black/70 dark:text-white/70 font-sans max-w-xs mx-auto mb-1">
                   {t('enter_6_digit_otp_sent_to', 'Enter the 6-digit verification code sent to')}{' '}
-                  <span className="font-mono font-bold text-[#B5451B] break-all">
+                  <span
+                    className={`font-mono font-bold break-all ${
+                      isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                    }`}
+                  >
                     {email || 'your email'}
                   </span>
                 </p>
@@ -1213,7 +1500,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       sound.playTap();
                       setCurrentStep(1);
                     }}
-                    className="text-[11px] font-semibold text-[#B5451B] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                    className={`text-[11px] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer ${
+                      isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                    }`}
                   >
                     <span className="material-symbols-outlined text-xs">edit</span>
                     <span>Wrong email? Click to change</span>
@@ -1221,15 +1510,27 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 </div>
 
                 {/* Email Delivery Notice Banner */}
-                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl p-3 text-center space-y-1.5 max-w-sm mx-auto shadow-xs">
-                  <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
-                    <span className="material-symbols-outlined text-sm">mark_email_read</span>
-                    <span>Verification email dispatched</span>
+                {isAdminMode ? (
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/50 rounded-2xl p-3.5 text-center space-y-1 max-w-sm mx-auto shadow-xs">
+                    <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200">
+                      <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
+                      <span>Admin Bypass Mode Active</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300 leading-snug">
+                      External network calls are bypassed. Enter hardcoded verification code <strong className="font-mono text-emerald-900 dark:text-emerald-100 font-black">000000</strong> to authenticate.
+                    </p>
                   </div>
-                  <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-snug">
-                    Please check your <strong>Inbox</strong> and <strong>Spam/Junk</strong> folder for the 6-digit verification code.
-                  </p>
-                </div>
+                ) : (
+                  <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl p-3 text-center space-y-1.5 max-w-sm mx-auto shadow-xs">
+                    <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
+                      <span className="material-symbols-outlined text-sm">mark_email_read</span>
+                      <span>Verification email dispatched</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-snug">
+                      Please check your <strong>Inbox</strong> and <strong>Spam/Junk</strong> folder for the 6-digit verification code.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* 6 Digit Input Boxes */}
@@ -1254,7 +1555,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       }}
                       className={`w-12 h-14 text-center font-mono font-black text-xl rounded-2xl border-2 transition-all focus:outline-hidden focus:scale-105 ${
                         digit
-                          ? 'border-[#B5451B] bg-white dark:bg-[#1C221A] text-[#B5451B] shadow-sm'
+                          ? isAdminMode
+                            ? 'border-[#059669] bg-white dark:bg-[#1C221A] text-[#059669] shadow-sm'
+                            : 'border-[#B5451B] bg-white dark:bg-[#1C221A] text-[#B5451B] shadow-sm'
                           : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-white dark:bg-[#1C221A]'
                       }`}
                     />
@@ -1281,7 +1584,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     type="button"
                     disabled={resendCooldown > 0 || isSendingOtp}
                     onClick={handleResendOtp}
-                    className="text-xs font-bold text-[#B5451B] hover:underline disabled:opacity-50 disabled:no-underline flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+                    className={`text-xs font-bold hover:underline disabled:opacity-50 disabled:no-underline flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed ${
+                      isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                    }`}
                   >
                     {isSendingOtp ? (
                       <span>{t('sending', 'Sending...')}</span>
@@ -1307,7 +1612,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 type="button"
                 disabled={isVerifyingOtp}
                 onClick={handleVerifyOtp}
-                className="w-full py-4 bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className={`w-full py-4 text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${
+                  isAdminMode
+                    ? 'bg-[#059669] hover:bg-[#047857]'
+                    : 'bg-[#B5451B] hover:bg-[#9C3A14]'
+                }`}
               >
                 {isVerifyingOtp ? (
                   <>
@@ -1340,6 +1649,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               setCurrentStep(2);
             }}
             isDark={isDark}
+            onToggleTheme={() => handleSelectTheme(isDark ? 'light' : 'dark')}
           />
         )}
 
@@ -1356,36 +1666,72 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             <div>
               {/* Top Navigation & Stepper Header */}
               <div className="flex items-center justify-between pt-2 mb-4">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playTap();
+                      setCurrentStep(3);
+                    }}
+                    className={`w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center text-sm transition-colors cursor-pointer ${
+                      isAdminMode
+                        ? 'hover:bg-[#059669]/10 hover:text-[#059669]'
+                        : 'hover:bg-[#B5451B]/10 hover:text-[#B5451B]'
+                    }`}
+                    title="Back to language selection"
+                    aria-label="Back to language selection"
+                  >
+                    <span className="material-symbols-outlined text-lg">arrow_back</span>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <ShilpSetuLogo size="xs" isDark={isDark} />
+                    <span
+                      className={`font-serif font-bold text-sm sm:text-base tracking-tight ${
+                        isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                      }`}
+                    >
+                      SHILPSETU
+                    </span>
+                  </div>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => {
-                    sound.playTap();
-                    setCurrentStep(3);
-                  }}
-                  className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 hover:bg-[#B5451B]/10 hover:text-[#B5451B] flex items-center justify-center text-sm transition-colors"
-                  title="Back to language selection"
-                  aria-label="Back to language selection"
+                  onClick={() => handleSelectTheme(isDark ? 'light' : 'dark')}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-xs border ${
+                    isDark
+                      ? 'text-[#E8B84B] bg-[#1A1A1A] hover:bg-[#252525] border-[#E8B84B]/30'
+                      : isAdminMode
+                      ? 'text-[#059669] bg-[#E8F5E9] hover:bg-[#C8E6C9] border-[#059669]/30'
+                      : 'text-[#B5451B] bg-[#FAF6EE] hover:bg-[#EFE4CF] border-[#B5451B]/30'
+                  }`}
+                  title={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                  aria-label={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
                 >
-                  <span className="material-symbols-outlined text-lg">arrow_back</span>
-                </button>
-                <div className="flex items-center gap-2">
-                  <ShilpSetuLogo size="xs" isDark={isDark} />
-                  <span className="font-serif font-bold text-sm sm:text-base tracking-tight text-[#B5451B]">
-                    SHILPSETU
+                  <span className="material-symbols-outlined text-base">
+                    {isDark ? 'light_mode' : 'dark_mode'}
                   </span>
-                </div>
+                </button>
               </div>
 
               {/* Header */}
               <div className="text-center mb-6">
-                <div className="w-12 h-12 rounded-full bg-[#B5451B] text-[#FFEBB3] flex items-center justify-center mx-auto mb-3 shadow-md">
+                <div
+                  className={`w-12 h-12 rounded-full text-white flex items-center justify-center mx-auto mb-3 shadow-md ${
+                    isAdminMode ? 'bg-[#059669]' : 'bg-[#B5451B]'
+                  }`}
+                >
                   <span className="material-symbols-outlined text-2xl">interests</span>
                 </div>
                 <h2 className="font-serif font-bold text-2xl mb-1 text-[#22331E] dark:text-[#F4ECDE]">
                   {t('what_is_your_craft', 'What is your heritage craft?')}
                 </h2>
                 <p className="text-xs opacity-75 font-sans">
-                  Welcome <strong className="text-[#B5451B]">{fullName}</strong>! Select your craft to personalize your AI Studio.
+                  Welcome{' '}
+                  <strong className={isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'}>
+                    {fullName}
+                  </strong>
+                  ! Select your craft to personalize your AI Studio.
                 </p>
               </div>
 
@@ -1405,7 +1751,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       }}
                       className={`relative rounded-2xl p-3 flex flex-col items-center text-center transition-all duration-200 border-2 overflow-hidden group cursor-pointer ${
                         isSelected
-                          ? 'bg-[#EAE0CC] dark:bg-[#1C221A] border-[#B5451B] shadow-lg scale-[1.02]'
+                          ? isAdminMode
+                            ? 'bg-[#EAE0CC] dark:bg-[#1C221A] border-[#059669] shadow-lg scale-[1.02]'
+                            : 'bg-[#EAE0CC] dark:bg-[#1C221A] border-[#B5451B] shadow-lg scale-[1.02]'
                           : 'bg-white dark:bg-[#1C221A]/60 border-[#22331E]/15 dark:border-[#2D3A2B] hover:border-[#E8B84B]'
                       }`}
                     >
@@ -1417,7 +1765,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                         {isSelected && (
-                          <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-[#B5451B] text-white flex items-center justify-center shadow-md">
+                          <div
+                            className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full text-white flex items-center justify-center shadow-md ${
+                              isAdminMode ? 'bg-[#059669]' : 'bg-[#B5451B]'
+                            }`}
+                          >
                             <span className="material-symbols-outlined text-sm font-bold">
                               check
                             </span>
@@ -1428,7 +1780,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       <h4 className="font-serif font-bold text-xs leading-tight text-[#1A1815] dark:text-[#F4ECDE]">
                         {craft.name}
                       </h4>
-                      <p className="text-[10px] text-[#B5451B] dark:text-[#FFA680] font-serif font-medium mt-0.5">
+                      <p
+                        className={`text-[10px] font-serif font-medium mt-0.5 ${
+                          isAdminMode
+                            ? 'text-[#059669] dark:text-emerald-400'
+                            : 'text-[#B5451B] dark:text-[#FFA680]'
+                        }`}
+                      >
                         {localizedName}
                       </p>
                     </button>
@@ -1442,13 +1800,185 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               <button
                 type="button"
                 onClick={handleFinish}
-                className="w-full bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold text-base py-4 rounded-full shadow-artisan transition-transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                className={`w-full text-white font-serif font-bold text-base py-4 rounded-full shadow-artisan transition-transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${
+                  isAdminMode
+                    ? 'bg-[#059669] hover:bg-[#047857]'
+                    : 'bg-[#B5451B] hover:bg-[#9C3A14]'
+                }`}
               >
                 <span>{getEnterWorkshopLabel(language)}</span>
                 <span className="material-symbols-outlined text-xl">store</span>
               </button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Admin Mode Verification Prompt Modal */}
+      <AnimatePresence>
+        {showAdminModal && (
+          <div
+            id="admin-auth-modal-overlay"
+            className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowAdminModal(false);
+              }
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-sm rounded-3xl p-6 shadow-2xl border bg-[#FAF5EC] dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B] text-[#1A1815] dark:text-[#F4ECDE] relative"
+            >
+              {/* Close Button */}
+              <button
+                id="btn-close-admin-modal"
+                type="button"
+                onClick={() => {
+                  sound.playTap();
+                  setShowAdminModal(false);
+                }}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center hover:opacity-80 transition-opacity cursor-pointer"
+                aria-label="Close modal"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+
+              {/* Icon & Title */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-2xl">admin_panel_settings</span>
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-lg leading-tight">
+                    Admin / Bypass Mode
+                  </h3>
+                  <p className="text-xs text-black/60 dark:text-white/60 font-sans">
+                    Development and end-to-end testing
+                  </p>
+                </div>
+              </div>
+
+              {/* Current Status */}
+              {isAdminMode ? (
+                <div className="space-y-4">
+                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs">
+                    <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold mb-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Admin Mode is currently ACTIVE</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 leading-relaxed">
+                      Network authentication is bypassed. Theme accent is set to emerald green.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      id="btn-deactivate-admin-mode"
+                      type="button"
+                      onClick={() => {
+                        sound.playTap();
+                        exitAdminMode();
+                        setShowAdminModal(false);
+                      }}
+                      className="flex-1 py-3 rounded-2xl border border-red-500/30 bg-red-500/10 hover:bg-red-500 hover:text-white text-red-600 dark:text-red-400 font-serif font-bold text-xs transition-all active:scale-95 cursor-pointer"
+                    >
+                      Deactivate Admin Mode
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sound.playTap();
+                        setShowAdminModal(false);
+                      }}
+                      className="px-4 py-3 rounded-2xl bg-black/5 dark:bg-white/10 hover:bg-black/10 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (enterAdminMode(adminCodeInput)) {
+                      sound.playSuccess();
+                      setAdminCodeError('');
+                      setShowAdminModal(false);
+                    } else {
+                      sound.playError();
+                      setAdminCodeError('Invalid access code. Please verify credentials and try again.');
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <p className="text-xs text-black/70 dark:text-white/70 font-sans leading-relaxed">
+                    Enter the authorized access code to bypass external Supabase and Clerk calls for offline testing.
+                  </p>
+
+                  <div>
+                    <label className="block text-xs font-bold font-serif uppercase tracking-wider text-black/80 dark:text-white/80 mb-1.5">
+                      Access Code
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="input-admin-code"
+                        type={showAdminCodePassword ? 'text' : 'password'}
+                        autoFocus
+                        value={adminCodeInput}
+                        onChange={(e) => {
+                          setAdminCodeInput(e.target.value);
+                          if (adminCodeError) setAdminCodeError('');
+                        }}
+                        placeholder="Enter access code"
+                        className={`w-full pl-3.5 pr-10 py-2.5 rounded-xl border text-sm font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-emerald-500 transition-all ${
+                          adminCodeError
+                            ? 'border-red-500 bg-red-50 dark:bg-red-950/20'
+                            : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-white dark:bg-[#121411]'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminCodePassword(!showAdminCodePassword)}
+                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                        title={showAdminCodePassword ? 'Hide' : 'Show'}
+                      >
+                        <span className="material-symbols-outlined text-sm">
+                          {showAdminCodePassword ? 'visibility_off' : 'visibility'}
+                        </span>
+                      </button>
+                    </div>
+                    {adminCodeError && (
+                      <p className="text-[11px] text-red-500 mt-1 font-medium">
+                        {adminCodeError}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      id="btn-submit-admin-code"
+                      type="submit"
+                      className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-serif font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-sm">verified_user</span>
+                      <span>Verify & Enter Admin</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminModal(false)}
+                      className="px-4 py-3 rounded-2xl bg-black/5 dark:bg-white/10 hover:bg-black/10 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

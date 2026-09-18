@@ -21,10 +21,12 @@ import { ShilpiVoiceFAB } from './components/voice/ShilpiVoiceFAB';
 import { ShilpiVoiceModal } from './components/voice/ShilpiVoiceModal';
 import { sound } from './services/sound';
 import { useLanguage } from './context/LanguageContext';
+import { useAdminMode } from './context/AdminModeContext';
 import { api } from './services/api';
 
 export function App() {
   const { language, setLanguage } = useLanguage();
+  const { isAdminMode, exitAdminMode } = useAdminMode();
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(() => {
     return localStorage.getItem('shilpsetu_auth_done') === 'true';
   });
@@ -156,12 +158,14 @@ export function App() {
     localStorage.setItem('shilpsetu_theme', theme);
   };
 
-  // Sync dark class on document root to decouple from OS preference
+  // Sync dark class on document root and body to decouple from OS preference
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
     }
   }, [isDark]);
 
@@ -226,6 +230,10 @@ export function App() {
   const handleLogout = () => {
     sound.playTap();
     localStorage.removeItem('shilpsetu_auth_done');
+    localStorage.removeItem('shilpsetu_token');
+    if (isAdminMode) {
+      exitAdminMode();
+    }
     setHasCompletedOnboarding(false);
     setCurrentScreen('home');
   };
@@ -257,34 +265,47 @@ export function App() {
 
     const updatedArtisan: ArtisanProfile = {
       ...artisan,
-      name: data.fullName?.trim() || artisan.name,
+      name: data.fullName?.trim() || (isAdminMode ? 'Admin Artisan' : artisan.name),
       gender: data.gender || 'male',
       avatarUrl: DEFAULT_ARTISAN_AVATAR,
-      location: userLocation,
-      mobile: data.mobile?.trim() || artisan.mobile,
-      email: data.email?.trim() ? data.email.trim() : undefined,
-      craft: craftInfo.craft,
-      title: craftInfo.title,
+      location: userLocation || (isAdminMode ? 'New Delhi, Delhi' : artisan.location),
+      mobile: data.mobile?.trim() || (isAdminMode ? '9999999999' : artisan.mobile),
+      email: data.email?.trim() ? data.email.trim() : (isAdminMode ? 'admin@shilpsetu.in' : undefined),
+      craft: isAdminMode ? 'Heritage Craft Curation & Governance' : craftInfo.craft,
+      title: isAdminMode ? 'System Administrator & Master Curator' : craftInfo.title,
     };
 
     handleUpdateArtisan(updatedArtisan);
   };
 
-  return (
-    <div
-      className={`min-h-screen w-full flex font-sans relative selection:bg-[#B5451B]/20 transition-colors duration-300 ${
-        isDark ? 'bg-[#121411] text-[#F4ECDE]' : 'bg-[#F4ECDE] text-[#1A1815]'
-      }`}
-    >
-      {/* 4-Step Onboarding Flow if not completed */}
-      {!hasCompletedOnboarding && (
+  // If onboarding / login is not completed, isolate the landing flow so no dashboard cards bleed through
+  if (!hasCompletedOnboarding) {
+    return (
+      <div
+        className={`min-h-screen w-full font-sans transition-colors duration-300 ${
+          isAdminMode ? 'selection:bg-emerald-600/30' : 'selection:bg-[#B5451B]/30'
+        } ${
+          isDark ? 'bg-[#121212] text-[#F4ECDE]' : 'bg-[#F4ECDE] text-[#1A1815]'
+        }`}
+      >
         <OnboardingFlow
           onComplete={handleOnboardingComplete}
           isDark={isDark}
           onToggleTheme={handleToggleTheme}
           onSetTheme={handleSetTheme}
         />
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`min-h-screen w-full flex font-sans relative transition-colors duration-300 ${
+        isAdminMode ? 'selection:bg-emerald-600/20' : 'selection:bg-[#B5451B]/20'
+      } ${
+        isDark ? 'bg-[#121411] text-[#F4ECDE]' : 'bg-[#F4ECDE] text-[#1A1815]'
+      }`}
+    >
 
       {/* Desktop Sidebar Navigation (Visible on md+ screens) */}
       <DesktopSidebar
@@ -296,6 +317,7 @@ export function App() {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         isDark={isDark}
+        onToggleTheme={handleToggleTheme}
         language={language}
         onOpenVoiceAssistant={() => setIsVoiceModalOpen(true)}
       />

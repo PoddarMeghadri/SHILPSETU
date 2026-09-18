@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { LanguageProvider } from './context/LanguageContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { AdminModeProvider } from './context/AdminModeContext';
 import { initGlobalHaptics } from './services/sound';
 import App from './App.tsx';
 import './index.css';
@@ -30,7 +31,9 @@ createRoot(document.getElementById('root')!).render(
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
       <LanguageProvider>
         <NotificationProvider>
-          <App />
+          <AdminModeProvider>
+            <App />
+          </AdminModeProvider>
         </NotificationProvider>
       </LanguageProvider>
     </ClerkProvider>

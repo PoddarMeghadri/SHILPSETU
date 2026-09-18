@@ -143,6 +143,29 @@ class SoundService {
     }
   }
 
+  // Error tone (gentle warning low pitch)
+  playError() {
+    try {
+      const ctx = this.getContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(140, now + 0.15);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+      this.vibrateWarning();
+    } catch {
+      // Ignored
+    }
+  }
+
   // Subtle slider tick
   playTick() {
     try {

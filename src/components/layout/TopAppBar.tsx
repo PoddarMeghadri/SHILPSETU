@@ -5,6 +5,7 @@ import { LANGUAGES } from '../../data/mockData';
 import { sound } from '../../services/sound';
 import { ShilpSetuLogo } from '../common/ShilpSetuLogo';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAdminMode } from '../../context/AdminModeContext';
 
 interface TopAppBarProps {
   currentScreen: ScreenId;
@@ -30,6 +31,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   onOpenVoiceAssistant,
 }) => {
   const { language: contextLanguage, setLanguage, t } = useLanguage();
+  const { isAdminMode } = useAdminMode();
   const effectiveLanguage = currentLanguage || contextLanguage;
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [langSearch, setLangSearch] = useState('');
@@ -98,9 +100,17 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 <ShilpSetuLogo size="sm" isDark={isDark} />
               </div>
               <div className="min-w-0 flex flex-col justify-center">
-                <h1 className="font-serif font-black text-lg tracking-tight leading-none text-[#B5451B]">
-                  SHILPSETU
-                </h1>
+                <div className="flex items-center gap-1.5">
+                  <h1 className="font-serif font-black text-lg tracking-tight leading-none text-[#B5451B]">
+                    SHILPSETU
+                  </h1>
+                  {isAdminMode && (
+                    <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-emerald-600 text-white rounded shadow-xs flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse" />
+                      Admin
+                    </span>
+                  )}
+                </div>
                 <p className="font-serif italic text-[11px] opacity-75 truncate mt-0.5">
                   {t('app_tagline', 'Har Haath Ki Kahani')}
                 </p>

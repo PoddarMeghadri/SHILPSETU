@@ -5,12 +5,14 @@ import { BlueVerifiedBadge } from '../common/SocialIcons';
 import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
 import { useNotifications } from '../../context/NotificationContext';
+import { useAdminMode } from '../../context/AdminModeContext';
 
 interface DesktopSidebarProps {
   currentScreen: ScreenId;
   artisan: ArtisanProfile;
   onNavigate: (screen: ScreenId) => void;
   isDark?: boolean;
+  onToggleTheme?: () => void;
   language?: LanguageCode;
   onOpenVoiceAssistant?: () => void;
 }
@@ -44,11 +46,13 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   artisan,
   onNavigate,
   isDark = false,
+  onToggleTheme,
   language,
   onOpenVoiceAssistant,
 }) => {
   const { t } = useTranslation();
   const { unreadCount } = useNotifications();
+  const { isAdminMode } = useAdminMode();
 
   // State to minimize/expand sidebar on tablet/pc
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
@@ -102,33 +106,67 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 <ShilpSetuLogo size="sm" isDark={isDark} />
               </div>
               <div className="min-w-0">
-                <h1 className="font-serif font-black text-lg tracking-tight leading-none text-[#B5451B]">
-                  SHILPSETU
-                </h1>
+                <div className="flex items-center gap-1.5">
+                  <h1 className="font-serif font-black text-lg tracking-tight leading-none text-[#B5451B]">
+                    SHILPSETU
+                  </h1>
+                  {isAdminMode && (
+                    <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-emerald-600 text-white rounded shadow-xs flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse" />
+                      Admin
+                    </span>
+                  )}
+                </div>
                 <p className="font-serif italic text-[11px] opacity-75 truncate mt-0.5">
                   {t('app_tagline', 'Har Haath Ki Kahani')}
                 </p>
               </div>
             </button>
 
-            {/* 3-Lined Button to Minimize Navigation Bar */}
-            <button
-              onClick={toggleCollapsed}
-              className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
-                isDark
-                  ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
-                  : 'border-[#22331E]/15 bg-white/70 text-[#22331E] hover:bg-white'
-              }`}
-              title={t('minimize_nav_bar', 'Minimize navigation bar')}
-              aria-label={t('minimize_nav_bar', 'Minimize navigation bar')}
-              id="btn-collapse-sidebar"
-            >
-              <span className="material-symbols-outlined text-[20px]">menu</span>
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {onToggleTheme && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playTap();
+                    onToggleTheme();
+                  }}
+                  className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                    isDark
+                      ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
+                      : isAdminMode
+                      ? 'border-[#059669]/20 bg-[#E8F5E9] text-[#059669] hover:bg-[#C8E6C9]'
+                      : 'border-[#B5451B]/20 bg-[#FAF6EE] text-[#B5451B] hover:bg-[#EFE4CF]'
+                  }`}
+                  title={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                  aria-label={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                  id="btn-sidebar-theme-toggle"
+                >
+                  <span className="material-symbols-outlined text-[19px]">
+                    {isDark ? 'light_mode' : 'dark_mode'}
+                  </span>
+                </button>
+              )}
+
+              {/* 3-Lined Button to Minimize Navigation Bar */}
+              <button
+                onClick={toggleCollapsed}
+                className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                  isDark
+                    ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
+                    : 'border-[#22331E]/15 bg-white/70 text-[#22331E] hover:bg-white'
+                }`}
+                title={t('minimize_nav_bar', 'Minimize navigation bar')}
+                aria-label={t('minimize_nav_bar', 'Minimize navigation bar')}
+                id="btn-collapse-sidebar"
+              >
+                <span className="material-symbols-outlined text-[20px]">menu</span>
+              </button>
+            </div>
           </>
         ) : (
           /* Minimized Header with 3-Lined Button and Centered Logo */
-          <div className="flex flex-col items-center gap-3 w-full py-1">
+          <div className="flex flex-col items-center gap-2.5 w-full py-1">
             <button
               onClick={toggleCollapsed}
               className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
@@ -142,6 +180,30 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             >
               <span className="material-symbols-outlined text-[20px]">menu</span>
             </button>
+
+            {onToggleTheme && (
+              <button
+                type="button"
+                onClick={() => {
+                  sound.playTap();
+                  onToggleTheme();
+                }}
+                className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                  isDark
+                    ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
+                    : isAdminMode
+                    ? 'border-[#059669]/20 bg-[#E8F5E9] text-[#059669] hover:bg-[#C8E6C9]'
+                    : 'border-[#B5451B]/20 bg-[#FAF6EE] text-[#B5451B] hover:bg-[#EFE4CF]'
+                }`}
+                title={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                aria-label={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
+                id="btn-sidebar-collapsed-theme-toggle"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {isDark ? 'light_mode' : 'dark_mode'}
+                </span>
+              </button>
+            )}
 
             <button
               onClick={() => {

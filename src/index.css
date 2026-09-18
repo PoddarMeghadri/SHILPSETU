@@ -15,6 +15,13 @@
     background-color: #F4ECDE;
     color: #1A1815;
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  html.dark body,
+  .dark body {
+    background-color: #121411;
+    color: #F4ECDE;
   }
 
   h1, h2, h3, .font-serif-heading {
@@ -378,5 +385,154 @@ a span.material-symbols-outlined {
   -webkit-font-feature-settings: 'liga' 1 !important;
   font-feature-settings: 'liga' 1 !important;
 }
+
+/* ==========================================================================
+   Admin Mode Dynamic Emerald/Green Theme Overrides
+   ========================================================================== */
+html.admin-mode,
+.admin-mode {
+  --color-primary: #059669;
+  --color-primary-hover: #047857;
+  --color-primary-light: rgba(16, 185, 129, 0.15);
+  --color-accent: #34D399;
+}
+
+/* Dynamically redirect all terracotta/orange color utilities to emerald green */
+html.admin-mode [class*="bg-[#B5451B]"],
+.admin-mode [class*="bg-[#B5451B]"],
+html.admin-mode .bg-artisan-primary,
+.admin-mode .bg-artisan-primary {
+  background-color: #059669 !important;
+}
+
+/* Translucent background tints in Admin Mode (must override the solid rule above) */
+html.admin-mode [class*="bg-[#B5451B]/5"],
+.admin-mode [class*="bg-[#B5451B]/5"] {
+  background-color: rgba(5, 150, 105, 0.05) !important;
+}
+html.admin-mode [class*="bg-[#B5451B]/10"],
+.admin-mode [class*="bg-[#B5451B]/10"] {
+  background-color: rgba(5, 150, 105, 0.1) !important;
+}
+html.admin-mode [class*="bg-[#B5451B]/15"],
+.admin-mode [class*="bg-[#B5451B]/15"] {
+  background-color: rgba(5, 150, 105, 0.15) !important;
+}
+html.admin-mode [class*="bg-[#B5451B]/20"],
+.admin-mode [class*="bg-[#B5451B]/20"] {
+  background-color: rgba(5, 150, 105, 0.2) !important;
+}
+html.admin-mode [class*="bg-[#B5451B]/25"],
+.admin-mode [class*="bg-[#B5451B]/25"] {
+  background-color: rgba(5, 150, 105, 0.25) !important;
+}
+html.admin-mode [class*="bg-[#B5451B]/30"],
+.admin-mode [class*="bg-[#B5451B]/30"] {
+  background-color: rgba(5, 150, 105, 0.3) !important;
+}
+html.admin-mode [class*="bg-[#B5451B]/40"],
+.admin-mode [class*="bg-[#B5451B]/40"] {
+  background-color: rgba(5, 150, 105, 0.4) !important;
+}
+html.admin-mode [class*="bg-[#B5451B]/50"],
+.admin-mode [class*="bg-[#B5451B]/50"] {
+  background-color: rgba(5, 150, 105, 0.5) !important;
+}
+html.admin-mode [class*="bg-[#B5451B]/60"],
+.admin-mode [class*="bg-[#B5451B]/60"] {
+  background-color: rgba(5, 150, 105, 0.6) !important;
+}
+
+/* Translucent hover states */
+html.admin-mode [class*="hover:bg-[#B5451B]/20"]:hover,
+.admin-mode [class*="hover:bg-[#B5451B]/20"]:hover {
+  background-color: rgba(5, 150, 105, 0.2) !important;
+}
+html.admin-mode [class*="hover:bg-[#B5451B]/25"]:hover,
+.admin-mode [class*="hover:bg-[#B5451B]/25"]:hover {
+  background-color: rgba(5, 150, 105, 0.25) !important;
+}
+
+html.admin-mode [class*="hover:bg-[#9C3A14]"]:hover,
+.admin-mode [class*="hover:bg-[#9C3A14]"]:hover,
+html.admin-mode [class*="hover:bg-[#9E3913]"]:hover,
+.admin-mode [class*="hover:bg-[#9E3913]"]:hover,
+html.admin-mode [class*="hover:bg-[#872E0E]"]:hover,
+.admin-mode [class*="hover:bg-[#872E0E]"]:hover {
+  background-color: #047857 !important;
+}
+
+/* Text colors in Admin Mode */
+html.admin-mode [class*="text-[#B5451B]"],
+.admin-mode [class*="text-[#B5451B]"],
+html.admin-mode [class*="text-[#9E3913]"],
+.admin-mode [class*="text-[#9E3913]"],
+html.admin-mode [class*="text-[#872E0E]"],
+.admin-mode [class*="text-[#872E0E]"],
+html.admin-mode .text-artisan-primary,
+.admin-mode .text-artisan-primary {
+  color: #059669 !important;
+}
+
+/* Ensure bright, accessible text contrast in dark admin mode */
+html.dark.admin-mode [class*="text-[#B5451B]"],
+html.dark .admin-mode [class*="text-[#B5451B]"],
+html.dark.admin-mode [class*="dark:text-[#FFA680]"],
+html.dark .admin-mode [class*="dark:text-[#FFA680]"],
+html.dark.admin-mode [class*="text-[#FFA680]"],
+html.dark .admin-mode [class*="text-[#FFA680]"] {
+  color: #6EE7B7 !important;
+}
+
+/* Translucent borders in Admin Mode */
+html.admin-mode [class*="border-[#B5451B]/20"],
+.admin-mode [class*="border-[#B5451B]/20"] {
+  border-color: rgba(5, 150, 105, 0.2) !important;
+}
+html.admin-mode [class*="border-[#B5451B]/30"],
+.admin-mode [class*="border-[#B5451B]/30"] {
+  border-color: rgba(5, 150, 105, 0.3) !important;
+}
+html.admin-mode [class*="border-[#B5451B]/40"],
+.admin-mode [class*="border-[#B5451B]/40"] {
+  border-color: rgba(5, 150, 105, 0.4) !important;
+}
+html.admin-mode [class*="border-[#B5451B]/60"],
+.admin-mode [class*="border-[#B5451B]/60"] {
+  border-color: rgba(5, 150, 105, 0.6) !important;
+}
+
+html.admin-mode [class*="border-[#B5451B]"],
+.admin-mode [class*="border-[#B5451B]"],
+html.admin-mode [class*="border-[#9E3913]"],
+.admin-mode [class*="border-[#9E3913]"] {
+  border-color: #059669 !important;
+}
+
+html.admin-mode [class*="selection:bg-[#B5451B]"],
+.admin-mode [class*="selection:bg-[#B5451B]"] {
+  background-color: rgba(5, 150, 105, 0.25) !important;
+}
+
+html.admin-mode [class*="focus:border-[#B5451B]"]:focus,
+.admin-mode [class*="focus:border-[#B5451B]"]:focus {
+  border-color: #059669 !important;
+}
+
+html.admin-mode [class*="focus:ring-[#B5451B]"]:focus,
+.admin-mode [class*="focus:ring-[#B5451B]"]:focus {
+  --tw-ring-color: #059669 !important;
+}
+
+html.admin-mode .terracotta-card,
+.admin-mode .terracotta-card {
+  background-color: #059669 !important;
+}
+
+html.admin-mode .wax-seal,
+.admin-mode .wax-seal {
+  background: linear-gradient(135deg, #10B981, #047857) !important;
+}
+
 
 
