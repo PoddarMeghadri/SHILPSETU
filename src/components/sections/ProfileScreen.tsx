@@ -6,7 +6,6 @@ import { WhatsAppIcon, InstagramIcon, FacebookIcon, XIcon, BlueVerifiedBadge } f
 import { SocialRedirectModal, SocialPlatformType } from '../common/SocialRedirectModal';
 import { ShareWorkshopModal } from '../common/ShareWorkshopModal';
 import { useTranslation } from '../../services/translations';
-import { useAdminMode } from '../../context/AdminModeContext';
 import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
 
 const DEFAULT_AVATAR = DEFAULT_ARTISAN_AVATAR;
@@ -36,7 +35,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onLogout,
 }) => {
   const { t, language } = useTranslation();
-  const { isAdminMode, exitAdminMode } = useAdminMode();
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [redirectPlatform, setRedirectPlatform] = useState<SocialPlatformType | null>(null);
@@ -636,42 +634,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </button>
           </div>
 
-          {/* Admin Mode Status & Exit Control */}
-          {isAdminMode && (
-            <div className="p-3.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                  <span className="material-symbols-outlined text-lg">admin_panel_settings</span>
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-serif font-bold text-xs text-emerald-800 dark:text-emerald-300">
-                      Admin Bypass Mode Active
-                    </p>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold uppercase tracking-wider bg-emerald-600 text-white rounded">
-                      Test Mode
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 truncate">
-                    Network authentication bypassed. Emerald theme active.
-                  </p>
-                </div>
-              </div>
-              <button
-                id="btn-profile-exit-admin-mode"
-                type="button"
-                onClick={() => {
-                  sound.playTap();
-                  exitAdminMode();
-                }}
-                className="px-3 py-1.5 rounded-xl border border-emerald-600/30 bg-emerald-600/20 hover:bg-emerald-600 hover:text-white text-emerald-800 dark:text-emerald-200 text-xs font-serif font-bold transition-all active:scale-95 cursor-pointer shrink-0"
-              >
-                Exit Admin
-              </button>
-            </div>
-          )}
-
-          {/* Setting 4: Logout Button */}
+          {/* Logout Button */}
           <button
             type="button"
             onClick={() => {

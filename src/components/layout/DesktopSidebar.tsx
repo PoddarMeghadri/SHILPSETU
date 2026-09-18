@@ -77,7 +77,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   return (
     <aside
       className={`hidden md:flex flex-col shrink-0 border-r sticky top-0 h-screen z-30 transition-all duration-300 ${
-        isCollapsed ? 'w-20' : 'w-64 lg:w-72'
+        isCollapsed ? 'w-20' : 'w-72 xl:w-80'
       } ${
         isDark
           ? 'bg-[#161B14] border-[#2D3A2B] text-[#F4ECDE]'
@@ -88,7 +88,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
       {/* Brand Header with 3-Lined Minimize Button Above */}
       <div
         className={`border-b border-current/10 flex items-center transition-all ${
-          isCollapsed ? 'p-3 flex-col gap-2.5 justify-center' : 'p-4 lg:p-5 justify-between gap-2'
+          isCollapsed ? 'p-3 flex-col gap-2.5 justify-center' : 'p-4 lg:p-5 grid grid-cols-[minmax(0,1fr)_auto] gap-2'
         }`}
       >
         {!isCollapsed ? (
@@ -107,7 +107,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h1 className="font-serif font-black text-lg tracking-tight leading-none text-[#B5451B]">
+                  <h1 className="font-serif font-black text-lg tracking-tight leading-none text-[#B5451B] truncate">
                     SHILPSETU
                   </h1>
                   {isAdminMode && (
@@ -131,7 +131,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     sound.playTap();
                     onToggleTheme();
                   }}
-                  className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                  className={`w-10 h-10 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
                     isDark
                       ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
                       : isAdminMode
@@ -151,7 +151,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               {/* 3-Lined Button to Minimize Navigation Bar */}
               <button
                 onClick={toggleCollapsed}
-                className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                className={`w-10 h-10 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
                   isDark
                     ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
                     : 'border-[#22331E]/15 bg-white/70 text-[#22331E] hover:bg-white'

@@ -397,39 +397,124 @@ html.admin-mode,
   --color-accent: #34D399;
 }
 
-/* Dynamically redirect all terracotta/orange color utilities to emerald green */
-html.admin-mode [class*="bg-[#B5451B]"],
-.admin-mode [class*="bg-[#B5451B]"],
+/*
+ * Admin mode is an emerald theme.  The first version of this override matched
+ * every `bg-[#B5451B]/…` class as if it were an opaque background. That made
+ * text that also used `text-[#B5451B]` emerald-on-emerald and therefore
+ * unreadable. Keep the translucent semantic styles translucent, then map the
+ * remaining terracotta utilities and gradients to one emerald palette.
+ */
+html.admin-mode [class*="bg-[#B5451B]/"],
+.admin-mode [class*="bg-[#B5451B]/"],
+html.admin-mode [class*="bg-[#9C3A14]/"],
+.admin-mode [class*="bg-[#9C3A14]/"],
+html.admin-mode [class*="bg-[#9E3913]/"],
+.admin-mode [class*="bg-[#9E3913]/"],
+html.admin-mode [class*="bg-[#7F2A0B]/"],
+.admin-mode [class*="bg-[#7F2A0B]/"],
+html.admin-mode [class*="bg-[#8C2C09]/"],
+.admin-mode [class*="bg-[#8C2C09]/"] {
+  background-color: rgb(5 150 105 / 0.16) !important;
+}
+
+html.admin-mode [class~="bg-[#B5451B]"],
+.admin-mode [class~="bg-[#B5451B]"],
+html.admin-mode [class~="bg-[#9C3A14]"],
+.admin-mode [class~="bg-[#9C3A14]"],
+html.admin-mode [class~="bg-[#9E3913]"],
+.admin-mode [class~="bg-[#9E3913]"],
+html.admin-mode [class~="bg-[#872E0E]"],
+.admin-mode [class~="bg-[#872E0E]"],
+html.admin-mode [class~="bg-[#7F2A0B]"],
+.admin-mode [class~="bg-[#7F2A0B]"],
+html.admin-mode [class~="bg-[#8C2C09]"],
+.admin-mode [class~="bg-[#8C2C09]"],
+html.admin-mode [class~="bg-[#D45B2E]"],
+.admin-mode [class~="bg-[#D45B2E]"],
 html.admin-mode .bg-artisan-primary,
 .admin-mode .bg-artisan-primary {
   background-color: #059669 !important;
 }
 
+html.admin-mode [class*="hover:bg-[#B5451B]"]:hover,
+.admin-mode [class*="hover:bg-[#B5451B]"]:hover,
 html.admin-mode [class*="hover:bg-[#9C3A14]"]:hover,
 .admin-mode [class*="hover:bg-[#9C3A14]"]:hover,
 html.admin-mode [class*="hover:bg-[#9E3913]"]:hover,
 .admin-mode [class*="hover:bg-[#9E3913]"]:hover,
 html.admin-mode [class*="hover:bg-[#872E0E]"]:hover,
-.admin-mode [class*="hover:bg-[#872E0E]"]:hover {
+.admin-mode [class*="hover:bg-[#872E0E]"]:hover,
+html.admin-mode [class*="hover:bg-[#7F2A0B]"]:hover,
+.admin-mode [class*="hover:bg-[#7F2A0B]"]:hover,
+html.admin-mode [class*="hover:bg-[#8C2C09]"]:hover,
+.admin-mode [class*="hover:bg-[#8C2C09]"]:hover {
   background-color: #047857 !important;
 }
 
 html.admin-mode [class*="text-[#B5451B]"],
 .admin-mode [class*="text-[#B5451B]"],
+html.admin-mode [class*="text-[#9C3A14]"],
+.admin-mode [class*="text-[#9C3A14]"],
 html.admin-mode [class*="text-[#9E3913]"],
 .admin-mode [class*="text-[#9E3913]"],
 html.admin-mode [class*="text-[#872E0E]"],
 .admin-mode [class*="text-[#872E0E]"],
+html.admin-mode [class*="text-[#7F2A0B]"],
+.admin-mode [class*="text-[#7F2A0B]"],
+html.admin-mode [class*="text-[#8C2C09]"],
+.admin-mode [class*="text-[#8C2C09]"],
 html.admin-mode .text-artisan-primary,
 .admin-mode .text-artisan-primary {
-  color: #059669 !important;
+  color: #047857 !important;
+}
+
+html.dark.admin-mode [class*="text-[#B5451B]"],
+.dark.admin-mode [class*="text-[#B5451B]"],
+html.dark.admin-mode [class*="text-[#9C3A14]"],
+.dark.admin-mode [class*="text-[#9C3A14]"],
+html.dark.admin-mode [class*="text-[#9E3913]"],
+.dark.admin-mode [class*="text-[#9E3913]"],
+html.dark.admin-mode [class*="text-[#872E0E]"],
+.dark.admin-mode [class*="text-[#872E0E]"],
+html.dark.admin-mode [class*="text-[#7F2A0B]"],
+.dark.admin-mode [class*="text-[#7F2A0B]"],
+html.dark.admin-mode [class*="text-[#8C2C09]"],
+.dark.admin-mode [class*="text-[#8C2C09]"] {
+  color: #6ee7b7 !important;
 }
 
 html.admin-mode [class*="border-[#B5451B]"],
 .admin-mode [class*="border-[#B5451B]"],
+html.admin-mode [class*="border-[#9C3A14]"],
+.admin-mode [class*="border-[#9C3A14]"],
 html.admin-mode [class*="border-[#9E3913]"],
-.admin-mode [class*="border-[#9E3913]"] {
+.admin-mode [class*="border-[#9E3913]"],
+html.admin-mode [class*="border-[#7F2A0B]"],
+.admin-mode [class*="border-[#7F2A0B]"],
+html.admin-mode [class*="border-[#8C2C09]"],
+.admin-mode [class*="border-[#8C2C09]"] {
   border-color: #059669 !important;
+}
+
+html.admin-mode [class*="from-[#B5451B]"],
+.admin-mode [class*="from-[#B5451B]"],
+html.admin-mode [class*="from-[#D45B2E]"],
+.admin-mode [class*="from-[#D45B2E]"] {
+  --tw-gradient-from: #059669 !important;
+  --tw-gradient-to: rgb(5 150 105 / 0) !important;
+}
+
+html.admin-mode [class*="via-[#9E3913]"],
+.admin-mode [class*="via-[#9E3913]"] {
+  --tw-gradient-via: #047857 !important;
+  --tw-gradient-to: rgb(4 120 87 / 0) !important;
+}
+
+html.admin-mode [class*="to-[#7F2A0B]"],
+.admin-mode [class*="to-[#7F2A0B]"],
+html.admin-mode [class*="to-[#8C2C09]"],
+.admin-mode [class*="to-[#8C2C09]"] {
+  --tw-gradient-to: #065f46 !important;
 }
 
 html.admin-mode [class*="selection:bg-[#B5451B]"],
@@ -450,6 +535,12 @@ html.admin-mode [class*="focus:ring-[#B5451B]"]:focus,
 html.admin-mode .terracotta-card,
 .admin-mode .terracotta-card {
   background-color: #059669 !important;
+}
+
+html.admin-mode .artisan-alert-card,
+.admin-mode .artisan-alert-card {
+  background-color: #123a2d !important;
+  border-color: #059669 !important;
 }
 
 html.admin-mode .wax-seal,
