@@ -656,7 +656,7 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
 
               <div className="pt-2 border-t border-[#22331E]/10 flex items-center justify-between gap-2">
                 <span className="font-mono font-bold text-sm">₹{(ord.amount ?? 1250).toLocaleString('en-IN')}</span>
-                {ord.status !== 'shipped' && (
+                {ord.status !== 'shipped' ? (
                   <div className="flex gap-1.5">
                     <button onClick={() => handleFulfill(ord.id, 'accepted')} className="bg-[#22331E] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Accept</button>
                     <button onClick={async () => {
