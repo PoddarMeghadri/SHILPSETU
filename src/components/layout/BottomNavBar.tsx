@@ -4,6 +4,7 @@ import { ScreenId, LanguageCode } from '../../types';
 import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
 import { useNotifications } from '../../context/NotificationContext';
+import { useAdminMode } from '../../context/AdminModeContext';
 
 interface BottomNavBarProps {
   currentScreen: ScreenId;
@@ -39,6 +40,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
 }) => {
   const { t } = useTranslation();
   const { unreadCount } = useNotifications();
+  const { isAdminMode } = useAdminMode();
 
   // Map secondary screens to primary tab highlights if needed
   const activeTabId = (() => {
@@ -92,7 +94,9 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                     }}
                     className={`absolute inset-0 rounded-full z-0 ${
                       item.id === 'settings'
-                        ? isDark ? 'bg-emerald-500/30' : 'bg-emerald-500/15'
+                        ? isAdminMode
+                          ? isDark ? 'bg-emerald-500/30' : 'bg-emerald-500/15'
+                          : isDark ? 'bg-[#B5451B]/30' : 'bg-[#B5451B]/15'
                         : isDark ? 'bg-[#B5451B]/30' : 'bg-[#B5451B]/15'
                     }`}
                   />
@@ -102,7 +106,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                 <div
                   className={`relative z-10 flex flex-col items-center justify-center w-full transition-colors duration-200 ${
                     isActive
-                      ? item.id === 'settings' ? 'text-emerald-500' : 'text-[#B5451B]'
+                      ? item.id === 'settings' && isAdminMode ? 'text-emerald-500' : 'text-[#B5451B]'
                       : isDark
                       ? 'text-[#F4ECDE]/60 group-hover:text-[#F4ECDE]'
                       : 'text-[#22331E]/60 group-hover:text-[#22331E]'
@@ -126,7 +130,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                     className={`text-[9.5px] sm:text-[10.5px] tracking-tight font-sans truncate max-w-full text-center leading-tight mt-0.5 ${
                       isActive
                         ? item.id === 'settings'
-                          ? 'font-bold text-emerald-500'
+                          ? isAdminMode ? 'font-bold text-emerald-500' : 'font-bold text-[#B5451B]'
                           : 'font-bold text-[#B5451B]'
                         : 'font-medium'
                     }`}
@@ -142,4 +146,3 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
     </nav>
   );
 };
-

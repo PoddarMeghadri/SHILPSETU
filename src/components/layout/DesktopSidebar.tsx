@@ -254,7 +254,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 } rounded-2xl text-xs font-medium font-sans transition-all group relative cursor-pointer ${
                   isActive
                     ? item.id === 'settings'
-                      ? 'bg-emerald-500/20 text-emerald-400 font-bold'
+                      ? isAdminMode
+                        ? 'bg-emerald-500/20 text-emerald-400 font-bold'
+                        : 'bg-[#B5451B] text-white font-bold shadow-sm'
                       : 'bg-[#B5451B] text-white font-bold shadow-sm'
                     : isDark
                     ? 'text-[#F4ECDE]/80 hover:bg-[#252E22] hover:text-white'
@@ -265,7 +267,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   <span
                     className={`material-symbols-outlined text-[20px] transition-transform group-hover:scale-110 ${
                       isActive
-                        ? item.id === 'settings' ? 'text-emerald-400' : 'text-white'
+                        ? item.id === 'settings'
+                          ? isAdminMode ? 'text-emerald-400' : 'text-white'
+                          : 'text-white'
                         : 'text-[#B5451B]'
                     }`}
                   >
