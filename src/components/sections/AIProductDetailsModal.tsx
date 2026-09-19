@@ -9,6 +9,7 @@ interface AIProductDetailsModalProps {
   capturedImage: string;
   lightingFilterName: string;
   onSaveProduct: (product: ProductItem) => void;
+  initialProduct?: ProductItem;
   isDark?: boolean;
 }
 
@@ -30,6 +31,7 @@ export const AIProductDetailsModal: React.FC<AIProductDetailsModalProps> = ({
   capturedImage,
   lightingFilterName,
   onSaveProduct,
+  initialProduct,
   isDark = false,
 }) => {
   const { t } = useTranslation();
@@ -64,7 +66,15 @@ export const AIProductDetailsModal: React.FC<AIProductDetailsModalProps> = ({
         hasInitializedRef.current = true;
         setIsTitleCleared(false);
         setIsDescriptionCleared(false);
-        setTitle('Handcrafted Heritage Craft (4K Studio)');
+        setTitle(initialProduct?.title || 'Handcrafted Heritage Craft (4K Studio)');
+        if (initialProduct) {
+          setCategory(initialProduct.category);
+          setPrice(initialProduct.price);
+          setStock(initialProduct.stock);
+          setDescription(initialProduct.description);
+          setMaterials(initialProduct.materials.join(', '));
+          setIsGiCertified(initialProduct.status === 'gem_approved' || initialProduct.gemSyncStatus === 'synced');
+        }
         setDescription(
           `Captured in AI Studio with ${lightingFilterName} lighting, 4K texture preservation, and neutral background.`
         );
@@ -75,7 +85,7 @@ export const AIProductDetailsModal: React.FC<AIProductDetailsModalProps> = ({
       setIsTitleCleared(false);
       setIsDescriptionCleared(false);
     }
-  }, [isOpen, lightingFilterName]);
+  }, [isOpen, lightingFilterName, initialProduct]);
 
   // Check speech support
   useEffect(() => {

@@ -239,8 +239,8 @@ app.delete('/api/products/:id', authenticateJwt, (req: AuthenticatedRequest, res
    4. ORDERS & GEM B2B TENDERS ENDPOINTS
    ========================================================================= */
 
-app.get('/api/orders', (req, res) => {
-  const artisanId = (req.query.artisanId as string) || undefined;
+app.get('/api/orders', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  const artisanId = req.artisan?.id || (req.query.artisanId as string) || 'artisan_demo';
   const orders = db.getOrders(artisanId);
   res.json(orders);
 });
@@ -248,10 +248,14 @@ app.get('/api/orders', (req, res) => {
 app.post('/api/orders', authenticateJwt, (req: AuthenticatedRequest, res) => {
   try {
     const artisanId = req.artisan?.id || req.body.artisanId || 'artisan_demo';
+    const status = req.body.status || 'pending';
+    if (!['pending', 'accepted', 'shipped'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be pending, accepted, or shipped' });
+    }
     const order = db.createOrder({
       ...req.body,
       artisanId,
-      status: req.body.status || 'pending',
+      status,
       escrowStatus: req.body.escrowStatus || 'held_in_sbi_escrow',
     });
     res.status(201).json(order);
@@ -260,12 +264,17 @@ app.post('/api/orders', authenticateJwt, (req: AuthenticatedRequest, res) => {
   }
 });
 
-app.patch('/api/orders/:id/status', (req, res) => {
+app.patch('/api/orders/:id/status', authenticateJwt, (req: AuthenticatedRequest, res) => {
   try {
     const { status } = req.body;
     if (!status) {
       return res.status(400).json({ error: 'Status is required' });
     }
+    if (!['pending', 'accepted', 'shipped'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be pending, accepted, or shipped' });
+    }
+    const order = db.getOrders(req.artisan?.id || 'artisan_demo').find((item) => item.id === req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
     const updated = db.updateOrderStatus(req.params.id, status);
     if (!updated) {
       return res.status(404).json({ error: 'Order not found' });
@@ -274,6 +283,13 @@ app.patch('/api/orders/:id/status', (req, res) => {
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to update order status' });
   }
+});
+
+app.delete('/api/orders/:id', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  const order = db.getOrders(req.artisan?.id || 'artisan_demo').find((item) => item.id === req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  if (!db.deleteOrder(req.params.id)) return res.status(404).json({ error: 'Order not found' });
+  res.status(204).end();
 });
 
 app.get('/api/tenders', (req, res) => {

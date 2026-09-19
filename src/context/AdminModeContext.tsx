@@ -27,13 +27,11 @@ export const AdminModeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       localStorage.setItem('shilpsetu_admin_mode', 'true');
     } else {
       root.classList.remove('admin-mode');
-      const savedPalette = localStorage.getItem('shilpsetu_palette_id') || 'terracotta';
-      if (savedPalette === 'terracotta') {
-        root.style.setProperty('--color-primary', '#B5451B');
-        root.style.setProperty('--color-primary-hover', '#9C3A14');
-        root.style.setProperty('--color-primary-light', 'rgba(181, 69, 27, 0.15)');
-        root.style.setProperty('--color-accent', '#E8B84B');
-      }
+      localStorage.setItem('shilpsetu_palette_id', 'terracotta');
+      root.style.setProperty('--color-primary', '#B5451B');
+      root.style.setProperty('--color-primary-hover', '#9C3A14');
+      root.style.setProperty('--color-primary-light', 'rgba(181, 69, 27, 0.15)');
+      root.style.setProperty('--color-accent', '#E8B84B');
       localStorage.removeItem('shilpsetu_admin_mode');
     }
   }, [isAdminMode]);

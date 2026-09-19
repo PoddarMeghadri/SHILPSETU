@@ -24,6 +24,7 @@ import { sound } from './services/sound';
 import { useLanguage } from './context/LanguageContext';
 import { useAdminMode } from './context/AdminModeContext';
 import { api } from './services/api';
+import { upsertSupabaseProfile } from './services/supabase';
 
 export function App() {
   const { language, setLanguage } = useLanguage();
@@ -225,6 +226,15 @@ export function App() {
       statusTag: 'Live on GeM',
       thumbnailUrl: newProduct.polishedImageUrl,
     };
+
+    const handleUpdateProduct = (updatedProduct: ProductItem) => {
+      setProducts((prev) => {
+        const updated = prev.map((product) => product.id === updatedProduct.id ? updatedProduct : product);
+        localStorage.setItem('shilpsetu_products', JSON.stringify(updated));
+        return updated;
+      });
+      api.updateProduct?.(updatedProduct.id, updatedProduct).catch(console.warn);
+    };
     setActivities((prev) => [newActivity, ...prev]);
   };
 
@@ -277,6 +287,19 @@ export function App() {
     };
 
     handleUpdateArtisan(updatedArtisan);
+    upsertSupabaseProfile({
+      fullName: updatedArtisan.name,
+      email: updatedArtisan.email,
+      mobileNumber: updatedArtisan.mobile,
+      preferredLanguage: data.selectedLanguage || language,
+      desiredWorkshop: data.selectedCraft,
+      location: userLocation,
+      craftSpecialty: craftInfo.craft,
+      avatarUrl: updatedArtisan.avatarUrl,
+      bio: updatedArtisan.bio,
+    }).then((result) => {
+      if (!result.saved) console.error('[Profile persistence]', result.error);
+    }).catch((error) => console.error('[Profile persistence]', error));
   };
 
   // If onboarding / login is not completed, isolate the landing flow so no dashboard cards bleed through
@@ -386,6 +409,7 @@ export function App() {
                   language={language}
                   isDark={isDark}
                   onAddProduct={handleAddProduct}
+                  onUpdateProduct={handleUpdateProduct}
                   onNavigate={(scr) => {
                     sound.playTap();
                     setCurrentScreen(scr);

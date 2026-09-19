@@ -10,6 +10,8 @@ import { useAdminMode } from '../../context/AdminModeContext';
 import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { CRAFT_OPTIONS, getLocalizedCraftName, getEnterWorkshopLabel } from '../../data/crafts';
 import { fetchAuthRequest, withAuthRequestTimeout } from '../../services/authRequest';
+import { sendSupabaseOtp, verifySupabaseOtp } from '../../services/supabase';
+import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
 
 export interface OnboardingUserData {
   fullName: string;
@@ -60,6 +62,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [mobile, setMobile] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [selectedCraft, setSelectedCraft] = useState<string>('pottery');
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
 
   // Clerk Auth Hooks
   const clerk = useClerk();
@@ -72,6 +76,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [cityError, setCityError] = useState<string>('');
   const [mobileError, setMobileError] = useState<string>('');
   const [emailError, setEmailError] = useState<string>('');
+  const [passwordError, setPasswordError] = useState<string>('');
 
   // Clerk Auth Flow & Cooldown State
   const [authFlowMode, setAuthFlowMode] = useState<'sign_up' | 'sign_in' | 'backend'>('sign_up');
@@ -155,6 +160,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setEmailError('');
     }
 
+    const passwordValidation = !isAdminMode ? validatePassword(password) : null;
+    if (passwordValidation) {
+      setPasswordError(passwordValidation);
+      valid = false;
+    } else if (!isAdminMode && !passwordsMatch(password, passwordConfirmation)) {
+      setPasswordError('Passwords do not match.');
+      valid = false;
+    } else {
+      setPasswordError('');
+    }
+
     if (!valid) {
       return;
     }
@@ -178,9 +194,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
     let sentViaClerk = false;
     let clerkErrorMessage = '';
+    const supabaseOtp = await sendSupabaseOtp(cleanEmail);
+    const sentViaSupabase = supabaseOtp.sent;
 
     // 1. Clerk Email Verification Flow (Dispatches the 6-digit OTP verification code)
-    if (isSignUpLoaded && signUp) {
+    if (!sentViaSupabase && isSignUpLoaded && signUp) {
       try {
         console.log('[Clerk Auth] Current signUp status:', signUp.status, 'email:', signUp.emailAddress);
 
@@ -213,6 +231,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             await withAuthRequestTimeout(
               signUp.create({
                 emailAddress: cleanEmail,
+                password,
                 firstName: fullName.trim().split(' ')[0] || fullName.trim(),
                 lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
               }),
@@ -312,10 +331,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
 
     // Stop only if both Clerk and Backend were unable to dispatch verification code
-    if (!sentViaClerk && !backendSuccess) {
+    if (!sentViaClerk && !backendSuccess && !sentViaSupabase) {
       setIsSendingOtp(false);
       setEmailError(
-        clerkErrorMessage ||
+        clerkErrorMessage || supabaseOtp.error ||
         backendErrorMessage ||
         'Could not dispatch verification code to your email. Please check your email address or try again.'
       );
@@ -406,6 +425,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           const newSignUp = await withAuthRequestTimeout(
             signUp.create({
               emailAddress: cleanEmail,
+              password,
               firstName: fullName.trim().split(' ')[0] || fullName.trim(),
               lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
             }),
@@ -541,6 +561,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     let clerkSuccess = false;
     let clerkSessionId = '';
     let clerkVerificationError = '';
+    const supabaseVerification = await verifySupabaseOtp(cleanEmail, fullOtp);
+    if (supabaseVerification.verified) {
+      localStorage.setItem('shilpsetu_token', `supabase_${Date.now()}`);
+      setIsVerifyingOtp(false);
+      setCurrentStep(3);
+      return;
+    }
 
     // Enforce isolated Admin Mode OTP validation (No Clerk / No Supabase calls)
     if (isAdminMode) {
@@ -563,60 +590,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       // Keep admin onboarding in the shared flow so language and workshop selection
       // are completed before the app marks authentication as finished.
       setCurrentStep(3);
-      return;
-    }
-
-    // Emergency developer backdoor bypass for network/server outages (instant zero-network access)
-    if (fullOtp === '123456') {
-      console.log('[Auth] Backdoor OTP 123456 authenticated successfully');
-      const offlineToken = `artisan_backdoor_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      localStorage.setItem('shilpsetu_token', offlineToken);
-
-      try {
-        const existingLocal = localStorage.getItem('shilpsetu_artisan');
-        const artisanRecord = existingLocal ? JSON.parse(existingLocal) : {};
-        localStorage.setItem(
-          'shilpsetu_artisan',
-          JSON.stringify({
-            ...artisanRecord,
-            fullName: fullName.trim() || artisanRecord.fullName || 'Master Artisan',
-            gender,
-            state: selectedState,
-            city: effectiveCity,
-            mobile: cleanMobile,
-            email: cleanEmail,
-            selectedLanguage: language,
-          })
-        );
-      } catch {}
-
-      // Fire non-blocking backend sync in background if server is online
-      try {
-        fetch('/api/auth/verify-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            mobile: cleanMobile,
-            otp: '123456',
-            clerkVerified: true,
-            artisanDetails: {
-              fullName: fullName.trim(),
-              state: selectedState,
-              city: effectiveCity,
-              gender,
-              email: cleanEmail,
-              selectedLanguage: language,
-            },
-          }),
-        }).catch(() => {});
-      } catch {}
-
-      sound.playSuccess();
-      setIsVerifyingOtp(false);
-      setOtpError('');
-      setResendNotice('');
-      setCurrentStep(3); // Proceed to language selection immediately
       return;
     }
 
@@ -739,7 +712,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         console.warn('Backend returned non-JSON response during OTP verify');
         setOtpError(
           clerkVerificationError ||
-          'Verification service is updating. Please retry, or use emergency verification code 123456.'
+          'Verification service is updating. Please retry or request a new code.'
         );
         setIsVerifyingOtp(false);
         return;
@@ -765,7 +738,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       console.warn('Network error during OTP verify:', err);
       setOtpError(
         clerkVerificationError ||
-        'Unable to connect to verification server. Please retry, or use emergency verification code 123456.'
+        'Unable to connect to verification server. Please retry or request a new code.'
       );
       setIsVerifyingOtp(false);
     }
@@ -1386,6 +1359,27 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     </p>
                   )}
                 </div>
+
+                {!isAdminMode && (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
+                      Create password <span className="text-red-500">*</span>
+                    </label>
+                    <input type="password" required minLength={8} maxLength={PASSWORD_MAX_LENGTH} value={password}
+                      onChange={(e) => { setPassword(e.target.value); setPasswordError(''); }}
+                      placeholder="8–16 characters" className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A]" />
+                    <div className="flex gap-1" aria-label="Password strength">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <span key={level} className={`h-1.5 flex-1 rounded-full ${passwordStrength(password) >= level ? 'bg-[#B5451B]' : 'bg-black/10 dark:bg-white/10'}`} />
+                      ))}
+                    </div>
+                    <p className="text-[10px] opacity-70">Use uppercase, lowercase, number, and special character.</p>
+                    <input type="password" required minLength={8} maxLength={PASSWORD_MAX_LENGTH} value={passwordConfirmation}
+                      onChange={(e) => { setPasswordConfirmation(e.target.value); setPasswordError(''); }}
+                      placeholder="Confirm password" className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A]" />
+                    {passwordError && <p className="text-[11px] text-red-500">{passwordError}</p>}
+                  </div>
+                )}
 
                 {/* Trust & Security Badge */}
                 <div className="p-3.5 rounded-2xl bg-[#22331E]/10 dark:bg-[#2D3A2B]/40 border border-[#22331E]/15 flex items-center gap-2.5 mt-4">
