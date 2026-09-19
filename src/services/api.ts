@@ -209,6 +209,12 @@ export const api = {
     return res.json();
   },
 
+  async deleteOrder(orderId: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/orders/${orderId}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (!res.ok) throw new Error('Unable to reject order');
+    return true;
+  },
+
   // AI Actions
   async enhancePhoto(imageBase64: string, promptPreset?: string, lightingPreset?: string) {
     const res = await fetch(`${API_BASE}/ai/enhance-photo`, {

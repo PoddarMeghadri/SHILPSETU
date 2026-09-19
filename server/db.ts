@@ -381,6 +381,13 @@ class LocalStoreManager {
     return updated;
   }
 
+  deleteOrder(id: string): boolean {
+    if (!this.store.orders[id]) return false;
+    delete this.store.orders[id];
+    this.save(this.store);
+    return true;
+  }
+
   // Tenders operations
   getTenders(): TenderRecord[] {
     return Object.values(this.store.tenders);
@@ -455,6 +462,7 @@ export const db = {
   getOrders: (artisanId?: string) => localStore.getOrders(artisanId),
   createOrder: (order: any) => localStore.createOrder(order),
   updateOrderStatus: (id: string, status: any) => localStore.updateOrderStatus(id, status),
+  deleteOrder: (id: string) => localStore.deleteOrder(id),
   getTenders: () => localStore.getTenders(),
   updateTenderStatus: (id: string, status: any) => localStore.updateTenderStatus(id, status),
   getChatHistory: (artisanId: string) => localStore.getChatHistory(artisanId),

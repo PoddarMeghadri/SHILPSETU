@@ -11,6 +11,7 @@ import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { CRAFT_OPTIONS, getLocalizedCraftName, getEnterWorkshopLabel } from '../../data/crafts';
 import { fetchAuthRequest, withAuthRequestTimeout } from '../../services/authRequest';
 import { sendSupabaseOtp, verifySupabaseOtp } from '../../services/supabase';
+import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
 
 export interface OnboardingUserData {
   fullName: string;
@@ -61,6 +62,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [mobile, setMobile] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [selectedCraft, setSelectedCraft] = useState<string>('pottery');
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
 
   // Clerk Auth Hooks
   const clerk = useClerk();
@@ -73,6 +76,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [cityError, setCityError] = useState<string>('');
   const [mobileError, setMobileError] = useState<string>('');
   const [emailError, setEmailError] = useState<string>('');
+  const [passwordError, setPasswordError] = useState<string>('');
 
   // Clerk Auth Flow & Cooldown State
   const [authFlowMode, setAuthFlowMode] = useState<'sign_up' | 'sign_in' | 'backend'>('sign_up');
@@ -156,6 +160,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setEmailError('');
     }
 
+    const passwordValidation = !isAdminMode ? validatePassword(password) : null;
+    if (passwordValidation) {
+      setPasswordError(passwordValidation);
+      valid = false;
+    } else if (!isAdminMode && !passwordsMatch(password, passwordConfirmation)) {
+      setPasswordError('Passwords do not match.');
+      valid = false;
+    } else {
+      setPasswordError('');
+    }
+
     if (!valid) {
       return;
     }
@@ -216,6 +231,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             await withAuthRequestTimeout(
               signUp.create({
                 emailAddress: cleanEmail,
+                password,
                 firstName: fullName.trim().split(' ')[0] || fullName.trim(),
                 lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
               }),
@@ -409,6 +425,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           const newSignUp = await withAuthRequestTimeout(
             signUp.create({
               emailAddress: cleanEmail,
+              password,
               firstName: fullName.trim().split(' ')[0] || fullName.trim(),
               lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
             }),
@@ -1342,6 +1359,27 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     </p>
                   )}
                 </div>
+
+                {!isAdminMode && (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
+                      Create password <span className="text-red-500">*</span>
+                    </label>
+                    <input type="password" required minLength={8} maxLength={PASSWORD_MAX_LENGTH} value={password}
+                      onChange={(e) => { setPassword(e.target.value); setPasswordError(''); }}
+                      placeholder="8–16 characters" className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A]" />
+                    <div className="flex gap-1" aria-label="Password strength">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <span key={level} className={`h-1.5 flex-1 rounded-full ${passwordStrength(password) >= level ? 'bg-[#B5451B]' : 'bg-black/10 dark:bg-white/10'}`} />
+                      ))}
+                    </div>
+                    <p className="text-[10px] opacity-70">Use uppercase, lowercase, number, and special character.</p>
+                    <input type="password" required minLength={8} maxLength={PASSWORD_MAX_LENGTH} value={passwordConfirmation}
+                      onChange={(e) => { setPasswordConfirmation(e.target.value); setPasswordError(''); }}
+                      placeholder="Confirm password" className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A]" />
+                    {passwordError && <p className="text-[11px] text-red-500">{passwordError}</p>}
+                  </div>
+                )}
 
                 {/* Trust & Security Badge */}
                 <div className="p-3.5 rounded-2xl bg-[#22331E]/10 dark:bg-[#2D3A2B]/40 border border-[#22331E]/15 flex items-center gap-2.5 mt-4">

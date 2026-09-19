@@ -281,6 +281,13 @@ app.patch('/api/orders/:id/status', authenticateJwt, (req: AuthenticatedRequest,
   }
 });
 
+app.delete('/api/orders/:id', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  const order = db.getOrders(req.artisan?.id || 'artisan_demo').find((item) => item.id === req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  if (!db.deleteOrder(req.params.id)) return res.status(404).json({ error: 'Order not found' });
+  res.status(204).end();
+});
+
 app.get('/api/tenders', (req, res) => {
   const tenders = db.getTenders();
   res.json(tenders);

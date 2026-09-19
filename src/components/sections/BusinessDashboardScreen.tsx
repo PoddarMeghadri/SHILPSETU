@@ -659,7 +659,14 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
                 {ord.status !== 'shipped' && (
                   <div className="flex gap-1.5">
                     <button onClick={() => handleFulfill(ord.id, 'accepted')} className="bg-[#22331E] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Accept</button>
-                    <button onClick={() => setOrders((prev) => prev.filter((item) => item.id !== ord.id))} className="bg-[#B5451B] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Reject</button>
+                    <button onClick={async () => {
+                      try {
+                        await api.deleteOrder(ord.id);
+                        setOrders((prev) => prev.filter((item) => item.id !== ord.id));
+                      } catch (error: any) {
+                        setOrdersError(error?.message || 'Unable to reject order.');
+                      }
+                    }} className="bg-[#B5451B] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Reject</button>
                     <button onClick={() => handleFulfill(ord.id, 'shipped')} className="bg-[#2E4638] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Dispatch</button>
                   </div>
                 ) : (
