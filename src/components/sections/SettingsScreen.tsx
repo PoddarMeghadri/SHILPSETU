@@ -59,7 +59,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </div>
           <div>
             <h2 className="font-serif font-bold text-xl">{t('settings', 'Settings')}</h2>
-            <p className="text-xs opacity-70">{t('workshop_settings', 'Workshop & Account Settings')}</p>
           </div>
         </div>
       </div>

@@ -59,7 +59,7 @@ export interface OrderRecord {
   quantity: number;
   unitPrice: number;
   totalAmount: number;
-  status: 'pending' | 'accepted' | 'declined' | 'in_production' | 'shipped' | 'delivered';
+  status: 'pending' | 'accepted' | 'shipped';
   escrowStatus: string;
   deliveryBy?: string;
   createdAt: string;

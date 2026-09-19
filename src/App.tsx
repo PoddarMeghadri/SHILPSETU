@@ -24,6 +24,7 @@ import { sound } from './services/sound';
 import { useLanguage } from './context/LanguageContext';
 import { useAdminMode } from './context/AdminModeContext';
 import { api } from './services/api';
+import { upsertSupabaseProfile } from './services/supabase';
 
 export function App() {
   const { language, setLanguage } = useLanguage();
@@ -286,6 +287,19 @@ export function App() {
     };
 
     handleUpdateArtisan(updatedArtisan);
+    upsertSupabaseProfile({
+      fullName: updatedArtisan.name,
+      email: updatedArtisan.email,
+      mobileNumber: updatedArtisan.mobile,
+      preferredLanguage: data.selectedLanguage || language,
+      desiredWorkshop: data.selectedCraft,
+      location: userLocation,
+      craftSpecialty: craftInfo.craft,
+      avatarUrl: updatedArtisan.avatarUrl,
+      bio: updatedArtisan.bio,
+    }).then((result) => {
+      if (!result.saved) console.error('[Profile persistence]', result.error);
+    }).catch((error) => console.error('[Profile persistence]', error));
   };
 
   // If onboarding / login is not completed, isolate the landing flow so no dashboard cards bleed through

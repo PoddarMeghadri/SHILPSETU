@@ -100,12 +100,38 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
     }
   };
 
-  // Dynamic metrics based on period
+  const periodDays = period === 'today' ? 1 : period === 'week' ? 7 : 30;
+  const periodStart = Date.now() - periodDays * 86400000;
+  const periodOrders = orders.filter((order) => {
+    const timestamp = Date.parse(order.time);
+    return !Number.isNaN(timestamp) && timestamp >= periodStart;
+  });
+  const earningOrders = periodOrders.filter((order) => order.status === 'accepted' || order.status === 'shipped');
+  const revenue = earningOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+  const units = earningOrders.reduce((sum, order) => sum + (order.quantity || 0), 0);
   const metrics = {
-    today: { revenue: 3450, units: 4, aov: 860, views: 240 },
-    week: { revenue: 14250, units: 18, aov: 1120, views: 1840 },
-    month: { revenue: 68400, units: 76, aov: 1240, views: 7920 },
-  }[period];
+    revenue,
+    units,
+    aov: earningOrders.length ? Math.round(revenue / earningOrders.length) : 0,
+    views: periodOrders.length,
+  };
+  const categoryTotals = earningOrders.reduce<Record<string, number>>((totals, order) => {
+    const product = currentProducts.find((item) => item.title === order.itemTitle);
+    const category = product?.category || 'Other';
+    totals[category] = (totals[category] || 0) + (order.amount || 0);
+    return totals;
+  }, {});
+  const categoryEntries = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+  const maxCategoryRevenue = categoryEntries[0]?.[1] || 1;
+  const dailySales = Array.from({ length: periodDays === 1 ? 1 : 7 }, (_, index) => {
+    const dayStart = periodDays === 1 ? periodStart : Date.now() - (6 - index) * 86400000;
+    const dayEnd = dayStart + 86400000;
+    return periodOrders.filter((order) => {
+      const timestamp = Date.parse(order.time);
+      return timestamp >= dayStart && timestamp < dayEnd;
+    }).reduce((sum, order) => sum + (order.amount || 0), 0);
+  });
+  const maxDailySales = Math.max(...dailySales, 1);
 
   const handleFulfill = async (orderId: string, status: 'accepted' | 'shipped') => {
     sound.playSuccess();
@@ -287,78 +313,30 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
               <span className="material-symbols-outlined text-lg text-[#B5451B]">pie_chart</span>
               {t('sales_by_category', 'Sales by Craft Category')}
             </h4>
-            <span className="text-xs text-[#B5451B] font-bold">{t('top_pottery', 'Top: Pottery')}</span>
+            <span className="text-xs text-[#B5451B] font-bold">{categoryEntries[0]?.[0] || t('no_sales', 'No sales yet')}</span>
           </div>
 
           <div className="flex items-center justify-around py-2 flex-wrap gap-4">
             {/* SVG Donut */}
             <div className="relative w-32 h-32">
               <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="38"
-                  fill="none"
-                  stroke="#B5451B"
-                  strokeWidth="14"
-                  strokeDasharray="107 238"
-                  strokeDashoffset="0"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="38"
-                  fill="none"
-                  stroke="#22331E"
-                  strokeWidth="14"
-                  strokeDasharray="71 238"
-                  strokeDashoffset="-107"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="38"
-                  fill="none"
-                  stroke="#E8B84B"
-                  strokeWidth="14"
-                  strokeDasharray="36 238"
-                  strokeDashoffset="-178"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="38"
-                  fill="none"
-                  stroke="#8C7355"
-                  strokeWidth="14"
-                  strokeDasharray="24 238"
-                  strokeDashoffset="-214"
-                />
+                <circle cx="50" cy="50" r="38" fill="none" stroke="#B5451B" strokeWidth="14"
+                  strokeDasharray={`${(categoryEntries[0]?.[1] || 0) / maxCategoryRevenue * 238} 238`} />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="font-serif font-bold text-base">45%</span>
-                <span className="text-[10px] text-[#B5451B] font-medium">{t('craft_pottery_short', 'Pottery')}</span>
+                <span className="font-serif font-bold text-base">{categoryEntries.length}</span>
+                <span className="text-[10px] text-[#B5451B] font-medium">{t('categories', 'categories')}</span>
               </div>
             </div>
 
             {/* Legend */}
             <div className="space-y-1.5 text-xs font-sans">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#B5451B]" />
-                <span className="font-medium">{t('craft_pottery_short', 'Pottery')} (45%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#22331E] dark:bg-[#344E41]" />
-                <span className="font-medium">{t('craft_weaving_short', 'Weaving')} (30%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#E8B84B]" />
-                <span className="font-medium">{t('craft_woodwork_short', 'Woodwork')} (15%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#8C7355]" />
-                <span className="font-medium">{t('craft_brass_short', 'Brass')} (10%)</span>
-              </div>
+              {categoryEntries.slice(0, 4).map(([category, amount], index) => (
+                <div key={category} className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${['bg-[#B5451B]', 'bg-[#22331E]', 'bg-[#E8B84B]', 'bg-[#8C7355]'][index]}`} />
+                  <span className="font-medium">{category} ({Math.round((amount / revenue) * 100) || 0}%)</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -383,20 +361,12 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
             </span>
           </div>
 
-          <div className="h-28 w-full relative pt-2">
-            <svg viewBox="0 0 300 80" className="w-full h-full overflow-visible">
-              <path
-                d="M 10 65 Q 40 20, 80 50 T 160 30 T 240 15 T 290 25 L 290 80 L 10 80 Z"
-                fill="rgba(181, 69, 27, 0.15)"
-              />
-              <path
-                d="M 10 65 Q 40 20, 80 50 T 160 30 T 240 15 T 290 25"
-                fill="none"
-                stroke="#B5451B"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-            </svg>
+          <div className="h-28 w-full flex items-end gap-2 px-2">
+            {dailySales.map((amount, index) => (
+              <div key={index} className="flex-1 h-full flex items-end" title={`₹${amount.toLocaleString('en-IN')}`}>
+                <div className="w-full rounded-t-md bg-[#B5451B]" style={{ height: `${Math.max(4, (amount / maxDailySales) * 100)}%` }} />
+              </div>
+            ))}
           </div>
 
           <div className="flex justify-between text-xs opacity-60 font-sans font-medium">

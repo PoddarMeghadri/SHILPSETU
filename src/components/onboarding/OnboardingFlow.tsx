@@ -183,7 +183,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     const sentViaSupabase = supabaseOtp.sent;
 
     // 1. Clerk Email Verification Flow (Dispatches the 6-digit OTP verification code)
-    if (isSignUpLoaded && signUp) {
+    if (!sentViaSupabase && isSignUpLoaded && signUp) {
       try {
         console.log('[Clerk Auth] Current signUp status:', signUp.status, 'email:', signUp.emailAddress);
 
