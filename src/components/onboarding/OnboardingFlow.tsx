@@ -64,6 +64,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [selectedCraft, setSelectedCraft] = useState<string>('pottery');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [signInIdentifier, setSignInIdentifier] = useState('');
+  const [signInPassword, setSignInPassword] = useState('');
+  const [signInError, setSignInError] = useState('');
+  const [signInEmail, setSignInEmail] = useState('');
 
   // Clerk Auth Hooks
   const clerk = useClerk();
@@ -115,6 +119,35 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   // Handle personal details submission and initiate Clerk Email OTP
   const handleProceedToOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (authFlowMode === 'sign_in') {
+      const identifier = signInIdentifier.trim();
+      if (!identifier || !signInPassword) {
+        setSignInError('Enter your registered email or mobile number and password.');
+        return;
+      }
+      setIsSendingOtp(true);
+      setSignInError('');
+      try {
+        const res = await fetchAuthRequest('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier, password: signInPassword }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Unable to sign in.');
+        setSignInEmail(data.email);
+        setEmail(data.email);
+        setResendCooldown(data.cooldownSeconds || 30);
+        setResendNotice('');
+        setOtpDigits(['', '', '', '', '', '']);
+        setCurrentStep(2);
+      } catch (error: any) {
+        setSignInError(error.message || 'Unable to sign in. Please try again.');
+      } finally {
+        setIsSendingOtp(false);
+      }
+      return;
+    }
     let valid = true;
 
     if (!fullName.trim()) {
@@ -356,6 +389,31 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
     sound.playTap();
 
+    if (authFlowMode === 'sign_in') {
+      setIsSendingOtp(true);
+      setOtpError('');
+      setResendNotice('');
+      try {
+        const res = await fetchAuthRequest('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: signInIdentifier.trim(), password: signInPassword }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Unable to resend login code.');
+        setSignInEmail(data.email);
+        setEmail(data.email);
+        setResendCooldown(data.cooldownSeconds || 30);
+        setOtpDigits(['', '', '', '', '', '']);
+        setResendNotice('New login code sent to your registered email.');
+      } catch (error: any) {
+        setOtpError(error.message || 'Unable to resend login code.');
+      } finally {
+        setIsSendingOtp(false);
+      }
+      return;
+    }
+
     if (isAdminMode) {
       sound.playSuccess();
       setOtpDigits(['', '', '', '', '', '']);
@@ -554,6 +612,36 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setIsVerifyingOtp(true);
     setOtpError('');
 
+    if (authFlowMode === 'sign_in') {
+      try {
+        const res = await fetchAuthRequest('/api/auth/login-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: signInEmail, otp: fullOtp }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Invalid login code.');
+        localStorage.setItem('shilpsetu_token', data.token);
+        const loggedIn = data.artisan || {};
+        setFullName(loggedIn.fullName || '');
+        setMobile(loggedIn.mobile || '');
+        setEmail(loggedIn.email || signInEmail);
+        setSelectedState(loggedIn.state || '');
+        setSelectedCity(loggedIn.city || '');
+        const storedCraft = String(loggedIn.craft || '').toLowerCase();
+        const craftId = CRAFT_OPTIONS.find((craft) =>
+          storedCraft.includes(craft.name.toLowerCase().split(' ')[0])
+        )?.id;
+        if (craftId) setSelectedCraft(craftId);
+        setIsVerifyingOtp(false);
+        setCurrentStep(3);
+      } catch (error: any) {
+        setOtpError(error.message || 'Unable to verify login code.');
+        setIsVerifyingOtp(false);
+      }
+      return;
+    }
+
     const cleanEmail = email.trim().toLowerCase();
     const cleanMobile = mobile.replace(/\D/g, '');
     const effectiveCity = selectedCity === 'Other' ? customCity.trim() : selectedCity;
@@ -563,10 +651,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     let clerkVerificationError = '';
     const supabaseVerification = await verifySupabaseOtp(cleanEmail, fullOtp);
     if (supabaseVerification.verified) {
-      localStorage.setItem('shilpsetu_token', `supabase_${Date.now()}`);
-      setIsVerifyingOtp(false);
-      setCurrentStep(3);
-      return;
+      // Continue through the backend verifier as well so the local/profile
+      // persistence path receives the new user's password and profile.
     }
 
     // Enforce isolated Admin Mode OTP validation (No Clerk / No Supabase calls)
@@ -661,6 +747,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               gender,
               email: cleanEmail,
               selectedLanguage: language,
+              password,
             },
           }),
         });
@@ -702,6 +789,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             gender,
             email: cleanEmail,
             selectedLanguage: language,
+            password,
           },
         }),
       });
@@ -962,8 +1050,62 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           </motion.div>
         )}
 
+        {/* STEP 1: SIGN IN (IDENTIFIER + PASSWORD ONLY) */}
+        {currentStep === 1 && authFlowMode === 'sign_in' && (
+          <motion.div
+            key="sign-in-screen"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ duration: 0.3 }}
+            className="min-h-screen w-full flex flex-col justify-between p-6 max-w-xl md:max-w-2xl mx-auto"
+          >
+            <div>
+              <div className="flex items-center gap-3 pt-2 mb-10">
+                <button type="button" onClick={() => setCurrentStep(0)}
+                  className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center cursor-pointer">
+                  <span className="material-symbols-outlined text-lg">arrow_back</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <ShilpSetuLogo size="xs" isDark={isDark} />
+                  <span className="font-serif font-bold text-base text-[#B5451B]">{t('app_title', 'SHILPSETU')}</span>
+                </div>
+              </div>
+              <div className="mb-8">
+                <h2 className="font-serif font-bold text-2xl mb-1">Sign In</h2>
+                <p className="text-xs text-black/70 dark:text-white/70">Use your registered email or mobile number and password.</p>
+              </div>
+              <form onSubmit={handleProceedToOtp} className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] mb-1.5">
+                    Email or mobile number
+                  </label>
+                  <input autoFocus required value={signInIdentifier}
+                    onChange={(e) => { setSignInIdentifier(e.target.value); setSignInError(''); }}
+                    placeholder="Enter email or 10-digit mobile number"
+                    className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] mb-1.5">Password</label>
+                  <input type="password" required value={signInPassword}
+                    onChange={(e) => { setSignInPassword(e.target.value); setSignInError(''); }}
+                    placeholder="Enter your password"
+                    className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B]" />
+                </div>
+                {signInError && <p className="text-xs text-red-500 font-medium">{signInError}</p>}
+              </form>
+            </div>
+            <div className="pt-6 pb-4">
+              <button type="button" disabled={isSendingOtp} onClick={() => handleProceedToOtp({ preventDefault: () => {} } as React.FormEvent)}
+                className="w-full py-4 bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold text-base rounded-full shadow-artisan disabled:opacity-50 cursor-pointer">
+                {isSendingOtp ? 'Checking credentials...' : 'Continue'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* STEP 1: PERSONAL DETAILS (FULL NAME*, MOBILE NUMBER*, EMAIL ADDRESS) */}
-        {currentStep === 1 && (
+        {currentStep === 1 && authFlowMode !== 'sign_in' && (
           <motion.div
             key="details-screen"
             initial={{ opacity: 0, x: 50 }}
@@ -1676,7 +1818,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             initialLanguage="en"
             onSelectLanguage={(newLang) => {
               setLanguage(newLang);
-              setCurrentStep(4);
+              if (authFlowMode === 'sign_in') {
+                onComplete({
+                  fullName: fullName.trim(),
+                  gender,
+                  state: selectedState,
+                  city: selectedCity === 'Other' ? customCity.trim() : selectedCity,
+                  mobile: mobile.trim(),
+                  email: email.trim() || undefined,
+                  selectedCraft,
+                  selectedLanguage: newLang,
+                });
+              } else {
+                setCurrentStep(4);
+              }
             }}
             onBack={() => {
               sound.playTap();
