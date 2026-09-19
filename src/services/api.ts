@@ -8,7 +8,7 @@ function getAuthHeaders(): HeadersInit {
     'Content-Type': 'application/json',
   };
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers['Authorization'] = ['Bearer', token].join(' ');
   }
   return headers;
 }

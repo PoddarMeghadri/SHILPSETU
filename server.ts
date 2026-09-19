@@ -266,6 +266,9 @@ app.patch('/api/orders/:id/status', authenticateJwt, (req: AuthenticatedRequest,
     if (!status) {
       return res.status(400).json({ error: 'Status is required' });
     }
+    if (!['pending', 'accepted', 'shipped'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be pending, accepted, or shipped' });
+    }
     const order = db.getOrders(req.artisan?.id || 'artisan_demo').find((item) => item.id === req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     const updated = db.updateOrderStatus(req.params.id, status);

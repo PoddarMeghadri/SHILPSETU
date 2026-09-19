@@ -55,7 +55,7 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
         itemImage: currentProducts.find((p) => p.id === order.productId)?.polishedImageUrl || '',
         amount: Number(order.totalAmount || order.unitPrice * order.quantity || 0),
         quantity: order.quantity,
-        status: order.status === 'shipped' || order.status === 'delivered' ? 'shipped' : order.status === 'declined' ? 'delivered' : 'new',
+        status: order.status === 'shipped' ? 'shipped' : order.status === 'accepted' ? 'accepted' : 'new',
         time: order.createdAt,
       })));
       setOrdersError('');
@@ -107,11 +107,11 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
     month: { revenue: 68400, units: 76, aov: 1240, views: 7920 },
   }[period];
 
-  const handleFulfill = async (orderId: string, status: 'accepted' | 'declined' | 'shipped') => {
+  const handleFulfill = async (orderId: string, status: 'accepted' | 'shipped') => {
     sound.playSuccess();
     try { await api.updateOrderStatus(orderId, status); } catch (error: any) { setOrdersError(error?.message || 'Unable to update order.'); return; }
     setOrders((prev) =>
-      prev.map((ord) => (ord.id === orderId ? { ...ord, status: status === 'shipped' ? 'shipped' : status === 'declined' ? 'delivered' : 'packing' } : ord))
+      prev.map((ord) => (ord.id === orderId ? { ...ord, status } : ord))
     );
     if (status === 'shipped') setShowSuccess(true);
   };
@@ -686,10 +686,10 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
 
               <div className="pt-2 border-t border-[#22331E]/10 flex items-center justify-between gap-2">
                 <span className="font-mono font-bold text-sm">₹{(ord.amount ?? 1250).toLocaleString('en-IN')}</span>
-                {ord.status !== 'shipped' && ord.status !== 'delivered' ? (
+                {ord.status !== 'shipped' && (
                   <div className="flex gap-1.5">
                     <button onClick={() => handleFulfill(ord.id, 'accepted')} className="bg-[#22331E] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Accept</button>
-                    <button onClick={() => handleFulfill(ord.id, 'declined')} className="bg-[#B5451B] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Reject</button>
+                    <button onClick={() => setOrders((prev) => prev.filter((item) => item.id !== ord.id))} className="bg-[#B5451B] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Reject</button>
                     <button onClick={() => handleFulfill(ord.id, 'shipped')} className="bg-[#2E4638] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Dispatch</button>
                   </div>
                 ) : (

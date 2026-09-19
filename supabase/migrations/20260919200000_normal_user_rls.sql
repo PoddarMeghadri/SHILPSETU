@@ -10,11 +10,14 @@ alter table if exists chat_history add column if not exists owner_id uuid refere
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null default '',
-  mobile text,
-  craft text,
-  state text,
-  city text,
-  language text not null default 'hi',
+  email text,
+  mobile_number text,
+  preferred_language text not null default 'hi',
+  desired_workshop text,
+  location text,
+  craft_specialty text,
+  avatar_url text,
+  bio text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -48,9 +51,19 @@ create table if not exists alerts (
   read_at timestamptz,
   created_at timestamptz not null default now()
 );
+alter table profiles add column if not exists email text;
+alter table profiles add column if not exists mobile_number text;
+alter table profiles add column if not exists preferred_language text not null default 'hi';
+alter table profiles add column if not exists desired_workshop text;
+alter table profiles add column if not exists location text;
+alter table profiles add column if not exists craft_specialty text;
+alter table profiles add column if not exists avatar_url text;
+alter table profiles add column if not exists bio text;
+
 do $$ begin
+  alter table orders drop constraint if exists orders_status_check;
   alter table orders add constraint orders_status_check
-    check (status in ('pending','accepted','declined','in_production','shipped','delivered'));
+    check (status in ('pending','accepted','shipped'));
 exception when duplicate_object then null;
 end $$;
 
