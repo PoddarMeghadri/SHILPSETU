@@ -17,6 +17,7 @@ import { NotificationsScreen } from './components/sections/NotificationsScreen';
 import { SocialShareScreen } from './components/sections/SocialShareScreen';
 import { HeritageStoryScreen } from './components/sections/HeritageStoryScreen';
 import { ProfileScreen } from './components/sections/ProfileScreen';
+import { SettingsScreen } from './components/sections/SettingsScreen';
 import { ShilpiVoiceFAB } from './components/voice/ShilpiVoiceFAB';
 import { ShilpiVoiceModal } from './components/voice/ShilpiVoiceModal';
 import { sound } from './services/sound';
@@ -488,19 +489,30 @@ export function App() {
               {currentScreen === 'profile' && (
                 <ProfileScreen
                   artisan={artisan}
-                  products={products}
-                  isOffline={isOffline}
-                  onToggleOffline={() => setIsOffline(!isOffline)}
                   onUpdateArtisan={handleUpdateArtisan}
                   isDark={isDark}
-                  onToggleTheme={handleToggleTheme}
                   language={language}
-                  onLogout={handleLogout}
                   onNavigate={(scr) => {
                     sound.playTap();
                     setCurrentScreen(scr);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
+                />
+              )}
+
+              {currentScreen === 'settings' && (
+                <SettingsScreen
+                  isOffline={isOffline}
+                  onToggleOffline={() => setIsOffline(!isOffline)}
+                  onNavigate={(scr) => {
+                    sound.playTap();
+                    setCurrentScreen(scr);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  isDark={isDark}
+                  onToggleTheme={handleToggleTheme}
+                  language={language}
+                  onLogout={handleLogout}
                 />
               )}
             </motion.div>
