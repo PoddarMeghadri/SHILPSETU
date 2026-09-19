@@ -13,7 +13,6 @@ import { fetchAuthRequest, withAuthRequestTimeout } from '../../services/authReq
 import { sendSupabaseOtp, verifySupabaseOtp, upsertSupabaseProfile, getSupabase, signInSupabaseWithEmailOrMobile } from '../../services/supabase';
 import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
 import { api } from '../../services/api';
-import { ForgotPasswordFlow } from './ForgotPasswordFlow';
 
 export interface OnboardingUserData {
   fullName: string;
@@ -86,7 +85,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [passwordError, setPasswordError] = useState<string>('');
 
   // Clerk Auth Flow & Cooldown State
-  const [authFlowMode, setAuthFlowMode] = useState<'sign_up' | 'sign_in' | 'forgot_password' | 'backend'>('sign_up');
+  const [authFlowMode, setAuthFlowMode] = useState<'sign_up' | 'sign_in' | 'backend'>('sign_up');
   const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
   const [resendCooldown, setResendCooldown] = useState<number>(0);
 
@@ -1203,23 +1202,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B] focus:outline-hidden focus:ring-2 focus:ring-[#B5451B]/30" />
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
-                      Password
-                    </label>
-                    <button
-                      type="button"
-                      id="signin-forgot-password-link"
-                      onClick={() => {
-                        sound.playTap();
-                        setAuthFlowMode('forgot_password');
-                        setSignInError('');
-                      }}
-                      className="text-[11px] text-[#B5451B] dark:text-[#E8B84B] font-semibold hover:underline cursor-pointer"
-                    >
-                      Forgot Password?
-                    </button>
-                  </div>
+                  <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] mb-1.5">Password</label>
                   <input type="password" required value={signInPassword}
                     onChange={(e) => { setSignInPassword(e.target.value); setSignInError(''); }}
                     placeholder="Enter your password"
@@ -1260,36 +1243,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           </motion.div>
         )}
 
-        {/* FORGOT PASSWORD FLOW (STRICT 6-DIGIT OTP + NEW PASSWORD CONFIRMATION) */}
-        {authFlowMode === 'forgot_password' && (
-          <motion.div
-            key="forgot-password-screen"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ duration: 0.3 }}
-            className="w-full"
-          >
-            <ForgotPasswordFlow
-              isDark={isDark}
-              initialEmail={signInIdentifier.includes('@') ? signInIdentifier.trim() : email}
-              onSuccess={(recoveredEmail) => {
-                setSignInIdentifier(recoveredEmail);
-                setSignInPassword('');
-                setAuthFlowMode('sign_in');
-                setCurrentStep(1);
-              }}
-              onCancel={() => {
-                setAuthFlowMode('sign_in');
-                setCurrentStep(1);
-              }}
-              onToggleTheme={() => handleSelectTheme(isDark ? 'light' : 'dark')}
-            />
-          </motion.div>
-        )}
-
         {/* STEP 1: PERSONAL DETAILS (FULL NAME*, MOBILE NUMBER*, EMAIL ADDRESS) */}
-        {currentStep === 1 && authFlowMode === 'sign_up' && (
+        {currentStep === 1 && authFlowMode !== 'sign_in' && (
           <motion.div
             key="details-screen"
             initial={{ opacity: 0, x: 50 }}

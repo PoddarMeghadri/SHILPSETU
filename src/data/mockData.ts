@@ -298,32 +298,6 @@ export const BULK_INQUIRIES: BulkInquiry[] = [
     imageUrl: 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=400&auto=format&fit=crop&q=80',
     notes: 'For luxury palace courtyard renovation. Weather-treated unglazed terracotta required.',
   },
-  {
-    id: 'inq-104',
-    buyerName: 'Ministry of Culture (GeM National Tender)',
-    buyerType: 'Govt Department',
-    location: 'New Delhi, India',
-    itemTitle: 'Hand-Cast Brass Tribal Diyas & Ceremonial Bells',
-    quantity: 500,
-    targetPrice: 1250,
-    requiredBy: 'Nov 30, 2026',
-    status: 'pending',
-    imageUrl: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=400&auto=format&fit=crop&q=80',
-    notes: 'GeM Tender GEM/2026/B/891244. Official national heritage exhibition gifting. 100% direct bank escrow settlement.',
-  },
-  {
-    id: 'inq-105',
-    buyerName: 'ITC WelcomHeritage Luxury Resorts',
-    buyerType: 'Corporate',
-    location: 'Jaipur, Rajasthan',
-    itemTitle: 'Terracotta Artisan Tea Sets (Set of 6)',
-    quantity: 250,
-    targetPrice: 1400,
-    requiredBy: 'Dec 12, 2026',
-    status: 'pending',
-    imageUrl: 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=400&auto=format&fit=crop&q=80',
-    notes: 'Corporate Tender CORP/ITC/2026/782. Direct procurement for luxury resort welcome gifting with GI authenticity tags.',
-  },
 ];
 
 export const PENDING_ORDERS: OrderItem[] = [

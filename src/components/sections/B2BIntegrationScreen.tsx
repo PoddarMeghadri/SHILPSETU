@@ -237,24 +237,9 @@ export const B2BIntegrationScreen: React.FC<B2BScreenProps> = ({
                 <span className="material-symbols-outlined text-xl text-[#B5451B]">inventory_2</span>
                 {t('direct_bulk_inquiries', 'Direct Bulk & Tender Inquiries')}
               </h4>
-              <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  id="reset-mock-inquiries-btn"
-                  onClick={() => {
-                    sound.playTap();
-                    setInquiries(BULK_INQUIRIES);
-                  }}
-                  className="text-xs font-sans text-[#B5451B] dark:text-[#E8B84B] hover:underline cursor-pointer flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity"
-                  title="Reset to default mock inquiries"
-                >
-                  <span className="material-symbols-outlined text-sm">refresh</span>
-                  <span>{t('reset_mock_data', 'Reset Mock Data')}</span>
-                </button>
-                <span className="text-xs text-[#B5451B] font-sans font-bold bg-[#B5451B]/10 px-2.5 py-1 rounded-full">
-                  {inquiries.filter((i) => i.status === 'pending').length} {t('active_tag', 'Active')}
-                </span>
-              </div>
+              <span className="text-xs text-[#B5451B] font-sans font-bold bg-[#B5451B]/10 px-2.5 py-1 rounded-full">
+                {inquiries.filter((i) => i.status === 'pending').length} {t('active_tag', 'Active')}
+              </span>
             </div>
 
             <div className="space-y-4">
