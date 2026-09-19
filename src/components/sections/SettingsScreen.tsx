@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LanguageCode, ScreenId } from '../../types';
 import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
+import { useAdminMode } from '../../context/AdminModeContext';
 
 interface SettingsScreenProps {
   isOffline: boolean;
@@ -23,6 +24,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onLogout,
 }) => {
   const { t } = useTranslation(language);
+  const { isAdminMode } = useAdminMode();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const panelClass = `rounded-3xl p-5 border shadow-xs space-y-3 ${
     isDark
@@ -37,7 +39,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     <div className="w-full max-w-4xl mx-auto pb-28 md:pb-12 pt-2 px-3 sm:px-6 lg:px-8 space-y-6">
       <div className={panelClass}>
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center">
+          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
+            isAdminMode
+              ? 'bg-emerald-500/15 text-emerald-500'
+              : 'bg-[#B5451B]/15 text-[#B5451B]'
+          }`}>
             <span className="material-symbols-outlined text-2xl">settings</span>
           </div>
           <div>
