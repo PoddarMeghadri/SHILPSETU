@@ -62,6 +62,16 @@ alter table profiles add column if not exists bio text;
 
 do $$ begin
   alter table orders drop constraint if exists orders_status_check;
+  -- Preserve existing orders while narrowing the lifecycle vocabulary.
+  -- Declined orders return to pending for manual review; production and
+  -- delivered orders are represented by the terminal shipped state.
+  update orders
+    set status = case
+      when status = 'declined' then 'pending'
+      when status in ('in_production', 'delivered') then 'shipped'
+      else status
+    end
+    where status in ('declined', 'in_production', 'delivered');
   alter table orders add constraint orders_status_check
     check (status in ('pending','accepted','shipped'));
 exception when duplicate_object then null;

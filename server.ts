@@ -248,10 +248,14 @@ app.get('/api/orders', authenticateJwt, (req: AuthenticatedRequest, res) => {
 app.post('/api/orders', authenticateJwt, (req: AuthenticatedRequest, res) => {
   try {
     const artisanId = req.artisan?.id || req.body.artisanId || 'artisan_demo';
+    const status = req.body.status || 'pending';
+    if (!['pending', 'accepted', 'shipped'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be pending, accepted, or shipped' });
+    }
     const order = db.createOrder({
       ...req.body,
       artisanId,
-      status: req.body.status || 'pending',
+      status,
       escrowStatus: req.body.escrowStatus || 'held_in_sbi_escrow',
     });
     res.status(201).json(order);
