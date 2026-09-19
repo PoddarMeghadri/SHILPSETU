@@ -11,6 +11,8 @@ import {
   authenticateJwt,
   AuthenticatedRequest,
   isValidEmail,
+  hashPassword,
+  verifyPassword,
 } from './server/auth.js';
 import {
   generateShilpiReply,
@@ -72,6 +74,52 @@ app.get('/api/health', (req, res) => {
    1. AUTHENTICATION & OTP ENDPOINTS
    ========================================================================= */
 
+// Normal-user sign in: password authentication precedes the email OTP challenge.
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const identifier = typeof req.body.identifier === 'string' ? req.body.identifier.trim() : '';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Enter your registered email or mobile number and password.' });
+    }
+    const artisan = identifier.includes('@')
+      ? db.getArtisanByEmail(identifier)
+      : db.getArtisanByPhone(identifier);
+    if (!artisan || !artisan.email || !verifyPassword(password, artisan.passwordHash)) {
+      return res.status(401).json({ error: 'The email/mobile number or password is incorrect.' });
+    }
+
+    const result = await sendOtpToEmail(artisan.email, artisan.mobile, { shouldCreateUser: false });
+    res.json({
+      success: true,
+      email: artisan.email,
+      maskedEmail: artisan.email.replace(/^(.{2}).*(@.*)$/, '$1••••$2'),
+      message: result.message,
+      cooldownSeconds: result.cooldownSeconds,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Unable to start sign in.' });
+  }
+});
+
+app.post('/api/auth/login-otp', async (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const otp = typeof req.body.otp === 'string' ? req.body.otp.trim() : '';
+    if (!isValidEmail(email) || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: 'Enter the 6-digit login code sent to your registered email.' });
+    }
+    const artisan = db.getArtisanByEmail(email);
+    if (!artisan) return res.status(401).json({ error: 'This account could not be found.' });
+    if (!(await verifyOtp(email, otp))) {
+      return res.status(401).json({ error: 'Invalid login code.' });
+    }
+    res.json({ success: true, token: generateToken(artisan), artisan });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Login verification failed.' });
+  }
+});
+
 // Request 6-digit OTP (Mandatory Email ID)
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
@@ -117,6 +165,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         gender: artisanDetails.gender,
         email: email.trim().toLowerCase(),
         language: artisanDetails.selectedLanguage || 'hi',
+        passwordHash: artisanDetails.password ? hashPassword(artisanDetails.password) : undefined,
       });
     } else if (!artisan) {
       artisan = db.upsertArtisan({

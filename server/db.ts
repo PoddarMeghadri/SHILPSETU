@@ -28,6 +28,7 @@ export interface ArtisanRecord {
   giTag?: string;
   createdAt: string;
   updatedAt: string;
+  passwordHash?: string;
 }
 
 export interface ProductRecord {
@@ -297,6 +298,7 @@ class LocalStoreManager {
       giTag: profile.giTag || existing?.giTag,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
+      passwordHash: profile.passwordHash || existing?.passwordHash,
     };
 
     this.store.artisans[id] = record;

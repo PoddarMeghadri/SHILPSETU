@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
 import { db } from './db.js';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shilpsetu_artisan_jwt_secret_key_2026';
 const DEFAULT_AUTH_PROVIDER_TIMEOUT_MS = 30_000;
@@ -71,13 +72,31 @@ export function isValidEmail(email: string): boolean {
   return re.test(email.trim().toLowerCase());
 }
 
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex');
+  return `${salt}:${scryptSync(password, salt, 64).toString('hex')}`;
+}
+
+export function verifyPassword(password: string, storedHash?: string): boolean {
+  if (!storedHash) return false;
+  const [salt, expected] = storedHash.split(':');
+  if (!salt || !expected) return false;
+  try {
+    const actual = scryptSync(password, salt, 64);
+    return timingSafeEqual(actual, Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Dispatches a real email OTP to the provided email address using Supabase Auth mailer
  * and Clerk, while recording local fallback state.
  */
 export async function sendOtpToEmail(
   email: string,
-  phone?: string
+  phone?: string,
+  options: { shouldCreateUser?: boolean } = {}
 ): Promise<{ success: boolean; message: string; cooldownSeconds: number }> {
   const normalizedEmail = email?.trim().toLowerCase();
 
@@ -128,7 +147,7 @@ export async function sendOtpToEmail(
     const { error: supaErr } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        shouldCreateUser: true,
+        shouldCreateUser: options.shouldCreateUser !== false,
       },
     });
     if (supaErr) {
