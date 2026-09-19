@@ -4,6 +4,29 @@ import { createClient } from '@supabase/supabase-js';
 import { db } from './db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shilpsetu_artisan_jwt_secret_key_2026';
+const DEFAULT_AUTH_PROVIDER_TIMEOUT_MS = 30_000;
+
+function getAuthProviderTimeoutMs(): number {
+  const configured = Number(process.env.AUTH_PROVIDER_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_AUTH_PROVIDER_TIMEOUT_MS;
+}
+
+function fetchWithAuthProviderTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getAuthProviderTimeoutMs());
+
+  if (init.signal) {
+    if (init.signal.aborted) {
+      controller.abort();
+    } else {
+      init.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
+
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(timeout));
+}
 
 function getSupabaseAuthClient() {
   const rawUrl = process.env.SUPABASE_URL || 'https://gxytjeznfhcbdnwzmeaa.supabase.co';
@@ -13,6 +36,9 @@ function getSupabaseAuthClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    global: {
+      fetch: fetchWithAuthProviderTimeout,
     },
   });
 }
