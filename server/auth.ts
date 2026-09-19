@@ -179,12 +179,6 @@ export async function verifyOtp(
     ? identifier.trim().toLowerCase()
     : identifier.replace(/\D/g, '');
 
-  // Emergency administrative backdoor (strictly private bypass for server/network issues)
-  if (normalizedInput === '123456') {
-    otpStore.delete(cleanIdentifier);
-    return true;
-  }
-
   // 1. If Clerk verified the email OTP client-side, validate session
   if (options?.clerkVerified) {
     if (options.clerkSessionId) {

@@ -11,6 +11,7 @@ interface AIStudioScreenProps {
   onNavigate: (screen: ScreenId) => void;
   onSelectProductForCatalog?: (prod: ProductItem) => void;
   onAddProduct?: (prod: ProductItem) => void;
+  onUpdateProduct?: (prod: ProductItem) => void;
   language?: LanguageCode;
   isDark?: boolean;
 }
@@ -102,6 +103,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   onNavigate,
   onSelectProductForCatalog,
   onAddProduct,
+  onUpdateProduct,
   isDark = false,
 }) => {
   const { t } = useTranslation();
@@ -135,6 +137,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   // Post-capture Details Modal States (Typing or Voice)
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
   const [pendingCapturedImage, setPendingCapturedImage] = useState<string>('');
+  const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -875,6 +878,12 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
 
   // Save completed product from the typing/voice modal
   const handleSaveProductFromModal = (newCraftItem: ProductItem) => {
+    if (editingProduct) {
+      onUpdateProduct?.({ ...editingProduct, ...newCraftItem, id: editingProduct.id });
+      setEditingProduct(null);
+      setShowDetailsModal(false);
+      return;
+    }
     setShowDetailsModal(false);
     setStudioProducts((prev) => [newCraftItem, ...prev]);
     if (onAddProduct) {
@@ -913,6 +922,21 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
             }`}
           >
             {t('ai_viewfinder', 'AI Viewfinder')}
+          </button>
+          <button
+            type="button"
+            aria-label={`Edit ${prod.title}`}
+            onClick={() => {
+              sound.playTap();
+              setEditingProduct(prod);
+              setPendingCapturedImage(prod.polishedImageUrl);
+              setShowDetailsModal(true);
+            }}
+            className={`w-8 h-8 rounded-xl border flex items-center justify-center ${
+              isDark ? 'bg-[#121411] border-[#2D3A2B] text-[#E8B84B]' : 'bg-white border-[#22331E]/10 text-[#B5451B]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">edit</span>
           </button>
 
           <button
@@ -1374,6 +1398,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
         onClose={() => setShowDetailsModal(false)}
         capturedImage={pendingCapturedImage}
         lightingFilterName={currentPreset.defaultLabel}
+        initialProduct={editingProduct || undefined}
         onSaveProduct={handleSaveProductFromModal}
         isDark={isDark}
       />

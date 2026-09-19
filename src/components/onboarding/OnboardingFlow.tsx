@@ -566,60 +566,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
 
-    // Emergency developer backdoor bypass for network/server outages (instant zero-network access)
-    if (fullOtp === '123456') {
-      console.log('[Auth] Backdoor OTP 123456 authenticated successfully');
-      const offlineToken = `artisan_backdoor_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      localStorage.setItem('shilpsetu_token', offlineToken);
-
-      try {
-        const existingLocal = localStorage.getItem('shilpsetu_artisan');
-        const artisanRecord = existingLocal ? JSON.parse(existingLocal) : {};
-        localStorage.setItem(
-          'shilpsetu_artisan',
-          JSON.stringify({
-            ...artisanRecord,
-            fullName: fullName.trim() || artisanRecord.fullName || 'Master Artisan',
-            gender,
-            state: selectedState,
-            city: effectiveCity,
-            mobile: cleanMobile,
-            email: cleanEmail,
-            selectedLanguage: language,
-          })
-        );
-      } catch {}
-
-      // Fire non-blocking backend sync in background if server is online
-      try {
-        fetch('/api/auth/verify-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            mobile: cleanMobile,
-            otp: '123456',
-            clerkVerified: true,
-            artisanDetails: {
-              fullName: fullName.trim(),
-              state: selectedState,
-              city: effectiveCity,
-              gender,
-              email: cleanEmail,
-              selectedLanguage: language,
-            },
-          }),
-        }).catch(() => {});
-      } catch {}
-
-      sound.playSuccess();
-      setIsVerifyingOtp(false);
-      setOtpError('');
-      setResendNotice('');
-      setCurrentStep(3); // Proceed to language selection immediately
-      return;
-    }
-
     // 1. Verify with Clerk Sign-Up
     if (!clerkSuccess && isSignUpLoaded && signUp) {
       try {
@@ -739,7 +685,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         console.warn('Backend returned non-JSON response during OTP verify');
         setOtpError(
           clerkVerificationError ||
-          'Verification service is updating. Please retry, or use emergency verification code 123456.'
+          'Verification service is updating. Please retry or request a new code.'
         );
         setIsVerifyingOtp(false);
         return;
@@ -765,7 +711,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       console.warn('Network error during OTP verify:', err);
       setOtpError(
         clerkVerificationError ||
-        'Unable to connect to verification server. Please retry, or use emergency verification code 123456.'
+        'Unable to connect to verification server. Please retry or request a new code.'
       );
       setIsVerifyingOtp(false);
     }

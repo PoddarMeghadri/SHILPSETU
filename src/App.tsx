@@ -225,6 +225,15 @@ export function App() {
       statusTag: 'Live on GeM',
       thumbnailUrl: newProduct.polishedImageUrl,
     };
+
+    const handleUpdateProduct = (updatedProduct: ProductItem) => {
+      setProducts((prev) => {
+        const updated = prev.map((product) => product.id === updatedProduct.id ? updatedProduct : product);
+        localStorage.setItem('shilpsetu_products', JSON.stringify(updated));
+        return updated;
+      });
+      api.updateProduct?.(updatedProduct.id, updatedProduct).catch(console.warn);
+    };
     setActivities((prev) => [newActivity, ...prev]);
   };
 
@@ -386,6 +395,7 @@ export function App() {
                   language={language}
                   isDark={isDark}
                   onAddProduct={handleAddProduct}
+                  onUpdateProduct={handleUpdateProduct}
                   onNavigate={(scr) => {
                     sound.playTap();
                     setCurrentScreen(scr);

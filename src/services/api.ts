@@ -172,6 +172,27 @@ export const api = {
     }
   },
 
+  async updateProduct(productId: string, product: Partial<ProductItem>): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/products/${productId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          title: product.title,
+          craft: product.category,
+          price: product.price,
+          stock: product.stock,
+          story: product.description,
+          rawMaterialsCost: product.materialCost,
+          laborHours: product.hoursWorked,
+        }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
   // AI Actions
   async enhancePhoto(imageBase64: string, promptPreset?: string, lightingPreset?: string) {
     const res = await fetch(`${API_BASE}/ai/enhance-photo`, {
@@ -218,4 +239,3 @@ export const api = {
     return res.json();
   },
 };
-
