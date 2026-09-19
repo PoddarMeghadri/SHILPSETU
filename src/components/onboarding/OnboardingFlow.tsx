@@ -911,30 +911,53 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               </motion.div>
             </div>
 
-            {/* Bottom Continue Action - Emerald Green in Admin Mode, Terracotta Orange in Normal Mode */}
+            {/* Normal users choose an auth flow; admin keeps its existing bypass entry. */}
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.6, duration: 0.5 }}
               className="w-full pb-6"
             >
-              <button
-                id="btn-login-get-started"
-                onClick={() => {
-                  sound.playTap();
-                  setCurrentStep(1);
-                }}
-                className={`w-full py-4 text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 group cursor-pointer ${
-                  isAdminMode
-                    ? 'bg-[#059669] hover:bg-[#047857]'
-                    : 'bg-[#B5451B] hover:bg-[#9C3A14]'
-                }`}
-              >
-                <span>{t('get_started_btn', 'Get Started')}</span>
-                <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">
-                  arrow_forward
-                </span>
-              </button>
+              {isAdminMode ? (
+                <button
+                  id="btn-login-get-started"
+                  onClick={() => {
+                    sound.playTap();
+                    setCurrentStep(1);
+                  }}
+                  className="w-full py-4 bg-[#059669] hover:bg-[#047857] text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                >
+                  <span>{t('get_started_btn', 'Get Started')}</span>
+                  <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                </button>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    id="btn-login-sign-in"
+                    type="button"
+                    onClick={() => {
+                      sound.playTap();
+                      setAuthFlowMode('sign_in');
+                      setCurrentStep(1);
+                    }}
+                    className="py-4 rounded-full border border-[#B5451B]/40 text-[#B5451B] bg-[#FAF6EE] hover:bg-[#EFE4CF] font-serif font-bold text-sm transition-all"
+                  >
+                    {t('sign_in', 'Sign In')}
+                  </button>
+                  <button
+                    id="btn-login-sign-up"
+                    type="button"
+                    onClick={() => {
+                      sound.playTap();
+                      setAuthFlowMode('sign_up');
+                      setCurrentStep(1);
+                    }}
+                    className="py-4 rounded-full bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold text-sm shadow-artisan transition-all"
+                  >
+                    {t('sign_up', 'Sign Up')}
+                  </button>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}

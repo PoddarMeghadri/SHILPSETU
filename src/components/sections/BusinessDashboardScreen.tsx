@@ -46,19 +46,31 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
     setIsLoadingOrders(true);
     api.getOrders().then((records) => {
       if (!active) return;
-      setOrders(records.map((order: any) => ({
-        id: order.id,
-        orderNumber: order.id,
-        customerName: order.buyerName,
-        location: order.buyerType,
-        itemTitle: order.productTitle,
-        itemImage: currentProducts.find((p) => p.id === order.productId)?.polishedImageUrl || '',
-        amount: Number(order.totalAmount || order.unitPrice * order.quantity || 0),
-        quantity: order.quantity,
-        status: order.status === 'shipped' ? 'shipped' : order.status === 'accepted' ? 'accepted' : 'new',
-        time: order.createdAt,
-      })));
-      setOrdersError('');
+      const mapped = (Array.isArray(records) ? records : []).map((order: any) => {
+        const orderId = String(order.id ?? order.orderId ?? order._id ?? `ord-${Date.now()}`);
+        const status = String(order.status ?? order.orderStatus ?? order.fulfillmentStatus ?? 'pending').toLowerCase();
+        const normalizedStatus = status === 'shipped' ? 'shipped' : status === 'accepted' ? 'accepted' : status === 'pending' ? 'new' : status === 'packing' ? 'packing' : status === 'declined' ? 'declined' : 'new';
+        const amount = Number(order.totalAmount ?? order.amount ?? order.unitPrice ?? order.price ?? 0);
+        const quantity = Number(order.quantity ?? order.qty ?? 1);
+        const productMatch = currentProducts.find((p) => p.id === order.productId || p.title === order.productTitle || p.title === order.itemTitle);
+
+        return {
+          id: orderId,
+          orderNumber: order.orderNumber ?? orderId,
+          customerName: order.buyerName ?? order.customerName ?? order.customer?.name ?? 'Customer',
+          location: order.buyerType ?? order.location ?? order.city ?? 'India',
+          itemTitle: order.productTitle ?? order.itemTitle ?? order.product?.title ?? 'Handcrafted product',
+          itemImage: order.itemImage ?? order.productImage ?? order.imageUrl ?? order.product?.imageUrl ?? productMatch?.polishedImageUrl ?? '',
+          amount: Number.isFinite(amount) ? amount : quantity * Number(order.unitPrice ?? order.price ?? 0),
+          quantity: Number.isFinite(quantity) ? quantity : 1,
+          status: normalizedStatus,
+          time: order.createdAt ?? order.time ?? order.created_at ?? new Date().toISOString(),
+        };
+      });
+      if (active) {
+        setOrders(mapped);
+        setOrdersError('');
+      }
     }).catch((error: any) => {
       if (active) setOrdersError(error?.message || 'Unable to load live orders.');
     }).finally(() => active && setIsLoadingOrders(false));

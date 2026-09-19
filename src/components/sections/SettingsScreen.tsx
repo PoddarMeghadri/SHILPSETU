@@ -83,24 +83,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </div>
               <div className="flex items-center p-0.5 rounded-full border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
                 <button type="button" onClick={() => isDark && (sound.playTap(), onToggleTheme())}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${!isDark ? 'bg-white text-[#B5451B] shadow-xs' : 'text-neutral-400'}`}>
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${!isDark ? 'bg-white text-[#B5451B] shadow-xs' : 'text-neutral-400'}`}
+                >
                   {t('light_mode_btn', 'Light')}
                 </button>
-                <button type="button" onClick={async () => {
-                  const email = user?.primaryEmailAddress?.emailAddress;
-                  if (!email) { setResetMessage('No email address is linked to this account.'); return; }
-                  const result = await sendSupabasePasswordReset(email);
-                  setResetMessage(result.sent ? 'Password reset instructions sent to your email.' : (result.error || 'Unable to send reset instructions.'));
-                }} className={`${rowClass} w-full p-3.5 flex items-center justify-between text-left hover:bg-black/5`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-[#E8B84B] text-[#1A1815] flex items-center justify-center"><span className="material-symbols-outlined text-lg">mail_lock</span></div>
-                    <div><p className="font-serif font-bold text-xs">Reset password by email</p><p className="text-[10px] opacity-75">Send a secure reset link</p></div>
-                  </div>
-                  <span className="material-symbols-outlined text-sm opacity-70">arrow_forward_ios</span>
-                </button>
-                {resetMessage && <p role="status" className="text-xs text-[#B5451B] px-2">{resetMessage}</p>}
                 <button type="button" onClick={() => !isDark && (sound.playTap(), onToggleTheme())}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${isDark ? 'bg-[#B5451B] text-white shadow-xs' : 'text-neutral-500'}`}>
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${isDark ? 'bg-[#B5451B] text-white shadow-xs' : 'text-neutral-500'}`}
+                >
                   {t('dark_mode_btn', 'Dark')}
                 </button>
               </div>
@@ -141,6 +130,30 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
       <div className={panelClass}>
         <h4 className="font-serif font-bold text-base">{t('account_settings', 'Account Settings')}</h4>
+        {!isAdminMode && user && (
+          <>
+            <button
+              type="button"
+              onClick={async () => {
+                const email = user.primaryEmailAddress?.emailAddress ?? user.emailAddresses?.[0]?.emailAddress;
+                if (!email) {
+                  setResetMessage('No email address is linked to this account.');
+                  return;
+                }
+                const result = await sendSupabasePasswordReset(email);
+                setResetMessage(result.sent ? 'Password reset instructions sent to your email.' : (result.error || 'Unable to send reset instructions.'));
+              }}
+              className={`${rowClass} w-full p-3.5 flex items-center justify-between text-left hover:bg-black/5`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#E8B84B] text-[#1A1815] flex items-center justify-center"><span className="material-symbols-outlined text-lg">mail_lock</span></div>
+                <div><p className="font-serif font-bold text-xs">Reset password by email</p><p className="text-[10px] opacity-75">Send a secure reset link</p></div>
+              </div>
+              <span className="material-symbols-outlined text-sm opacity-70">arrow_forward_ios</span>
+            </button>
+            {resetMessage && <p role="status" className="text-xs text-[#B5451B] px-2">{resetMessage}</p>}
+          </>
+        )}
         {!isAdminMode && user && (
           <button type="button" onClick={() => { sound.playTap(); setPasswordMessage(''); setShowPasswordModal(true); }}
             className={`${rowClass} w-full p-3.5 flex items-center justify-between text-left hover:bg-black/5`}>

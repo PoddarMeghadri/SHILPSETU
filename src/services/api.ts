@@ -194,9 +194,63 @@ export const api = {
   },
 
   async getOrders(): Promise<any[]> {
-    const res = await fetch(`${API_BASE}/orders`, { headers: getAuthHeaders() });
-    if (!res.ok) throw new Error('Unable to load orders');
-    return res.json();
+    const fallback = (() => {
+      if (typeof localStorage === 'undefined') return [];
+      try {
+        const saved = localStorage.getItem('shilpsetu_orders');
+        if (!saved) return [];
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : Array.isArray(parsed?.orders) ? parsed.orders : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    try {
+      const res = await fetch(`${API_BASE}/orders`, { headers: getAuthHeaders() });
+      const rawBody = res.ok ? await res.text() : '';
+      if (!res.ok) {
+        if (fallback.length > 0) return fallback;
+        throw new Error('Unable to load orders');
+      }
+
+      if (!rawBody || rawBody.trim() === '') {
+        if (fallback.length > 0) return fallback;
+        return [];
+      }
+
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(rawBody);
+      } catch {
+        if (fallback.length > 0) return fallback;
+        return [];
+      }
+
+      const arr = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.orders) ? parsed.orders : Array.isArray(parsed?.data) ? parsed.data : [];
+      const normalized = arr.map((order: any) => ({
+        ...order,
+        id: order.id ?? order.orderId ?? order._id ?? `ord-${Date.now()}-${Math.random()}`.replace(/\./g, ''),
+        buyerName: order.buyerName ?? order.customerName ?? order.customer?.name ?? 'Customer',
+        productTitle: order.productTitle ?? order.itemTitle ?? order.product?.title ?? 'Handcrafted product',
+        totalAmount: Number(order.totalAmount ?? order.amount ?? order.total ?? 0),
+        unitPrice: Number(order.unitPrice ?? order.price ?? order.amount ?? 0),
+        quantity: Number(order.quantity ?? order.qty ?? 1),
+        status: String(order.status ?? order.orderStatus ?? 'pending').toLowerCase(),
+        createdAt: order.createdAt ?? order.time ?? order.created_at ?? new Date().toISOString(),
+      }));
+
+      if (normalized.length > 0) {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('shilpsetu_orders', JSON.stringify(normalized));
+        }
+        return normalized;
+      }
+
+      return fallback.length > 0 ? fallback : [];
+    } catch {
+      return fallback.length > 0 ? fallback : [];
+    }
   },
 
   async updateOrderStatus(orderId: string, status: string): Promise<any> {
