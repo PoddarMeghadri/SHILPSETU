@@ -128,6 +128,7 @@ export interface OrderItem {
   itemImage: string;
   price: number;
   quantity: number;
-  status: 'new' | 'packing' | 'shipped' | 'delivered';
+  status: 'new' | 'packing' | 'shipped' | 'delivered' | 'accepted' | 'declined';
   time: string;
+  amount?: number;
 }

@@ -29,9 +29,29 @@ export function getSupabase(): SupabaseClient | null {
   if (!supabaseUrl || !supabaseAnonKey) {
     return null;
   }
+
+  export async function sendSupabaseOtp(email: string) {
+    const client = getSupabase();
+    if (!client) return { sent: false, error: 'Supabase is not configured' };
+    const { error } = await client.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { shouldCreateUser: true } });
+    return { sent: !error, error: error?.message };
+  }
+
+  export async function verifySupabaseOtp(email: string, token: string) {
+    const client = getSupabase();
+    if (!client) return { verified: false, error: 'Supabase is not configured' };
+    const { data, error } = await client.auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: 'email' });
+    return { verified: Boolean(data.session || data.user), error: error?.message };
+  }
+
+  export async function sendSupabasePasswordReset(email: string) {
+    const client = getSupabase();
+    if (!client) return { sent: false, error: 'Supabase is not configured' };
+    const { error } = await client.auth.resetPasswordForEmail(email.trim().toLowerCase());
+    return { sent: !error, error: error?.message };
+  }
   if (!supabaseClient) {
     supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
   }
   return supabaseClient;
 }
-

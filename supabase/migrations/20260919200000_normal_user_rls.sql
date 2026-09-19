@@ -7,17 +7,80 @@ alter table if exists inventory add column if not exists owner_id uuid reference
 alter table if exists orders add column if not exists owner_id uuid references auth.users(id) on delete cascade;
 alter table if exists chat_history add column if not exists owner_id uuid references auth.users(id) on delete cascade;
 
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text not null default '',
+  mobile text,
+  craft text,
+  state text,
+  city text,
+  language text not null default 'hi',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists studio_crafts (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  image_url text,
+  price numeric(12,2) not null default 0,
+  stock integer not null default 0,
+  description text,
+  status text not null default 'draft',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists sell_listings (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  craft_id uuid references studio_crafts(id) on delete set null,
+  title text not null,
+  price numeric(12,2) not null default 0,
+  status text not null default 'draft',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists alerts (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  message text not null,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+do $$ begin
+  alter table orders add constraint orders_status_check
+    check (status in ('pending','accepted','declined','in_production','shipped','delivered'));
+exception when duplicate_object then null;
+end $$;
+
 create index if not exists idx_artisans_owner_id on artisans(owner_id);
 create index if not exists idx_products_owner_id on products(owner_id);
 create index if not exists idx_inventory_owner_id on inventory(owner_id);
 create index if not exists idx_orders_owner_id on orders(owner_id);
 create index if not exists idx_chat_history_owner_id on chat_history(owner_id);
+create index if not exists idx_studio_crafts_owner_id on studio_crafts(owner_id);
+create index if not exists idx_sell_listings_owner_id on sell_listings(owner_id);
+create index if not exists idx_alerts_owner_id on alerts(owner_id);
 
 alter table artisans enable row level security;
 alter table products enable row level security;
 alter table inventory enable row level security;
 alter table orders enable row level security;
 alter table chat_history enable row level security;
+alter table profiles enable row level security;
+alter table studio_crafts enable row level security;
+alter table sell_listings enable row level security;
+alter table alerts enable row level security;
+
+drop policy if exists "own profile" on profiles;
+create policy "own profile" on profiles for all to authenticated using (id = auth.uid()) with check (id = auth.uid());
+drop policy if exists "studio crafts own rows" on studio_crafts;
+create policy "studio crafts own rows" on studio_crafts for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+drop policy if exists "sell listings own rows" on sell_listings;
+create policy "sell listings own rows" on sell_listings for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+drop policy if exists "alerts own rows" on alerts;
+create policy "alerts own rows" on alerts for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
 drop policy if exists "artisans own profile" on artisans;
 create policy "artisans own profile" on artisans for all to authenticated

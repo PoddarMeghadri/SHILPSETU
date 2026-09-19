@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { OrderItem, ScreenId, LanguageCode, ProductItem } from '../../types';
-import { PENDING_ORDERS, INITIAL_PRODUCTS } from '../../data/mockData';
 import { sound } from '../../services/sound';
 import { SuccessModal } from '../common/SuccessModal';
 import { useTranslation } from '../../services/translations';
+import { api } from '../../services/api';
 
 interface BusinessDashboardProps {
   products?: ProductItem[];
@@ -24,13 +24,15 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
 }) => {
   const { t } = useTranslation();
   const [period, setPeriod] = useState<Period>('week');
-  const [orders, setOrders] = useState<OrderItem[]>(PENDING_ORDERS);
+  const [orders, setOrders] = useState<OrderItem[]>([]);
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
   const [inventoryFilter, setInventoryFilter] = useState<'all' | 'low' | 'healthy'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [restockedItemTitle, setRestockedItemTitle] = useState<string | null>(null);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [ordersError, setOrdersError] = useState('');
 
-  const currentProducts = products && products.length > 0 ? products : INITIAL_PRODUCTS;
+  const currentProducts = products || [];
   const lowStockThreshold = 5;
   const lowStockProducts = currentProducts
     .filter((p) => (p.stock ?? 0) <= lowStockThreshold)
@@ -38,6 +40,30 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
   const criticalProducts = currentProducts.filter((p) => (p.stock ?? 0) <= 2);
   const healthyProducts = currentProducts.filter((p) => (p.stock ?? 0) > lowStockThreshold);
   const lowestProduct = lowStockProducts[0];
+
+  React.useEffect(() => {
+    let active = true;
+    setIsLoadingOrders(true);
+    api.getOrders().then((records) => {
+      if (!active) return;
+      setOrders(records.map((order: any) => ({
+        id: order.id,
+        orderNumber: order.id,
+        customerName: order.buyerName,
+        location: order.buyerType,
+        itemTitle: order.productTitle,
+        itemImage: currentProducts.find((p) => p.id === order.productId)?.polishedImageUrl || '',
+        amount: Number(order.totalAmount || order.unitPrice * order.quantity || 0),
+        quantity: order.quantity,
+        status: order.status === 'shipped' || order.status === 'delivered' ? 'shipped' : order.status === 'declined' ? 'delivered' : 'new',
+        time: order.createdAt,
+      })));
+      setOrdersError('');
+    }).catch((error: any) => {
+      if (active) setOrdersError(error?.message || 'Unable to load live orders.');
+    }).finally(() => active && setIsLoadingOrders(false));
+    return () => { active = false; };
+  }, [products]);
 
   const filteredProducts = currentProducts.filter((p) => {
     const title = (p.title || '').toLowerCase();
@@ -81,12 +107,13 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
     month: { revenue: 68400, units: 76, aov: 1240, views: 7920 },
   }[period];
 
-  const handleFulfill = (orderId: string) => {
+  const handleFulfill = async (orderId: string, status: 'accepted' | 'declined' | 'shipped') => {
     sound.playSuccess();
+    try { await api.updateOrderStatus(orderId, status); } catch (error: any) { setOrdersError(error?.message || 'Unable to update order.'); return; }
     setOrders((prev) =>
-      prev.map((ord) => (ord.id === orderId ? { ...ord, status: 'shipped' } : ord))
+      prev.map((ord) => (ord.id === orderId ? { ...ord, status: status === 'shipped' ? 'shipped' : status === 'declined' ? 'delivered' : 'packing' } : ord))
     );
-    setShowSuccess(true);
+    if (status === 'shipped') setShowSuccess(true);
   };
 
   return (
@@ -615,6 +642,8 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
           </span>
         </div>
 
+        {isLoadingOrders && <p className="text-sm opacity-70">Loading live orders…</p>}
+        {ordersError && <p role="alert" className="text-sm text-[#B5451B]">{ordersError}</p>}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {orders.map((ord) => (
             <div
@@ -657,14 +686,12 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
 
               <div className="pt-2 border-t border-[#22331E]/10 flex items-center justify-between gap-2">
                 <span className="font-mono font-bold text-sm">₹{(ord.amount ?? 1250).toLocaleString('en-IN')}</span>
-                {ord.status !== 'shipped' ? (
-                  <button
-                    onClick={() => handleFulfill(ord.id)}
-                    className="bg-[#22331E] text-white text-xs font-serif font-bold px-3.5 py-2 rounded-xl shadow-xs hover:bg-[#1A2817] active:scale-95 transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap"
-                  >
-                    <span className="material-symbols-outlined text-sm">mark_email_read</span>
-                    <span>{t('mark_dispatched', 'Dispatch')}</span>
-                  </button>
+                {ord.status !== 'shipped' && ord.status !== 'delivered' ? (
+                  <div className="flex gap-1.5">
+                    <button onClick={() => handleFulfill(ord.id, 'accepted')} className="bg-[#22331E] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Accept</button>
+                    <button onClick={() => handleFulfill(ord.id, 'declined')} className="bg-[#B5451B] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Reject</button>
+                    <button onClick={() => handleFulfill(ord.id, 'shipped')} className="bg-[#2E4638] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Dispatch</button>
+                  </div>
                 ) : (
                   <span className="text-xs text-[#22331E] dark:text-[#88C498] font-bold flex items-center gap-1 shrink-0 whitespace-nowrap">
                     <span className="material-symbols-outlined text-sm">check_circle</span>

@@ -10,6 +10,7 @@ import { useAdminMode } from '../../context/AdminModeContext';
 import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { CRAFT_OPTIONS, getLocalizedCraftName, getEnterWorkshopLabel } from '../../data/crafts';
 import { fetchAuthRequest, withAuthRequestTimeout } from '../../services/authRequest';
+import { sendSupabaseOtp, verifySupabaseOtp } from '../../services/supabase';
 
 export interface OnboardingUserData {
   fullName: string;
@@ -178,6 +179,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
     let sentViaClerk = false;
     let clerkErrorMessage = '';
+    const supabaseOtp = await sendSupabaseOtp(cleanEmail);
+    const sentViaSupabase = supabaseOtp.sent;
 
     // 1. Clerk Email Verification Flow (Dispatches the 6-digit OTP verification code)
     if (isSignUpLoaded && signUp) {
@@ -312,10 +315,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
 
     // Stop only if both Clerk and Backend were unable to dispatch verification code
-    if (!sentViaClerk && !backendSuccess) {
+    if (!sentViaClerk && !backendSuccess && !sentViaSupabase) {
       setIsSendingOtp(false);
       setEmailError(
-        clerkErrorMessage ||
+        clerkErrorMessage || supabaseOtp.error ||
         backendErrorMessage ||
         'Could not dispatch verification code to your email. Please check your email address or try again.'
       );
@@ -541,6 +544,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     let clerkSuccess = false;
     let clerkSessionId = '';
     let clerkVerificationError = '';
+    const supabaseVerification = await verifySupabaseOtp(cleanEmail, fullOtp);
+    if (supabaseVerification.verified) {
+      localStorage.setItem('shilpsetu_token', `supabase_${Date.now()}`);
+      setIsVerifyingOtp(false);
+      setCurrentStep(3);
+      return;
+    }
 
     // Enforce isolated Admin Mode OTP validation (No Clerk / No Supabase calls)
     if (isAdminMode) {

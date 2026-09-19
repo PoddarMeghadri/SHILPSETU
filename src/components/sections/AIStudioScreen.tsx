@@ -1313,10 +1313,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
               {t('enhanced_catalog', 'Enhanced Studio Catalog')}
             </h3>
             <span className="text-xs text-[#B5451B] font-sans font-bold">
-              {t('high_res_crafts_count', '{count} High-Res Crafts').replace(
-                '{count}',
-                String(studioProducts.length)
-              )}
+              {studioProducts.length} {t('crafts_count', 'Crafts')}
             </span>
           </div>
 
@@ -1370,7 +1367,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
                     className="flex-1 bg-[#B5451B] text-white text-[10px] font-semibold py-2 rounded-xl text-center flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-xs">mic</span>
-                    <span>{t('catalog', 'Catalog')}</span>
+                    <span>{t('edit', 'Edit')}</span>
                   </button>
                   <button
                     onClick={() => {

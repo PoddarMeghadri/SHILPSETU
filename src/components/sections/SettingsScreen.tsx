@@ -5,6 +5,7 @@ import { useTranslation } from '../../services/translations';
 import { useAdminMode } from '../../context/AdminModeContext';
 import { useUser } from '@clerk/clerk-react';
 import { validatePassword, passwordsMatch } from '../../services/passwordValidation';
+import { sendSupabasePasswordReset } from '../../services/supabase';
 
 interface SettingsScreenProps {
   isOffline: boolean;
@@ -35,6 +36,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [passwordMessage, setPasswordMessage] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
   const panelClass = `rounded-3xl p-5 border shadow-xs space-y-3 ${
     isDark
       ? 'bg-[#1C221A] border-[#2D3A2B] text-[#F4ECDE]'
@@ -46,7 +48,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto pb-28 md:pb-12 pt-2 px-3 sm:px-6 lg:px-8 space-y-6">
-      <div className={panelClass}>
+      <div className="flex items-center gap-3 px-1">
         <div className="flex items-center gap-3">
           <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
             isAdminMode
@@ -85,6 +87,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${!isDark ? 'bg-white text-[#B5451B] shadow-xs' : 'text-neutral-400'}`}>
                   {t('light_mode_btn', 'Light')}
                 </button>
+                <button type="button" onClick={async () => {
+                  const email = user?.primaryEmailAddress?.emailAddress;
+                  if (!email) { setResetMessage('No email address is linked to this account.'); return; }
+                  const result = await sendSupabasePasswordReset(email);
+                  setResetMessage(result.sent ? 'Password reset instructions sent to your email.' : (result.error || 'Unable to send reset instructions.'));
+                }} className={`${rowClass} w-full p-3.5 flex items-center justify-between text-left hover:bg-black/5`}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#E8B84B] text-[#1A1815] flex items-center justify-center"><span className="material-symbols-outlined text-lg">mail_lock</span></div>
+                    <div><p className="font-serif font-bold text-xs">Reset password by email</p><p className="text-[10px] opacity-75">Send a secure reset link</p></div>
+                  </div>
+                  <span className="material-symbols-outlined text-sm opacity-70">arrow_forward_ios</span>
+                </button>
+                {resetMessage && <p role="status" className="text-xs text-[#B5451B] px-2">{resetMessage}</p>}
                 <button type="button" onClick={() => !isDark && (sound.playTap(), onToggleTheme())}
                   className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${isDark ? 'bg-[#B5451B] text-white shadow-xs' : 'text-neutral-500'}`}>
                   {t('dark_mode_btn', 'Dark')}

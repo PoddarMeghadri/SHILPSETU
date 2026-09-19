@@ -193,6 +193,22 @@ export const api = {
     }
   },
 
+  async getOrders(): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/orders`, { headers: getAuthHeaders() });
+    if (!res.ok) throw new Error('Unable to load orders');
+    return res.json();
+  },
+
+  async updateOrderStatus(orderId: string, status: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error('Unable to update order');
+    return res.json();
+  },
+
   // AI Actions
   async enhancePhoto(imageBase64: string, promptPreset?: string, lightingPreset?: string) {
     const res = await fetch(`${API_BASE}/ai/enhance-photo`, {

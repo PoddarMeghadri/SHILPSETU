@@ -239,8 +239,8 @@ app.delete('/api/products/:id', authenticateJwt, (req: AuthenticatedRequest, res
    4. ORDERS & GEM B2B TENDERS ENDPOINTS
    ========================================================================= */
 
-app.get('/api/orders', (req, res) => {
-  const artisanId = (req.query.artisanId as string) || undefined;
+app.get('/api/orders', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  const artisanId = req.artisan?.id || (req.query.artisanId as string) || 'artisan_demo';
   const orders = db.getOrders(artisanId);
   res.json(orders);
 });
@@ -260,12 +260,14 @@ app.post('/api/orders', authenticateJwt, (req: AuthenticatedRequest, res) => {
   }
 });
 
-app.patch('/api/orders/:id/status', (req, res) => {
+app.patch('/api/orders/:id/status', authenticateJwt, (req: AuthenticatedRequest, res) => {
   try {
     const { status } = req.body;
     if (!status) {
       return res.status(400).json({ error: 'Status is required' });
     }
+    const order = db.getOrders(req.artisan?.id || 'artisan_demo').find((item) => item.id === req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
     const updated = db.updateOrderStatus(req.params.id, status);
     if (!updated) {
       return res.status(404).json({ error: 'Order not found' });
