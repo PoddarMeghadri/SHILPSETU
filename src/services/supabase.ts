@@ -105,15 +105,16 @@ export async function signInSupabaseWithEmailOrMobile(identifier: string, passwo
     email = data?.email || '';
   }
 
-  export async function updateSupabasePassword(newPassword: string) {
-    const validationError = validatePassword(newPassword);
-    if (validationError) return { updated: false, error: validationError };
-    const client = getSupabase();
-    if (!client) return { updated: false, error: 'Supabase is not configured' };
-    const { error } = await client.auth.updateUser({ password: newPassword });
-    return { updated: !error, error: error?.message };
-  }
   if (!email) return { signedIn: false, error: 'No account is linked to that mobile number.' };
   const { error } = await client.auth.signInWithPassword({ email, password });
   return { signedIn: !error, error: error?.message };
+}
+
+export async function updateSupabasePassword(newPassword: string) {
+  const validationError = validatePassword(newPassword);
+  if (validationError) return { updated: false, error: validationError };
+  const client = getSupabase();
+  if (!client) return { updated: false, error: 'Supabase is not configured' };
+  const { error } = await client.auth.updateUser({ password: newPassword });
+  return { updated: !error, error: error?.message };
 }
