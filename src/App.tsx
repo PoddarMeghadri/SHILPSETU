@@ -177,11 +177,32 @@ export function App() {
     localStorage.setItem('shilpsetu_lang', newLang);
   };
 
-  // Persist artisan profile changes
+  // Persist artisan profile changes safely
   const handleUpdateArtisan = (updated: ArtisanProfile) => {
     setArtisan(updated);
-    localStorage.setItem('shilpsetu_artisan', JSON.stringify(updated));
+    try {
+      localStorage.setItem('shilpsetu_artisan', JSON.stringify(updated));
+    } catch (err) {
+      console.warn('[Storage] Quota exceeded when saving artisan profile:', err);
+    }
     api.updateArtisanProfile(updated).catch(console.warn);
+
+    // Also sync to Supabase profile in background if available
+    try {
+      upsertSupabaseProfile({
+        fullName: updated.name,
+        mobileNumber: updated.mobile || '',
+        email: updated.email || '',
+        craftSpecialty: updated.craft,
+        location: updated.location,
+        avatarUrl: updated.avatarUrl,
+        bio: updated.bio,
+        preferredLanguage: language,
+        desiredWorkshop: updated.craft,
+      }).catch((sbErr) => {
+        console.warn('[Supabase Sync Warning]:', sbErr);
+      });
+    } catch (_) {}
   };
 
   // Persist product stock changes

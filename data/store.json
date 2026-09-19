@@ -3,8 +3,8 @@
     "artisan_9876543210": {
       "id": "artisan_9876543210",
       "mobile": "9876543210",
-      "fullName": "Master Artisan",
-      "craft": "Traditional Handicrafts",
+      "fullName": "Meghu",
+      "craft": "Terracotta & Heritage Pottery",
       "state": "Uttar Pradesh",
       "city": "Varanasi",
       "gender": "male",
@@ -14,7 +14,7 @@
       "isVerified": true,
       "udyamNumber": "UDYAM-UP-75-0029469",
       "createdAt": "2026-09-17T15:30:16.460Z",
-      "updatedAt": "2026-09-17T19:12:55.893Z"
+      "updatedAt": "2026-09-19T16:34:33.542Z"
     },
     "artisan_5432654231": {
       "id": "artisan_5432654231",
@@ -30,7 +30,8 @@
       "isVerified": true,
       "udyamNumber": "UDYAM-UP-75-0029418",
       "createdAt": "2026-09-17T18:08:55.706Z",
-      "updatedAt": "2026-09-17T18:17:56.531Z"
+      "updatedAt": "2026-09-19T16:42:38.285Z",
+      "passwordHash": "f48842d0de10c71a08606626cc18767a:b2f4e0a552415a110116c0ebde0545294003a2290c6f36b59a616b63acc2932af6f892e11ef1f7d04e0727cf6704bbfa916e5b810d533fc12f3e5067c568fc55"
     },
     "artisan_6494694646": {
       "id": "artisan_6494694646",
@@ -46,6 +47,23 @@
       "isVerified": true,
       "createdAt": "2026-09-17T19:05:56.480Z",
       "updatedAt": "2026-09-17T19:05:56.480Z"
+    },
+    "artisan_0000000000": {
+      "id": "artisan_0000000000",
+      "mobile": "0000000000",
+      "fullName": "Heheee",
+      "craft": "Terracotta & Heritage Pottery",
+      "state": "West Bengal",
+      "city": "Kolkata",
+      "gender": "male",
+      "email": "backupmeghadri@gmail.com",
+      "language": "en",
+      "trustScore": 98,
+      "isVerified": true,
+      "udyamNumber": "UDYAM-UP-75-0029469",
+      "createdAt": "2026-09-19T16:14:36.327Z",
+      "updatedAt": "2026-09-19T16:35:11.335Z",
+      "passwordHash": "1830eecface79e3f676c08ab3c11cc2b:4bf7cebb88bcdffa3e0a3e8f27c9271b55130353d661a01da5fe9ddeacabd686be4e9ab4e9c9143bbc7b417d498470e542d690b8342a45526901d969adf35d81"
     }
   },
   "products": {
@@ -115,11 +133,11 @@
       "quantity": 15,
       "unitPrice": 3450,
       "totalAmount": 51750,
-      "status": "pending",
+      "status": "shipped",
       "escrowStatus": "held_in_sbi_escrow",
       "deliveryBy": "2026-10-10",
       "createdAt": "2026-09-17T12:55:10.471Z",
-      "updatedAt": "2026-09-17T12:55:10.471Z"
+      "updatedAt": "2026-09-19T16:15:36.554Z"
     },
     "ord-8813": {
       "id": "ord-8813",
@@ -131,11 +149,11 @@
       "quantity": 8,
       "unitPrice": 8900,
       "totalAmount": 71200,
-      "status": "accepted",
+      "status": "shipped",
       "escrowStatus": "held_in_sbi_escrow",
       "deliveryBy": "2026-10-18",
       "createdAt": "2026-09-16T14:55:10.471Z",
-      "updatedAt": "2026-09-16T20:55:10.471Z"
+      "updatedAt": "2026-09-19T16:15:42.625Z"
     }
   },
   "tenders": {

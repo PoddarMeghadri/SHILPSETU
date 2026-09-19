@@ -13,6 +13,9 @@ import {
   isValidEmail,
   hashPassword,
   verifyPassword,
+  validatePasswordRules,
+  generatePasswordResetToken,
+  verifyPasswordResetToken,
 } from './server/auth.js';
 import {
   generateShilpiReply,
@@ -74,6 +77,20 @@ app.get('/api/health', (req, res) => {
    1. AUTHENTICATION & OTP ENDPOINTS
    ========================================================================= */
 
+// Check if an account already exists with this email address
+app.post('/api/auth/check-email', (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+    const existing = db.getArtisanByEmail(email);
+    res.json({ exists: !!existing });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to check email' });
+  }
+});
+
 // Normal-user sign in: direct password authentication without OTP challenge.
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -85,7 +102,17 @@ app.post('/api/auth/login', async (req, res) => {
     const artisan = identifier.includes('@')
       ? db.getArtisanByEmail(identifier)
       : db.getArtisanByPhone(identifier);
-    if (!artisan || !artisan.email || !verifyPassword(password, artisan.passwordHash)) {
+
+    if (!artisan) {
+      return res.status(401).json({ error: 'No account found with this email or mobile number. Please sign up first.' });
+    }
+
+    // If an account was registered earlier without a passwordHash (legacy or uncompleted setup),
+    // self-heal by setting their password now:
+    if (!artisan.passwordHash) {
+      artisan.passwordHash = hashPassword(password);
+      db.upsertArtisan(artisan);
+    } else if (!verifyPassword(password, artisan.passwordHash)) {
       return res.status(401).json({ error: 'The email/mobile number or password is incorrect.' });
     }
 
@@ -104,6 +131,8 @@ app.post('/api/auth/login', async (req, res) => {
         city: artisan.city,
         craft: artisan.craft,
         gender: artisan.gender,
+        language: artisan.language,
+        udyamNumber: artisan.udyamNumber,
       },
       message: 'Signed in successfully.',
     });
@@ -133,15 +162,151 @@ app.post('/api/auth/login-otp', async (req, res) => {
 // Request 6-digit OTP (Mandatory Email ID)
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
-    const { email, mobile } = req.body;
+    const { email, mobile, purpose } = req.body;
     if (!email || typeof email !== 'string' || !isValidEmail(email)) {
       return res.status(400).json({ error: 'Valid Email ID is strictly mandatory for artisan verification' });
     }
 
-    const result = await sendOtpToEmail(email, mobile);
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Enforce: one account per email address. Stop signup immediately if account already exists.
+    if (purpose !== 'login') {
+      const existing = db.getArtisanByEmail(normalizedEmail);
+      if (existing) {
+        return res.status(409).json({
+          error: 'An account with this email address already exists. Please sign in instead.',
+          code: 'EMAIL_ALREADY_EXISTS',
+          exists: true,
+        });
+      }
+    }
+
+    const result = await sendOtpToEmail(normalizedEmail, mobile);
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to send verification code' });
+  }
+});
+
+// Forgot Password - Step 1: Send 6-digit OTP strictly to registered email
+app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please provide a valid registered email address.' });
+    }
+
+    const artisan = db.getArtisanByEmail(email);
+    if (!artisan) {
+      return res.status(404).json({
+        error: 'No account found with this email address. Please check your email or sign up.',
+        code: 'ACCOUNT_NOT_FOUND',
+      });
+    }
+
+    const result = await sendOtpToEmail(email, artisan.mobile, { shouldCreateUser: false });
+    res.json({
+      success: true,
+      message: `A 6-digit verification code has been strictly sent to ${email}.`,
+      cooldownSeconds: result.cooldownSeconds || 30,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to send verification code.' });
+  }
+});
+
+// Forgot Password - Step 2: Strictly verify 6-digit OTP
+app.post('/api/auth/forgot-password/verify-otp', async (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const otp = typeof req.body.otp === 'string' ? req.body.otp.trim() : '';
+    const { clerkVerified, clerkSessionId, supabaseVerified, supabaseAccessToken } = req.body;
+
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Valid email address is required.' });
+    }
+
+    if (!otp || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: 'Please enter the exact 6-digit verification code sent to your email.' });
+    }
+
+    const artisan = db.getArtisanByEmail(email);
+    if (!artisan) {
+      return res.status(404).json({ error: 'No account found with this email address.' });
+    }
+
+    const isValid = await verifyOtp(email, otp, {
+      clerkVerified,
+      clerkSessionId,
+      supabaseVerified,
+      supabaseAccessToken,
+    });
+
+    if (!isValid) {
+      return res.status(400).json({ error: 'Invalid verification code. Please enter the OTP sent to your email.' });
+    }
+
+    const resetToken = generatePasswordResetToken(email);
+    res.json({
+      success: true,
+      message: 'Email verification confirmed.',
+      resetToken,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Verification failed.' });
+  }
+});
+
+// Forgot Password - Step 3: Set new password and confirm it (with same password conditions)
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
+    const resetToken = typeof req.body.resetToken === 'string' ? req.body.resetToken.trim() : '';
+    const otp = typeof req.body.otp === 'string' ? req.body.otp.trim() : '';
+
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Valid email address is required.' });
+    }
+
+    // Verify authentication via resetToken OR 6-digit OTP
+    let isAuthorized = false;
+    if (resetToken && verifyPasswordResetToken(resetToken, email)) {
+      isAuthorized = true;
+    } else if (otp && /^\d{6}$/.test(otp)) {
+      isAuthorized = await verifyOtp(email, otp);
+    }
+
+    if (!isAuthorized) {
+      return res.status(401).json({
+        error: 'Your verification session has expired or is invalid. Please verify your OTP code again.',
+      });
+    }
+
+    // Strictly enforce identical password rules
+    const passwordError = validatePasswordRules(newPassword);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+
+    const artisan = db.getArtisanByEmail(email);
+    if (!artisan) {
+      return res.status(404).json({ error: 'Account not found.' });
+    }
+
+    const newHash = hashPassword(newPassword);
+    const updated = db.updateArtisanPassword(email, newHash);
+
+    if (!updated) {
+      return res.status(500).json({ error: 'Failed to update account password. Please try again.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully. You can now sign in with your new password.',
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to reset password.' });
   }
 });
 
@@ -157,6 +322,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       clerkSessionId,
       supabaseVerified,
       supabaseAccessToken,
+      purpose,
     } = req.body;
 
     if (!email || typeof email !== 'string' || !isValidEmail(email)) {
@@ -167,7 +333,18 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Verification code (OTP) is required' });
     }
 
-    const isValid = await verifyOtp(email, otp, {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Enforce: one account per email address during signup
+    const existingArtisan = db.getArtisanByEmail(normalizedEmail);
+    if (existingArtisan && purpose !== 'login') {
+      return res.status(409).json({
+        error: 'An account with this email address already exists. Please sign in instead.',
+        code: 'EMAIL_ALREADY_EXISTS',
+      });
+    }
+
+    const isValid = await verifyOtp(normalizedEmail, otp, {
       clerkVerified,
       clerkSessionId,
       supabaseVerified,
@@ -177,8 +354,10 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Invalid verification code. Please check the code sent to your email.' });
     }
 
-    // Lookup existing or create profile by email or mobile
-    const existingArtisan = db.getArtisanByEmail(email) || (mobile ? db.getArtisanByPhone(mobile) : null);
+    // Securely hash password from signup details
+    const rawPassword = artisanDetails?.password;
+    const passwordHash = rawPassword ? hashPassword(rawPassword) : existingArtisan?.passwordHash;
+
     const artisan = db.upsertArtisan({
       id: existingArtisan?.id,
       mobile: mobile || artisanDetails?.mobile || existingArtisan?.mobile || '9876543210',
@@ -186,10 +365,10 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       craft: artisanDetails?.selectedCraft || existingArtisan?.craft || 'Traditional Handicrafts',
       state: artisanDetails?.state || existingArtisan?.state || 'Uttar Pradesh',
       city: artisanDetails?.city || existingArtisan?.city || 'Varanasi',
-      gender: artisanDetails?.gender || existingArtisan?.gender,
-      email: email.trim().toLowerCase(),
+      gender: artisanDetails?.gender || existingArtisan?.gender || 'male',
+      email: normalizedEmail,
       language: artisanDetails?.selectedLanguage || existingArtisan?.language || 'hi',
-      passwordHash: artisanDetails?.password ? hashPassword(artisanDetails.password) : existingArtisan?.passwordHash,
+      passwordHash,
     });
 
     const token = generateToken(artisan);
@@ -225,12 +404,13 @@ app.get('/api/artisan', authenticateJwt, (req: AuthenticatedRequest, res) => {
 
 app.put('/api/artisan', authenticateJwt, (req: AuthenticatedRequest, res) => {
   try {
-    const artisanId = req.artisan?.id || req.body.id || 'artisan_demo';
+    const artisanId = req.artisan?.id || req.body.id || (req.body.email ? db.getArtisanByEmail(req.body.email)?.id : undefined) || 'artisan_demo';
     const updated = db.upsertArtisan({
       ...req.body,
       id: artisanId,
+      email: req.body.email || req.artisan?.email,
       mobile: req.body.mobile || req.artisan?.mobile || '9876543210',
-      fullName: req.body.fullName || req.artisan?.fullName || 'Master Artisan',
+      fullName: req.body.fullName || req.body.name || req.artisan?.fullName || 'Master Artisan',
     });
     res.json(updated);
   } catch (err: any) {

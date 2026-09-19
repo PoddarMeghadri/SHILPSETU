@@ -17,32 +17,67 @@ interface EditProfileModalProps {
 
 const DEFAULT_AVATAR = DEFAULT_ARTISAN_AVATAR;
 
-const AVATAR_PRESETS = [
-  {
-    name: 'Default Artisan Avatar',
-    url: DEFAULT_ARTISAN_AVATAR,
-  },
-  {
-    name: 'Meera (Madhubani)',
-    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-  },
-  {
-    name: 'Babulal (Terracotta)',
-    url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
-  },
-  {
-    name: 'Anandi Bai (Weaver)',
-    url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
-  },
-  {
-    name: 'Kallu Mistry (Brass/Wood)',
-    url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80',
-  },
-  {
-    name: 'Devaki (Pashmina/Embroidery)',
-    url: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=400&auto=format&fit=crop&q=80',
-  },
-];
+// Helper to safely write to localStorage without crashing on QuotaExceededError
+const safeLocalStorageSet = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn(`[Storage] Failed to store ${key} (quota exceeded?):`, err);
+    try {
+      // Attempt to clear temporary bloated uploads if needed
+      localStorage.removeItem('shilpsetu_uploaded_portraits');
+      localStorage.setItem(key, value);
+    } catch (_) {
+      // Ignore if still fails, app continues smoothly
+    }
+  }
+};
+
+// Canvas-based image compressor to avoid bloated base64 strings
+const compressImage = (
+  dataUrl: string,
+  maxWidth = 400,
+  maxHeight = 400,
+  quality = 0.82
+): Promise<string> => {
+  return new Promise((resolve) => {
+    // If already a remote URL, return as-is
+    if (!dataUrl.startsWith('data:')) {
+      resolve(dataUrl);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxWidth || height > maxHeight) {
+        if (width / height > maxWidth / maxHeight) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        } else {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      try {
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed);
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+};
 
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   isOpen,
@@ -56,7 +91,16 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [formData, setFormData] = useState<ArtisanProfile>({ ...artisan });
+  const [formData, setFormData] = useState<ArtisanProfile>({
+    ...artisan,
+    name: artisan.name || '',
+    title: artisan.title || '',
+    bio: artisan.bio || '',
+    storyQuote: artisan.storyQuote || '',
+    mobile: artisan.mobile || '',
+    email: artisan.email || '',
+    udyamNumber: artisan.udyamNumber || '',
+  });
   const [selectedState, setSelectedState] = useState<string>('Uttar Pradesh');
   const [selectedCity, setSelectedCity] = useState<string>('Varanasi');
   const [uploadedPortraits, setUploadedPortraits] = useState<string[]>(() => {
@@ -94,10 +138,21 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   // Sync state & city when modal opens
   useEffect(() => {
     if (isOpen) {
-      setFormData({ ...artisan });
+      setIsSaving(false);
+      setFormData({
+        ...artisan,
+        name: artisan.name || '',
+        title: artisan.title || '',
+        bio: artisan.bio || '',
+        storyQuote: artisan.storyQuote || '',
+        mobile: artisan.mobile || '',
+        email: artisan.email || '',
+        udyamNumber: artisan.udyamNumber || '',
+      });
       const parsed = parseLocationString(artisan.location);
-      setSelectedState(parsed.state);
-      setSelectedCity(parsed.city);
+      setSelectedState(parsed.state || 'Uttar Pradesh');
+      setSelectedCity(parsed.city || 'Varanasi');
+      setSelectedPortraitForDelete(artisan.avatarUrl || null);
     }
   }, [isOpen, artisan]);
 
@@ -123,23 +178,27 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     setFormData((prev) => ({ ...prev, location: combinedLocation }));
   };
 
-  if (!isOpen) return null;
-
-  // Handle avatar upload
+  // Handle avatar upload with automatic compression
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       sound.playTap();
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const resultUrl = event.target?.result as string;
-        if (resultUrl) {
-          setFormData((prev) => ({ ...prev, avatarUrl: resultUrl }));
-          setSelectedPortraitForDelete(resultUrl);
-          const updatedPortraits = [resultUrl, ...uploadedPortraits.filter((p) => p !== resultUrl)];
-          setUploadedPortraits(updatedPortraits);
-          localStorage.setItem('shilpsetu_uploaded_portraits', JSON.stringify(updatedPortraits));
-          sound.playSuccess();
+      reader.onload = async (event) => {
+        const rawUrl = event.target?.result as string;
+        if (rawUrl) {
+          try {
+            const compressed = await compressImage(rawUrl, 400, 400, 0.82);
+            setFormData((prev) => ({ ...prev, avatarUrl: compressed }));
+            setSelectedPortraitForDelete(compressed);
+            const updatedPortraits = [compressed, ...uploadedPortraits.filter((p) => p !== compressed)].slice(0, 8);
+            setUploadedPortraits(updatedPortraits);
+            safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(updatedPortraits));
+            sound.playSuccess();
+          } catch (err) {
+            console.warn('[Avatar upload error]:', err);
+            setFormData((prev) => ({ ...prev, avatarUrl: rawUrl }));
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -152,7 +211,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     sound.playTap();
     const updated = uploadedPortraits.filter((p) => p !== portraitUrl);
     setUploadedPortraits(updated);
-    localStorage.setItem('shilpsetu_uploaded_portraits', JSON.stringify(updated));
+    safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(updated));
 
     if (formData.avatarUrl === portraitUrl) {
       const nextAvatar = updated[0] || DEFAULT_AVATAR;
@@ -163,19 +222,24 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     }
   };
 
-  // Handle gallery photo upload
+  // Handle gallery photo upload with compression
   const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       sound.playTap();
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const resultUrl = event.target?.result as string;
-        if (resultUrl) {
-          const updated = [resultUrl, ...recentPhotos];
-          setRecentPhotos(updated);
-          localStorage.setItem('shilpsetu_recent_photos', JSON.stringify(updated));
-          sound.playSuccess();
+      reader.onload = async (event) => {
+        const rawUrl = event.target?.result as string;
+        if (rawUrl) {
+          try {
+            const compressed = await compressImage(rawUrl, 800, 800, 0.8);
+            const updated = [compressed, ...recentPhotos].slice(0, 12);
+            setRecentPhotos(updated);
+            safeLocalStorageSet('shilpsetu_recent_photos', JSON.stringify(updated));
+            sound.playSuccess();
+          } catch (err) {
+            console.warn('[Gallery upload error]:', err);
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -187,7 +251,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     sound.playTap();
     const updated = recentPhotos.filter((_, idx) => idx !== indexToRemove);
     setRecentPhotos(updated);
-    localStorage.setItem('shilpsetu_recent_photos', JSON.stringify(updated));
+    safeLocalStorageSet('shilpsetu_recent_photos', JSON.stringify(updated));
   };
 
   // Remove profile picture (reset to clean default avatar)
@@ -197,38 +261,70 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     setSelectedPortraitForDelete(DEFAULT_AVATAR);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Robust profile submit handler that never hangs or gets stuck
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     setIsSaving(true);
-    sound.playSuccess();
 
-    const combinedLocation = `${selectedCity}, ${selectedState}`;
+    try {
+      sound.playSuccess();
 
-    // Ensure recentPhotos contains NO uploaded portraits
-    const cleanedRecentPhotos = recentPhotos.filter(
-      (p) => p !== formData.avatarUrl && !uploadedPortraits.includes(p)
-    );
+      const combinedLocation = `${selectedCity || 'Varanasi'}, ${selectedState || 'Uttar Pradesh'}`;
 
-    setTimeout(() => {
+      // Ensure recentPhotos contains NO uploaded portraits
+      const cleanedRecentPhotos = (recentPhotos || []).filter(
+        (p) => p !== formData.avatarUrl && !uploadedPortraits.includes(p)
+      );
+
+      const safeName = (formData.name || artisan.name || 'Master Artisan').trim();
+      const safeTitle = (formData.title || artisan.title || 'Master Artisan').trim();
+      const safeBio = (formData.bio || '').trim();
+      const safeStoryQuote = (formData.storyQuote || '').trim();
+      const safeMobile = (formData.mobile || artisan.mobile || '').trim();
+      const safeEmail = formData.email?.trim() ? formData.email.trim() : undefined;
+      const safeAvatar = formData.avatarUrl || artisan.avatarUrl || DEFAULT_AVATAR;
+
       const updatedProfile: ArtisanProfile = {
+        ...artisan,
         ...formData,
-        name: formData.name.trim(),
-        mobile: formData.mobile?.trim() || artisan.mobile,
-        email: formData.email?.trim() ? formData.email.trim() : undefined,
+        name: safeName,
+        title: safeTitle,
+        bio: safeBio,
+        storyQuote: safeStoryQuote,
+        mobile: safeMobile,
+        email: safeEmail,
+        avatarUrl: safeAvatar,
         location: combinedLocation,
         recentPhotos: cleanedRecentPhotos,
         completeness: Math.min(
           100,
-          70 + (formData.udyamNumber ? 15 : 0) + (formData.bio.length > 30 ? 15 : 0)
+          70 + (formData.udyamNumber ? 15 : 0) + (safeBio.length > 30 ? 15 : 0)
         ),
       };
-      onSave(updatedProfile);
-      localStorage.setItem('shilpsetu_artisan', JSON.stringify(updatedProfile));
-      localStorage.setItem('shilpsetu_recent_photos', JSON.stringify(cleanedRecentPhotos));
+
+      // Safely notify parent component
+      try {
+        onSave(updatedProfile);
+      } catch (saveErr) {
+        console.warn('[EditProfileModal] onSave warning:', saveErr);
+      }
+
+      // Safe local storage persistence
+      safeLocalStorageSet('shilpsetu_artisan', JSON.stringify(updatedProfile));
+      safeLocalStorageSet('shilpsetu_recent_photos', JSON.stringify(cleanedRecentPhotos));
+
+      // Successfully close modal and release saving state
       setIsSaving(false);
       onClose();
-    }, 400);
+    } catch (err) {
+      console.error('[EditProfileModal] Exception in handleSubmit:', err);
+      sound.playError();
+      setIsSaving(false);
+    }
   };
+
+  if (!isOpen) return null;
 
   return (
     <AnimatePresence>
@@ -738,10 +834,19 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex-1 bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold py-3 rounded-2xl text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold py-3 rounded-2xl text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-75"
               >
-                <span className="material-symbols-outlined text-base">check</span>
-                <span>{isSaving ? t('saving', 'Saving...') : t('save_changes', 'Save Changes')}</span>
+                {isSaving ? (
+                  <>
+                    <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                    <span>{t('saving', 'Saving...')}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base">check</span>
+                    <span>{t('save_changes', 'Save Changes')}</span>
+                  </>
+                )}
               </button>
             </div>
           </form>

@@ -12,6 +12,8 @@ import { CRAFT_OPTIONS, getLocalizedCraftName, getEnterWorkshopLabel } from '../
 import { fetchAuthRequest, withAuthRequestTimeout } from '../../services/authRequest';
 import { sendSupabaseOtp, verifySupabaseOtp, upsertSupabaseProfile, getSupabase, signInSupabaseWithEmailOrMobile } from '../../services/supabase';
 import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
+import { api } from '../../services/api';
+import { ForgotPasswordFlow } from './ForgotPasswordFlow';
 
 export interface OnboardingUserData {
   fullName: string;
@@ -20,6 +22,7 @@ export interface OnboardingUserData {
   city: string;
   mobile: string;
   email?: string;
+  password?: string;
   selectedCraft: string;
   selectedLanguage?: LanguageCode;
 }
@@ -83,7 +86,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [passwordError, setPasswordError] = useState<string>('');
 
   // Clerk Auth Flow & Cooldown State
-  const [authFlowMode, setAuthFlowMode] = useState<'sign_up' | 'sign_in' | 'backend'>('sign_up');
+  const [authFlowMode, setAuthFlowMode] = useState<'sign_up' | 'sign_in' | 'forgot_password' | 'backend'>('sign_up');
   const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
   const [resendCooldown, setResendCooldown] = useState<number>(0);
 
@@ -307,6 +310,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setOtpError('');
     setEmailError('');
 
+    // 0. Enforce unique account per email address: stop signup immediately if email already exists
+    try {
+      const emailCheck = await api.checkEmail(cleanEmail);
+      if (emailCheck?.exists) {
+        sound.playError();
+        setIsSendingOtp(false);
+        setEmailError('An account with this email address already exists. Please sign in instead.');
+        return;
+      }
+    } catch (checkErr) {
+      console.warn('[Check Email Notice]:', checkErr);
+    }
+
     let sentViaClerk = false;
     let clerkErrorMessage = '';
     const supabaseOtp = await sendSupabaseOtp(cleanEmail);
@@ -365,6 +381,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             console.warn('[Clerk Auth] SignUp create error:', createMsg, createErr);
             clerkErrorMessage = createMsg;
 
+            // Stop signup immediately if Clerk detects the email is already in use
+            const isEmailTaken =
+              createMsg.toLowerCase().includes('already exists') ||
+              createMsg.toLowerCase().includes('taken') ||
+              createMsg.toLowerCase().includes('form_identifier_exists') ||
+              (createErr?.errors && createErr.errors.some((e: any) => e.code === 'form_identifier_exists'));
+
+            if (isEmailTaken) {
+              sound.playError();
+              setIsSendingOtp(false);
+              setEmailError('An account with this email address already exists. Please sign in instead.');
+              return;
+            }
+
             // If Clerk says a sign up is in progress, prepare verification on it
             if (signUp.status === 'missing_requirements') {
               try {
@@ -382,39 +412,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 console.warn('[Clerk Auth] Recovered prepare failed:', prepErr);
               }
             }
-
-            // C. If user is already registered in Clerk, use SignIn email_code factor
-            if (!sentViaClerk && isSignInLoaded && signIn) {
-              try {
-                const signInAttempt = await withAuthRequestTimeout(
-                  signIn.create({ identifier: cleanEmail }),
-                  'Creating your sign-in session'
-                );
-
-                const emailFactor = signInAttempt.supportedFirstFactors?.find(
-                  (f: any) => f.strategy === 'email_code'
-                );
-
-                if (emailFactor && 'emailAddressId' in emailFactor) {
-                  await withAuthRequestTimeout(
-                    signIn.prepareFirstFactor({
-                      strategy: 'email_code',
-                      emailAddressId: (emailFactor as any).emailAddressId,
-                    }),
-                    'Sending your verification code'
-                  );
-                  sentViaClerk = true;
-                  setAuthFlowMode('sign_in');
-                  console.log('[Clerk Auth] OTP email successfully dispatched via sign_in factor');
-                }
-              } catch (signInErr: any) {
-                const signInMsg = signInErr?.errors?.[0]?.message || signInErr?.message || '';
-                console.warn('[Clerk Auth] SignIn error:', signInMsg);
-                if (!clerkErrorMessage) {
-                  clerkErrorMessage = signInMsg;
-                }
-              }
-            }
           }
         }
       } catch (overallClerkErr: any) {
@@ -430,13 +427,18 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       const res = await fetchAuthRequest('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile }),
+        body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile, purpose: 'signup' }),
       });
       const data = await res.json().catch(() => null);
       if (res.ok) {
         if (data?.success) {
           backendSuccess = true;
         }
+      } else if (res.status === 409 || data?.code === 'EMAIL_ALREADY_EXISTS') {
+        sound.playError();
+        setIsSendingOtp(false);
+        setEmailError('An account with this email address already exists. Please sign in instead.');
+        return;
       } else if (data?.error) {
         backendErrorMessage = data.error;
       }
@@ -745,13 +747,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             },
           }),
         });
-        if (res.ok) {
-          const ct = res.headers.get('content-type') || '';
-          if (ct.includes('application/json')) {
-            const data = await res.json().catch(() => null);
-            if (data?.token) {
-              localStorage.setItem('shilpsetu_token', data.token);
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            if (res.status === 409 || data?.code === 'EMAIL_ALREADY_EXISTS') {
+              sound.playError();
+              setIsVerifyingOtp(false);
+              setOtpError(data?.error || 'An account with this email address already exists. Please sign in instead.');
+              return;
             }
+          }
+          if (data?.token) {
+            localStorage.setItem('shilpsetu_token', data.token);
           }
         }
       } catch (e) {
@@ -852,13 +860,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             },
           }),
         });
-        if (res.ok) {
-          const ct = res.headers.get('content-type') || '';
-          if (ct.includes('application/json')) {
-            const data = await res.json().catch(() => null);
-            if (data?.token) {
-              localStorage.setItem('shilpsetu_token', data.token);
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            if (res.status === 409 || data?.code === 'EMAIL_ALREADY_EXISTS') {
+              sound.playError();
+              setIsVerifyingOtp(false);
+              setOtpError(data?.error || 'An account with this email address already exists. Please sign in instead.');
+              return;
             }
+          }
+          if (data?.token) {
+            localStorage.setItem('shilpsetu_token', data.token);
           }
         }
       } catch (e) {
@@ -883,6 +897,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           mobile: cleanMobile,
           otp: fullOtp,
           clerkVerified: false,
+          purpose: 'signup',
           artisanDetails: {
             fullName: fullName.trim(),
             state: selectedState,
@@ -944,6 +959,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       city: effectiveCity,
       mobile: mobile.trim(),
       email: email.trim() || undefined,
+      password: password || undefined,
       selectedCraft,
       selectedLanguage: language,
     });
@@ -1187,7 +1203,23 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B] focus:outline-hidden focus:ring-2 focus:ring-[#B5451B]/30" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] mb-1.5">Password</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
+                      Password
+                    </label>
+                    <button
+                      type="button"
+                      id="signin-forgot-password-link"
+                      onClick={() => {
+                        sound.playTap();
+                        setAuthFlowMode('forgot_password');
+                        setSignInError('');
+                      }}
+                      className="text-[11px] text-[#B5451B] dark:text-[#E8B84B] font-semibold hover:underline cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
                   <input type="password" required value={signInPassword}
                     onChange={(e) => { setSignInPassword(e.target.value); setSignInError(''); }}
                     placeholder="Enter your password"
@@ -1228,8 +1260,36 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           </motion.div>
         )}
 
+        {/* FORGOT PASSWORD FLOW (STRICT 6-DIGIT OTP + NEW PASSWORD CONFIRMATION) */}
+        {authFlowMode === 'forgot_password' && (
+          <motion.div
+            key="forgot-password-screen"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ duration: 0.3 }}
+            className="w-full"
+          >
+            <ForgotPasswordFlow
+              isDark={isDark}
+              initialEmail={signInIdentifier.includes('@') ? signInIdentifier.trim() : email}
+              onSuccess={(recoveredEmail) => {
+                setSignInIdentifier(recoveredEmail);
+                setSignInPassword('');
+                setAuthFlowMode('sign_in');
+                setCurrentStep(1);
+              }}
+              onCancel={() => {
+                setAuthFlowMode('sign_in');
+                setCurrentStep(1);
+              }}
+              onToggleTheme={() => handleSelectTheme(isDark ? 'light' : 'dark')}
+            />
+          </motion.div>
+        )}
+
         {/* STEP 1: PERSONAL DETAILS (FULL NAME*, MOBILE NUMBER*, EMAIL ADDRESS) */}
-        {currentStep === 1 && authFlowMode !== 'sign_in' && (
+        {currentStep === 1 && authFlowMode === 'sign_up' && (
           <motion.div
             key="details-screen"
             initial={{ opacity: 0, x: 50 }}
@@ -1641,7 +1701,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     />
                   </div>
                   {emailError ? (
-                    <p className="text-[11px] text-red-500 mt-1 font-medium">{emailError}</p>
+                    <div className="mt-1 space-y-1">
+                      <p className="text-[11px] text-red-500 font-medium">{emailError}</p>
+                      {emailError.includes('already exists') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playTap();
+                            setAuthFlowMode('sign_in');
+                            setSignInIdentifier(email.trim());
+                            setEmailError('');
+                          }}
+                          className="text-left text-xs font-semibold text-[#B5451B] dark:text-[#E8B84B] hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>Sign in with this email instead</span>
+                          <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-[10px] text-black/60 dark:text-white/60 mt-1">
                       {t('email_verification_notice', 'A 6-digit Clerk email verification code will be sent to this email.')}
@@ -1971,7 +2048,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 )}
 
                 {otpError && (
-                  <p className="text-center text-xs text-red-500 font-medium px-4">{otpError}</p>
+                  <div className="text-center px-4 space-y-1">
+                    <p className="text-xs text-red-500 font-medium">{otpError}</p>
+                    {otpError.includes('already exists') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sound.playTap();
+                          setAuthFlowMode('sign_in');
+                          setSignInIdentifier(email.trim());
+                          setCurrentStep(1);
+                        }}
+                        className="text-xs font-semibold text-[#B5451B] dark:text-[#E8B84B] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Sign in directly</span>
+                        <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/* Resend Code Button with Cooldown Timer */}

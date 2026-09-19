@@ -14,16 +14,112 @@ function getAuthHeaders(): HeadersInit {
 }
 
 export const api = {
+  // Check if an account already exists with this email address
+  async checkEmail(email: string): Promise<{ exists: boolean }> {
+    const res = await fetch(`${API_BASE}/auth/check-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+    if (!res.ok) return { exists: false };
+    return res.json();
+  },
+
+  // Direct login with email or phone + password
+  async login(identifier: string, password: string): Promise<{ success: boolean; token: string; artisan: any }> {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: identifier.trim(), password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'The email/mobile number or password is incorrect.');
+    }
+    if (data.token) {
+      localStorage.setItem('shilpsetu_token', data.token);
+    }
+    return data;
+  },
+
+  // Forgot Password: Step 1 - Send 6-digit OTP strictly to registered email
+  async forgotPasswordSendOtp(email: string): Promise<{ success: boolean; message: string; cooldownSeconds?: number }> {
+    const res = await fetch(`${API_BASE}/auth/forgot-password/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to send verification code.');
+    }
+    return data;
+  },
+
+  // Forgot Password: Step 2 - Strictly verify 6-digit OTP
+  async forgotPasswordVerifyOtp(
+    email: string,
+    otp: string,
+    options?: {
+      clerkVerified?: boolean;
+      clerkSessionId?: string;
+      supabaseVerified?: boolean;
+      supabaseAccessToken?: string;
+    }
+  ): Promise<{ success: boolean; message: string; resetToken: string }> {
+    const res = await fetch(`${API_BASE}/auth/forgot-password/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        otp: otp.trim(),
+        ...options,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Invalid 6-digit verification code.');
+    }
+    return data;
+  },
+
+  // Forgot Password: Step 3 - Set new password and confirm it
+  async resetPassword(params: {
+    email: string;
+    newPassword: string;
+    resetToken?: string;
+    otp?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${API_BASE}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: params.email.trim().toLowerCase(),
+        newPassword: params.newPassword,
+        resetToken: params.resetToken,
+        otp: params.otp,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to reset password.');
+    }
+    return data;
+  },
+
   // Auth - Mandatory Email Verification
-  async sendOtp(email: string, mobile?: string): Promise<{ success: boolean; message: string; cooldownSeconds?: number }> {
+  async sendOtp(email: string, mobile?: string, purpose: 'signup' | 'login' = 'signup'): Promise<{ success: boolean; message: string; cooldownSeconds?: number }> {
     const res = await fetch(`${API_BASE}/auth/send-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim().toLowerCase(), mobile }),
+      body: JSON.stringify({ email: email.trim().toLowerCase(), mobile, purpose }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to send verification code');
+      const error: any = new Error(err.error || 'Failed to send verification code');
+      error.status = res.status;
+      error.code = err.code;
+      throw error;
     }
     return res.json();
   },

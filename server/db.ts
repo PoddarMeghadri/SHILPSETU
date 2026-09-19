@@ -331,10 +331,11 @@ class LocalStoreManager {
     const cleanEmail = profile.email ? profile.email.trim().toLowerCase() : null;
 
     let existing: ArtisanRecord | undefined = undefined;
-    if (profile.id && this.store.artisans[profile.id]) {
-      existing = this.store.artisans[profile.id];
-    } else if (cleanEmail) {
+    if (cleanEmail) {
       existing = this.getArtisanByEmail(cleanEmail) || undefined;
+    }
+    if (!existing && profile.id && this.store.artisans[profile.id]) {
+      existing = this.store.artisans[profile.id];
     }
     if (!existing && cleanMobile) {
       existing = this.getArtisanByPhone(cleanMobile) || undefined;
@@ -346,7 +347,7 @@ class LocalStoreManager {
     const record: ArtisanRecord = {
       id,
       mobile: profile.mobile || existing?.mobile || '9876543210',
-      fullName: profile.fullName || existing?.fullName || 'Master Artisan',
+      fullName: profile.fullName || (profile as any).name || existing?.fullName || 'Master Artisan',
       craft: profile.craft || existing?.craft || 'Traditional Handicrafts',
       state: profile.state || existing?.state || 'Uttar Pradesh',
       city: profile.city || existing?.city || 'Varanasi',
@@ -365,6 +366,17 @@ class LocalStoreManager {
     this.store.artisans[id] = record;
     this.save(this.store);
     return record;
+  }
+
+  updateArtisanPassword(email: string, passwordHash: string): boolean {
+    const cleanEmail = email.trim().toLowerCase();
+    const artisan = this.getArtisanByEmail(cleanEmail);
+    if (!artisan) return false;
+    artisan.passwordHash = passwordHash;
+    artisan.updatedAt = new Date().toISOString();
+    this.store.artisans[artisan.id] = artisan;
+    this.save(this.store);
+    return true;
   }
 
   // Products operations
@@ -518,6 +530,7 @@ export const db = {
   getArtisanByEmail: (email: string) => localStore.getArtisanByEmail(email),
   getArtisanById: (id: string) => localStore.getArtisanById(id),
   upsertArtisan: (profile: any) => localStore.upsertArtisan(profile),
+  updateArtisanPassword: (email: string, passwordHash: string) => localStore.updateArtisanPassword(email, passwordHash),
   getProducts: (artisanId?: string) => localStore.getProducts(artisanId),
   createProduct: (product: any) => localStore.createProduct(product),
   updateProduct: (id: string, updates: any) => localStore.updateProduct(id, updates),
