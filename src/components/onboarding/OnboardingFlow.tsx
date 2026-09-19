@@ -9,6 +9,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAdminMode } from '../../context/AdminModeContext';
 import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { CRAFT_OPTIONS, getLocalizedCraftName, getEnterWorkshopLabel } from '../../data/crafts';
+import { fetchAuthRequest, withAuthRequestTimeout } from '../../services/authRequest';
 
 export interface OnboardingUserData {
   fullName: string;
@@ -187,9 +188,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         if (signUp.status === 'missing_requirements') {
           try {
             if (signUp.emailAddress && signUp.emailAddress.toLowerCase() !== cleanEmail) {
-              await signUp.update({ emailAddress: cleanEmail });
+              await withAuthRequestTimeout(signUp.update({ emailAddress: cleanEmail }), 'Updating your verification email');
             }
-            await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+            await withAuthRequestTimeout(
+              signUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
+              'Sending your verification code'
+            );
             sentViaClerk = true;
             setAuthFlowMode('sign_up');
             console.log('[Clerk Auth] OTP email successfully dispatched via existing sign_up');
@@ -206,13 +210,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         // B. If not dispatched, create a fresh sign up
         if (!sentViaClerk) {
           try {
-            await signUp.create({
-              emailAddress: cleanEmail,
-              firstName: fullName.trim().split(' ')[0] || fullName.trim(),
-              lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
-            });
+            await withAuthRequestTimeout(
+              signUp.create({
+                emailAddress: cleanEmail,
+                firstName: fullName.trim().split(' ')[0] || fullName.trim(),
+                lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
+              }),
+              'Creating your verification session'
+            );
 
-            await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+            await withAuthRequestTimeout(
+              signUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
+              'Sending your verification code'
+            );
             sentViaClerk = true;
             setAuthFlowMode('sign_up');
             console.log('[Clerk Auth] OTP email successfully dispatched via new sign_up');
@@ -225,9 +235,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             if (signUp.status === 'missing_requirements') {
               try {
                 if (signUp.emailAddress && signUp.emailAddress.toLowerCase() !== cleanEmail) {
-                  await signUp.update({ emailAddress: cleanEmail });
+                  await withAuthRequestTimeout(signUp.update({ emailAddress: cleanEmail }), 'Updating your verification email');
                 }
-                await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+                await withAuthRequestTimeout(
+                  signUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
+                  'Sending your verification code'
+                );
                 sentViaClerk = true;
                 setAuthFlowMode('sign_up');
                 console.log('[Clerk Auth] OTP email dispatched via recovered sign_up');
@@ -239,19 +252,23 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             // C. If user is already registered in Clerk, use SignIn email_code factor
             if (!sentViaClerk && isSignInLoaded && signIn) {
               try {
-                const signInAttempt = await signIn.create({
-                  identifier: cleanEmail,
-                });
+                const signInAttempt = await withAuthRequestTimeout(
+                  signIn.create({ identifier: cleanEmail }),
+                  'Creating your sign-in session'
+                );
 
                 const emailFactor = signInAttempt.supportedFirstFactors?.find(
                   (f: any) => f.strategy === 'email_code'
                 );
 
                 if (emailFactor && 'emailAddressId' in emailFactor) {
-                  await signIn.prepareFirstFactor({
-                    strategy: 'email_code',
-                    emailAddressId: (emailFactor as any).emailAddressId,
-                  });
+                  await withAuthRequestTimeout(
+                    signIn.prepareFirstFactor({
+                      strategy: 'email_code',
+                      emailAddressId: (emailFactor as any).emailAddressId,
+                    }),
+                    'Sending your verification code'
+                  );
                   sentViaClerk = true;
                   setAuthFlowMode('sign_in');
                   console.log('[Clerk Auth] OTP email successfully dispatched via sign_in factor');
@@ -274,20 +291,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
     // 2. Notify backend session tracker
     let backendSuccess = false;
+    let backendErrorMessage = '';
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const res = await fetchAuthRequest('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile }),
       });
+      const data = await res.json().catch(() => null);
       if (res.ok) {
-        const data = await res.json().catch(() => null);
         if (data?.success) {
           backendSuccess = true;
         }
+      } else if (data?.error) {
+        backendErrorMessage = data.error;
       }
     } catch (err: any) {
       console.warn('Backend OTP sync notice:', err);
+      backendErrorMessage = err?.message || '';
     }
 
     // Stop only if both Clerk and Backend were unable to dispatch verification code
@@ -295,6 +316,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setIsSendingOtp(false);
       setEmailError(
         clerkErrorMessage ||
+        backendErrorMessage ||
         'Could not dispatch verification code to your email. Please check your email address or try again.'
       );
       return;
@@ -338,14 +360,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       try {
         let factor = signIn.supportedFirstFactors?.find((f: any) => f.strategy === 'email_code');
         if (!factor) {
-          const attempt = await signIn.create({ identifier: cleanEmail });
+          const attempt = await withAuthRequestTimeout(
+            signIn.create({ identifier: cleanEmail }),
+            'Creating your sign-in session'
+          );
           factor = attempt.supportedFirstFactors?.find((f: any) => f.strategy === 'email_code');
         }
         if (factor && 'emailAddressId' in factor) {
-          await signIn.prepareFirstFactor({
-            strategy: 'email_code',
-            emailAddressId: (factor as any).emailAddressId,
-          });
+          await withAuthRequestTimeout(
+            signIn.prepareFirstFactor({
+              strategy: 'email_code',
+              emailAddressId: (factor as any).emailAddressId,
+            }),
+            'Sending your verification code'
+          );
           resendSuccess = true;
           console.log('[Clerk Resend] Dispatched via sign_in factor');
         }
@@ -360,9 +388,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       try {
         if (signUp.status === 'missing_requirements') {
           if (signUp.emailAddress && signUp.emailAddress.toLowerCase() !== cleanEmail) {
-            await signUp.update({ emailAddress: cleanEmail });
+            await withAuthRequestTimeout(signUp.update({ emailAddress: cleanEmail }), 'Updating your verification email');
           }
-          await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+          await withAuthRequestTimeout(
+            signUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
+            'Sending your verification code'
+          );
           resendSuccess = true;
           setAuthFlowMode('sign_up');
           console.log('[Clerk Resend] Dispatched via existing sign_up');
@@ -372,12 +403,18 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               (clerk.client as any).resetSignUp();
             }
           } catch {}
-          const newSignUp = await signUp.create({
-            emailAddress: cleanEmail,
-            firstName: fullName.trim().split(' ')[0] || fullName.trim(),
-            lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
-          });
-          await newSignUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+          const newSignUp = await withAuthRequestTimeout(
+            signUp.create({
+              emailAddress: cleanEmail,
+              firstName: fullName.trim().split(' ')[0] || fullName.trim(),
+              lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
+            }),
+            'Creating your verification session'
+          );
+          await withAuthRequestTimeout(
+            newSignUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
+            'Sending your verification code'
+          );
           resendSuccess = true;
           setAuthFlowMode('sign_up');
           console.log('[Clerk Resend] Dispatched via fresh sign_up');
@@ -390,13 +427,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         // Fallback to sign-in if email already registered
         if (!resendSuccess && isSignInLoaded && signIn) {
           try {
-            const attempt = await signIn.create({ identifier: cleanEmail });
+            const attempt = await withAuthRequestTimeout(
+              signIn.create({ identifier: cleanEmail }),
+              'Creating your sign-in session'
+            );
             const factor = attempt.supportedFirstFactors?.find((f: any) => f.strategy === 'email_code');
             if (factor && 'emailAddressId' in factor) {
-              await signIn.prepareFirstFactor({
-                strategy: 'email_code',
-                emailAddressId: (factor as any).emailAddressId,
-              });
+              await withAuthRequestTimeout(
+                signIn.prepareFirstFactor({
+                  strategy: 'email_code',
+                  emailAddressId: (factor as any).emailAddressId,
+                }),
+                'Sending your verification code'
+              );
               resendSuccess = true;
               setAuthFlowMode('sign_in');
               console.log('[Clerk Resend] Recovered via sign_in');
@@ -410,19 +453,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
     // 3. Backend sync & Supabase Mailer
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const res = await fetchAuthRequest('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile }),
       });
+      const data = await res.json().catch(() => null);
       if (res.ok) {
-        const data = await res.json().catch(() => null);
         if (data?.success) {
           resendSuccess = true;
         }
+      } else if (data?.error && !resendError) {
+        resendError = data.error;
       }
-    } catch (backendErr) {
+    } catch (backendErr: any) {
       console.warn('[Backend Resend Sync Notice]:', backendErr);
+      if (!resendError) {
+        resendError = backendErr?.message || '';
+      }
     }
 
     setIsSendingOtp(false);
