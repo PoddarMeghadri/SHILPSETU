@@ -32,6 +32,7 @@ const PRIMARY_NAV_ITEMS: NavItemDef[] = [
   { id: 'dashboard', labelKey: 'nav_dashboard', defaultLabel: 'Business Insights', icon: 'analytics' },
   { id: 'notifications', labelKey: 'nav_notifications', defaultLabel: 'Alerts', icon: 'notifications', badge: 'NEW' },
   { id: 'profile', labelKey: 'nav_profile', defaultLabel: 'Artisan Workshop', icon: 'badge' },
+  { id: 'settings', labelKey: 'nav_settings', defaultLabel: 'Settings', icon: 'settings' },
 ];
 
 const SECONDARY_NAV_ITEMS: NavItemDef[] = [
@@ -252,7 +253,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   isCollapsed ? 'justify-center py-2.5 px-0' : 'justify-between px-3 py-2.5'
                 } rounded-2xl text-xs font-medium font-sans transition-all group relative cursor-pointer ${
                   isActive
-                    ? 'bg-[#B5451B] text-white font-bold shadow-sm'
+                    ? item.id === 'settings'
+                      ? 'bg-emerald-500/20 text-emerald-400 font-bold'
+                      : 'bg-[#B5451B] text-white font-bold shadow-sm'
                     : isDark
                     ? 'text-[#F4ECDE]/80 hover:bg-[#252E22] hover:text-white'
                     : 'text-[#22331E]/80 hover:bg-[#DFD3BE] hover:text-[#1A1815]'
@@ -261,7 +264,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} min-w-0`}>
                   <span
                     className={`material-symbols-outlined text-[20px] transition-transform group-hover:scale-110 ${
-                      isActive ? 'text-white' : 'text-[#B5451B]'
+                      isActive
+                        ? item.id === 'settings' ? 'text-emerald-400' : 'text-white'
+                        : 'text-[#B5451B]'
                     }`}
                   >
                     {item.icon}

@@ -8,7 +8,8 @@ export type ScreenId =
   | 'notifications'
   | 'social'
   | 'story'
-  | 'profile';
+  | 'profile'
+  | 'settings';
 
 export type LanguageCode =
   | 'en'
