@@ -122,6 +122,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
   const [isFlashOn, setIsFlashOn] = useState<boolean>(false);
+  const [isTorchSupported, setIsTorchSupported] = useState<boolean>(false);
   const [showScreenFlash, setShowScreenFlash] = useState<boolean>(false);
   const [cameraPermissionStatus, setCameraPermissionStatus] = useState<'prompt' | 'granted' | 'denied' | 'unknown'>('unknown');
   const [availableBackCameras, setAvailableBackCameras] = useState<
@@ -144,7 +145,6 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
   const isFlashOnRef = useRef<boolean>(false);
   isFlashOnRef.current = isFlashOn;
   const isStartingCameraRef = useRef<boolean>(false);
-  const hasSelectedSpecificLensRef = useRef<boolean>(false);
 
   // Responsive device listener for viewport resize and orientation changes
   useEffect(() => {
@@ -316,22 +316,9 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
         setSelectedBackCameraId(formatted[0].deviceId);
       }
 
-      // If active track is currently using a secondary sensor (like ultra-wide or macro) instead of the main sensor,
-      // switch to the Main Camera (Camera 0) so the 3-flash array activates
-      if (
-        cameraFacingMode === 'environment' &&
-        !hasSelectedSpecificLensRef.current &&
-        formatted.length > 1 &&
-        activeTrack &&
-        activeTrack.getSettings().deviceId !== formatted[0].deviceId
-      ) {
-        console.log('[AI Studio] Promoting to primary rear camera (Camera 0) for triple-flash array');
-        hasSelectedSpecificLensRef.current = true;
-        setSelectedBackCameraId(formatted[0].deviceId);
-        setTimeout(() => {
-          startCamera('environment', formatted[0].deviceId);
-        }, 100);
-      }
+      // Do not automatically replace a working environment stream with a device-id
+      // stream. Some Android browsers expose stale device IDs after permission is
+      // granted, and replacing the stream can leave the preview unavailable.
     } catch (err) {
       console.warn('[AI Studio] Lens enumeration error:', err);
     }
@@ -503,6 +490,11 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
 
       const activeTrack = stream.getVideoTracks()[0];
       if (activeTrack) {
+        const capabilities = (activeTrack as MediaStreamTrack & {
+          getCapabilities?: () => { torch?: boolean };
+        }).getCapabilities?.();
+        setIsTorchSupported(capabilities?.torch === true);
+
         // Enumerate devices to populate lenses list and check for primary camera
         discoverCameraLenses(activeTrack);
 
@@ -543,13 +535,13 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
       videoRef.current.srcObject = null;
     }
     setIsCameraActive(false);
+    setIsTorchSupported(false);
     setIsFlashOn(false);
   };
 
   // Switch specifically between rear camera lenses (Main with Triple Flash vs Auxiliary)
   const handleSelectLens = async (deviceId: string) => {
     sound.playTap();
-    hasSelectedSpecificLensRef.current = true;
     setSelectedBackCameraId(deviceId);
     await startCamera('environment', deviceId);
   };
@@ -660,7 +652,10 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
       const track = streamRef.current.getVideoTracks()[0];
       if (track) {
         console.log('[AI Studio] Toggling physical torch to:', nextFlash);
-        await applyTorchConstraint(track, nextFlash);
+        const applied = await applyTorchConstraint(track, nextFlash);
+        if (!applied && nextFlash) {
+          setIsTorchSupported(false);
+        }
       }
     } else {
       // If camera is not yet active, start camera (torch will activate once stream starts)
@@ -1152,7 +1147,13 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
                       ? 'bg-[#E8B84B] text-[#1A1815] border-[#E8B84B] shadow-md ring-2 ring-[#E8B84B]/60'
                       : 'bg-black/60 text-white border-white/20 hover:bg-black/80'
                   }`}
-                  title={isFlashOn ? 'Flash Active' : 'Flash Off'}
+                  title={
+                    isFlashOn
+                      ? isTorchSupported
+                        ? 'Flash Active'
+                        : 'Screen Flash Active'
+                      : 'Flash Off'
+                  }
                 >
                   <span className="material-symbols-outlined text-base">
                     {isFlashOn ? 'flash_on' : 'flash_off'}
