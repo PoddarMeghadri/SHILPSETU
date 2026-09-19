@@ -511,41 +511,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
       const adminMockToken = `admin_bypass_session_${Date.now()}_mock`;
       localStorage.setItem('shilpsetu_token', adminMockToken);
-      localStorage.setItem('shilpsetu_auth_done', 'true');
 
-      const adminProfile: OnboardingUserData = {
-        fullName: fullName.trim() || 'Admin Artisan',
-        gender,
-        state: selectedState || 'Delhi',
-        city: effectiveCity || 'New Delhi',
-        mobile: cleanMobile || '9999999999',
-        email: cleanEmail || 'admin@shilpsetu.in',
-        selectedCraft: selectedCraft || 'pottery',
-        selectedLanguage: language,
-      };
-
-      try {
-        localStorage.setItem(
-          'shilpsetu_artisan',
-          JSON.stringify({
-            name: adminProfile.fullName,
-            gender: adminProfile.gender,
-            state: adminProfile.state,
-            city: adminProfile.city,
-            mobile: adminProfile.mobile,
-            email: adminProfile.email,
-            selectedLanguage: adminProfile.selectedLanguage,
-            craft: 'Heritage Craft Curation & Governance',
-            title: 'System Administrator & Master Curator',
-            location: `${adminProfile.city}, ${adminProfile.state}`,
-            isVerified: true,
-            trustScore: 100,
-          })
-        );
-      } catch {}
-
-      // Direct them immediately to the main dashboard!
-      onComplete(adminProfile);
+      // Keep admin onboarding in the shared flow so language and workshop selection
+      // are completed before the app marks authentication as finished.
+      setCurrentStep(3);
       return;
     }
 
