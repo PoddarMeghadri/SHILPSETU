@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { ProductItem, ScreenId, LanguageCode } from '../../types';
 import { sound } from '../../services/sound';
 import { PotterWheelSpinner } from '../common/PotterWheelSpinner';
@@ -1317,78 +1317,98 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {studioProducts.map((prod) => (
-              <div
-                key={prod.id}
-                className={`rounded-3xl p-3.5 border flex flex-col justify-between shadow-xs group ${
-                  isDark
-                    ? 'bg-[#1C221A] border-[#2D3A2B]'
-                    : 'bg-[#EFE4CF] border-[#22331E]/10'
-                }`}
+          {studioProducts.length === 0 ? (
+            <div className={`rounded-3xl border border-dashed p-6 text-center ${isDark ? 'bg-[#1C221A] border-[#2D3A2B] text-[#F4ECDE]' : 'bg-[#F6EDE1] border-[#22331E]/20 text-[#1A1815]'}`}>
+              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#B5451B]/15 text-[#B5451B]">
+                <span className="material-symbols-outlined text-3xl">inventory_2</span>
+              </div>
+              <h4 className="font-serif font-bold text-base">{t('catalog_empty_title', 'No products in your studio yet')}</h4>
+              <p className="mt-2 text-xs opacity-75">
+                {t('catalog_empty_desc', 'Capture a photo to create your first catalog item and publish it for buyers.')}
+              </p>
+              <button
+                type="button"
+                onClick={() => { sound.playTap(); setActiveTab('camera'); }}
+                className="mt-4 rounded-full bg-[#B5451B] px-4 py-2 text-xs font-bold text-white"
               >
-                <div className="w-full aspect-square rounded-2xl overflow-hidden relative mb-2">
-                  <img
-                    src={prod.polishedImageUrl}
-                    alt={prod.title}
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = RELIABLE_CRAFT_FALLBACK;
-                    }}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute top-2 right-2 px-2 py-0.5 bg-[#22331E]/90 text-white rounded-full text-[9px] font-bold">
-                    ₹{(prod.price ?? 1200).toLocaleString('en-IN')}
-                  </div>
-                  <div className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-xs text-[8px] font-bold text-[#E8B84B] rounded">
-                    {t('studio_4k_badge', '4K Studio')}
-                  </div>
-                </div>
-
-                <h4
-                  className={`font-serif font-bold text-xs line-clamp-1 ${
-                    isDark ? 'text-[#F4ECDE]' : 'text-[#1A1815]'
+                {t('capture_now', 'Capture now')}
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {studioProducts.map((prod) => (
+                <div
+                  key={prod.id}
+                  className={`rounded-3xl p-3.5 border flex flex-col justify-between shadow-xs group ${
+                    isDark
+                      ? 'bg-[#1C221A] border-[#2D3A2B]'
+                      : 'bg-[#EFE4CF] border-[#22331E]/10'
                   }`}
                 >
-                  {prod.title}
-                </h4>
-                <p className="text-[10px] opacity-70 font-sans mt-0.5">
-                  {prod.category} • {prod.stock} {t('in_stock', 'in stock')}
-                </p>
+                  <div className="w-full aspect-square rounded-2xl overflow-hidden relative mb-2">
+                    <img
+                      src={prod.polishedImageUrl || prod.rawImageUrl || RELIABLE_CRAFT_FALLBACK}
+                      alt={prod.title}
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = RELIABLE_CRAFT_FALLBACK;
+                      }}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-[#22331E]/90 text-white rounded-full text-[9px] font-bold">
+                      ₹{(prod.price ?? 1200).toLocaleString('en-IN')}
+                    </div>
+                    <div className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/70 backdrop-blur-xs text-[8px] font-bold text-[#E8B84B] rounded">
+                      {t('studio_4k_badge', '4K Studio')}
+                    </div>
+                  </div>
 
-                <div className="flex gap-1.5 mt-2">
-                  <button
-                    onClick={() => {
-                      sound.playTap();
-                      if (onSelectProductForCatalog) {
-                        onSelectProductForCatalog(prod);
-                      }
-                      onNavigate('cataloger');
-                    }}
-                    className="flex-1 bg-[#B5451B] text-white text-[10px] font-semibold py-2 rounded-xl text-center flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-xs">mic</span>
-                    <span>{t('edit', 'Edit')}</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      sound.playTap();
-                      onNavigate('social');
-                    }}
-                    className={`w-8 h-8 rounded-xl border flex items-center justify-center text-[#25D366] cursor-pointer ${
-                      isDark
-                        ? 'bg-[#121411] border-[#2D3A2B]'
-                        : 'bg-white border-[#22331E]/10'
+                  <h4
+                    className={`font-serif font-bold text-xs line-clamp-1 ${
+                      isDark ? 'text-[#F4ECDE]' : 'text-[#1A1815]'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-sm">share</span>
-                  </button>
+                    {prod.title}
+                  </h4>
+                  <p className="text-[10px] opacity-70 font-sans mt-0.5">
+                    {prod.category} • {prod.stock} {t('in_stock', 'in stock')}
+                  </p>
+
+                  <div className="flex gap-1.5 mt-2">
+                    <button
+                      onClick={() => {
+                        sound.playTap();
+                        setEditingProduct(prod);
+                        setPendingCapturedImage(prod.polishedImageUrl || prod.rawImageUrl || '');
+                        setShowDetailsModal(true);
+                        if (onSelectProductForCatalog) {
+                          onSelectProductForCatalog(prod);
+                        }
+                      }}
+                      className="flex-1 bg-[#B5451B] text-white text-[10px] font-semibold py-2 rounded-xl text-center flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-xs">edit</span>
+                      <span>{t('edit', 'Edit')}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        sound.playTap();
+                        onNavigate('social');
+                      }}
+                      className={`w-8 h-8 rounded-xl border flex items-center justify-center text-[#25D366] cursor-pointer ${
+                        isDark
+                          ? 'bg-[#121411] border-[#2D3A2B]'
+                          : 'bg-white border-[#22331E]/10'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">share</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
-
       {/* Product Details Modal (Typing or Voice) */}
       <AIProductDetailsModal
         isOpen={showDetailsModal}
@@ -1423,3 +1443,4 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
     </div>
   );
 };
+

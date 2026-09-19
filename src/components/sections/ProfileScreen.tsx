@@ -124,7 +124,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <div className="flex flex-wrap justify-center gap-1.5 mt-3">
             {isAdminMode && <span className="px-2.5 py-0.5 bg-[#0095F6]/15 text-[#0095F6] dark:text-[#52B7FF] rounded-full text-[10px] font-bold uppercase border border-[#0095F6]/30 flex items-center gap-1">
               <BlueVerifiedBadge size={12} />
-              {t('verified_artisan', 'Blue Verified')}
             </span>}
             {isAdminMode && <span className="px-2.5 py-0.5 bg-[#2E4638]/15 text-[#2E4638] dark:text-[#88C498] rounded-full text-[10px] font-bold uppercase border border-[#2E4638]/20 flex items-center gap-1">
               <span className="material-symbols-outlined text-xs">check_circle</span>
