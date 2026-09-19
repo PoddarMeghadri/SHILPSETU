@@ -226,16 +226,16 @@ export function App() {
       statusTag: 'Live on GeM',
       thumbnailUrl: newProduct.polishedImageUrl,
     };
-
-    const handleUpdateProduct = (updatedProduct: ProductItem) => {
-      setProducts((prev) => {
-        const updated = prev.map((product) => product.id === updatedProduct.id ? updatedProduct : product);
-        localStorage.setItem('shilpsetu_products', JSON.stringify(updated));
-        return updated;
-      });
-      api.updateProduct?.(updatedProduct.id, updatedProduct).catch(console.warn);
-    };
     setActivities((prev) => [newActivity, ...prev]);
+  };
+
+  const handleUpdateProduct = (updatedProduct: ProductItem) => {
+    setProducts((prev) => {
+      const updated = prev.map((product) => product.id === updatedProduct.id ? updatedProduct : product);
+      localStorage.setItem('shilpsetu_products', JSON.stringify(updated));
+      return updated;
+    });
+    api.updateProduct?.(updatedProduct.id, updatedProduct).catch(console.warn);
   };
 
   const handleLogout = () => {
@@ -298,8 +298,10 @@ export function App() {
       avatarUrl: updatedArtisan.avatarUrl,
       bio: updatedArtisan.bio,
     }).then((result) => {
-      if (!result.saved) console.error('[Profile persistence]', result.error);
-    }).catch((error) => console.error('[Profile persistence]', error));
+      if (!result.saved && !result.localOnly) {
+        console.warn('[Profile persistence note]:', result.error);
+      }
+    }).catch((error) => console.warn('[Profile persistence note]:', error?.message || error));
   };
 
   // If onboarding / login is not completed, isolate the landing flow so no dashboard cards bleed through

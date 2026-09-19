@@ -74,7 +74,7 @@ app.get('/api/health', (req, res) => {
    1. AUTHENTICATION & OTP ENDPOINTS
    ========================================================================= */
 
-// Normal-user sign in: password authentication precedes the email OTP challenge.
+// Normal-user sign in: direct password authentication without OTP challenge.
 app.post('/api/auth/login', async (req, res) => {
   try {
     const identifier = typeof req.body.identifier === 'string' ? req.body.identifier.trim() : '';
@@ -89,16 +89,26 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'The email/mobile number or password is incorrect.' });
     }
 
-    const result = await sendOtpToEmail(artisan.email, artisan.mobile, { shouldCreateUser: false });
+    const token = generateToken(artisan);
     res.json({
       success: true,
+      token,
       email: artisan.email,
-      maskedEmail: artisan.email.replace(/^(.{2}).*(@.*)$/, '$1••••$2'),
-      message: result.message,
-      cooldownSeconds: result.cooldownSeconds,
+      artisan: {
+        id: artisan.id,
+        fullName: artisan.fullName,
+        name: artisan.fullName,
+        email: artisan.email,
+        mobile: artisan.mobile,
+        state: artisan.state,
+        city: artisan.city,
+        craft: artisan.craft,
+        gender: artisan.gender,
+      },
+      message: 'Signed in successfully.',
     });
   } catch (err: any) {
-    res.status(400).json({ error: err.message || 'Unable to start sign in.' });
+    res.status(400).json({ error: err.message || 'Unable to sign in.' });
   }
 });
 
@@ -138,7 +148,16 @@ app.post('/api/auth/send-otp', async (req, res) => {
 // Verify Email OTP and issue JWT session token
 app.post('/api/auth/verify-otp', async (req, res) => {
   try {
-    const { email, mobile, otp, artisanDetails, clerkVerified, clerkSessionId } = req.body;
+    const {
+      email,
+      mobile,
+      otp,
+      artisanDetails,
+      clerkVerified,
+      clerkSessionId,
+      supabaseVerified,
+      supabaseAccessToken,
+    } = req.body;
 
     if (!email || typeof email !== 'string' || !isValidEmail(email)) {
       return res.status(400).json({ error: 'Valid Email ID is strictly mandatory for artisan verification' });
@@ -148,36 +167,30 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Verification code (OTP) is required' });
     }
 
-    const isValid = await verifyOtp(email, otp, { clerkVerified, clerkSessionId });
+    const isValid = await verifyOtp(email, otp, {
+      clerkVerified,
+      clerkSessionId,
+      supabaseVerified,
+      supabaseAccessToken,
+    });
     if (!isValid) {
       return res.status(400).json({ error: 'Invalid verification code. Please check the code sent to your email.' });
     }
 
     // Lookup existing or create profile by email or mobile
-    let artisan = db.getArtisanByEmail(email) || (mobile ? db.getArtisanByPhone(mobile) : null);
-    if (!artisan && artisanDetails) {
-      artisan = db.upsertArtisan({
-        mobile: mobile || artisanDetails.mobile || '9876543210',
-        fullName: artisanDetails.fullName || 'Artisan',
-        craft: artisanDetails.selectedCraft || 'Traditional Handicrafts',
-        state: artisanDetails.state || 'Uttar Pradesh',
-        city: artisanDetails.city || 'Varanasi',
-        gender: artisanDetails.gender,
-        email: email.trim().toLowerCase(),
-        language: artisanDetails.selectedLanguage || 'hi',
-        passwordHash: artisanDetails.password ? hashPassword(artisanDetails.password) : undefined,
-      });
-    } else if (!artisan) {
-      artisan = db.upsertArtisan({
-        mobile: mobile || '9876543210',
-        fullName: 'Master Artisan',
-        craft: 'Traditional Handicrafts',
-        state: 'Uttar Pradesh',
-        city: 'Varanasi',
-        email: email.trim().toLowerCase(),
-        language: 'hi',
-      });
-    }
+    const existingArtisan = db.getArtisanByEmail(email) || (mobile ? db.getArtisanByPhone(mobile) : null);
+    const artisan = db.upsertArtisan({
+      id: existingArtisan?.id,
+      mobile: mobile || artisanDetails?.mobile || existingArtisan?.mobile || '9876543210',
+      fullName: artisanDetails?.fullName || existingArtisan?.fullName || 'Master Artisan',
+      craft: artisanDetails?.selectedCraft || existingArtisan?.craft || 'Traditional Handicrafts',
+      state: artisanDetails?.state || existingArtisan?.state || 'Uttar Pradesh',
+      city: artisanDetails?.city || existingArtisan?.city || 'Varanasi',
+      gender: artisanDetails?.gender || existingArtisan?.gender,
+      email: email.trim().toLowerCase(),
+      language: artisanDetails?.selectedLanguage || existingArtisan?.language || 'hi',
+      passwordHash: artisanDetails?.password ? hashPassword(artisanDetails.password) : existingArtisan?.passwordHash,
+    });
 
     const token = generateToken(artisan);
     res.json({

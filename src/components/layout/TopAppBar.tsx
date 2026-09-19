@@ -55,6 +55,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
     social: t('screen_social', 'Social Share Kit'),
     story: t('screen_story', 'Heritage Story'),
     profile: t('screen_profile', 'Artisan Workshop'),
+    settings: t('settings', 'Settings'),
   };
 
   return (

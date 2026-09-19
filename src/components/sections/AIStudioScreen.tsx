@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ProductItem, ScreenId, LanguageCode } from '../../types';
 import { sound } from '../../services/sound';
 import { PotterWheelSpinner } from '../common/PotterWheelSpinner';
@@ -922,21 +922,6 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
             }`}
           >
             {t('ai_viewfinder', 'AI Viewfinder')}
-          </button>
-          <button
-            type="button"
-            aria-label={`Edit ${prod.title}`}
-            onClick={() => {
-              sound.playTap();
-              setEditingProduct(prod);
-              setPendingCapturedImage(prod.polishedImageUrl);
-              setShowDetailsModal(true);
-            }}
-            className={`w-8 h-8 rounded-xl border flex items-center justify-center ${
-              isDark ? 'bg-[#121411] border-[#2D3A2B] text-[#E8B84B]' : 'bg-white border-[#22331E]/10 text-[#B5451B]'
-            }`}
-          >
-            <span className="material-symbols-outlined text-sm">edit</span>
           </button>
 
           <button

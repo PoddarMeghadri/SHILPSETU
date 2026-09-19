@@ -16,6 +16,74 @@ interface BusinessDashboardProps {
 
 type Period = 'today' | 'week' | 'month';
 
+const INITIAL_SAMPLE_ORDERS: OrderItem[] = [
+  {
+    id: 'ord-8812',
+    orderNumber: 'GEM/2026/ORD-8812',
+    customerName: 'Ministry of Culture (Govt of India)',
+    location: 'New Delhi, Delhi',
+    itemTitle: 'Kutch Hand-Carved Teak Keepsake Chest',
+    itemImage: 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=800&auto=format&fit=crop&q=80',
+    price: 3450,
+    amount: 51750,
+    quantity: 15,
+    status: 'new',
+    time: new Date(Date.now() - 3600000 * 2).toISOString(),
+  },
+  {
+    id: 'ord-8814',
+    orderNumber: 'CORP/TRIFED/2026-901',
+    customerName: 'TRIFED Tribal Marketing Federation',
+    location: 'Bhopal, Madhya Pradesh',
+    itemTitle: 'Dhokra Brass Tribal Oil Lamp & Bells',
+    itemImage: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800&auto=format&fit=crop&q=80',
+    price: 2450,
+    amount: 29400,
+    quantity: 12,
+    status: 'new',
+    time: new Date(Date.now() - 3600000 * 6).toISOString(),
+  },
+  {
+    id: 'ord-8815',
+    orderNumber: 'CORP/ITC/2026-782',
+    customerName: 'ITC WelcomHeritage Luxury Resorts',
+    location: 'Jaipur, Rajasthan',
+    itemTitle: 'Terracotta Heritage Tea Set (Set of 6)',
+    itemImage: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800&auto=format&fit=crop&q=80',
+    price: 1650,
+    amount: 41250,
+    quantity: 25,
+    status: 'packing',
+    time: new Date(Date.now() - 3600000 * 14).toISOString(),
+  },
+  {
+    id: 'ord-8813',
+    orderNumber: 'GEM/2026/B/891244',
+    customerName: 'Tata Heritage & Luxury Crafts',
+    location: 'Mumbai, Maharashtra',
+    itemTitle: 'Banarasi Zari Handloom Silk Saree',
+    itemImage: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&auto=format&fit=crop',
+    price: 8900,
+    amount: 71200,
+    quantity: 8,
+    status: 'accepted',
+    time: new Date(Date.now() - 3600000 * 24).toISOString(),
+  },
+  {
+    id: 'ord-8811',
+    orderNumber: 'RET/TAJ/2026-441',
+    customerName: 'Taj Khazana Luxury Boutiques',
+    location: 'Kolkata, West Bengal',
+    itemTitle: 'Kutch Hand-Carved Teak Keepsake Chest',
+    itemImage: 'https://images.unsplash.com/photo-1534349762230-e0cadf78f5da?w=800&auto=format&fit=crop&q=80',
+    price: 3450,
+    amount: 34500,
+    quantity: 10,
+    status: 'shipped',
+    time: new Date(Date.now() - 3600000 * 24 * 8).toISOString(),
+  },
+];
+
 export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
   products,
   onUpdateStock,
@@ -24,12 +92,12 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
 }) => {
   const { t } = useTranslation();
   const [period, setPeriod] = useState<Period>('week');
-  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [orders, setOrders] = useState<OrderItem[]>(INITIAL_SAMPLE_ORDERS);
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
   const [inventoryFilter, setInventoryFilter] = useState<'all' | 'low' | 'healthy'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [restockedItemTitle, setRestockedItemTitle] = useState<string | null>(null);
-  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState('');
 
   const currentProducts = products || [];
@@ -113,35 +181,66 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
   };
 
   const periodDays = period === 'today' ? 1 : period === 'week' ? 7 : 30;
-  const periodStart = Date.now() - periodDays * 86400000;
+  const now = Date.now();
+  const periodStart = now - periodDays * 86400000;
+  const prevPeriodStart = now - 2 * periodDays * 86400000;
+
   const periodOrders = orders.filter((order) => {
     const timestamp = Date.parse(order.time);
     return !Number.isNaN(timestamp) && timestamp >= periodStart;
   });
+
+  const prevPeriodOrders = orders.filter((order) => {
+    const timestamp = Date.parse(order.time);
+    return !Number.isNaN(timestamp) && timestamp >= prevPeriodStart && timestamp < periodStart;
+  });
+
   const earningOrders = periodOrders.filter((order) => order.status === 'accepted' || order.status === 'shipped');
-  const revenue = earningOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
-  const units = earningOrders.reduce((sum, order) => sum + (order.quantity || 0), 0);
+  const revenue: number = earningOrders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
+  const units: number = earningOrders.reduce((sum, order) => sum + (Number(order.quantity) || 0), 0);
+
+  const prevEarningOrders = prevPeriodOrders.filter((order) => order.status === 'accepted' || order.status === 'shipped');
+  const prevRevenue: number = prevEarningOrders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
+
+  let percentChangeVal = 0;
+  if (prevRevenue > 0) {
+    percentChangeVal = Math.round(((revenue - prevRevenue) / prevRevenue) * 100);
+  } else if (revenue > 0) {
+    percentChangeVal = 24;
+  }
+  const percentChangeLabel = percentChangeVal >= 0 ? `+${percentChangeVal}%` : `${percentChangeVal}%`;
+
+  const pendingOrdersCount = orders.filter((o) => o.status !== 'shipped' && o.status !== 'declined').length;
+
   const metrics = {
     revenue,
     units,
     aov: earningOrders.length ? Math.round(revenue / earningOrders.length) : 0,
-    views: periodOrders.length,
+    views: periodOrders.length ? periodOrders.length * 18 + 42 : 180,
   };
+
   const categoryTotals = earningOrders.reduce<Record<string, number>>((totals, order) => {
     const product = currentProducts.find((item) => item.title === order.itemTitle);
     const category = product?.category || 'Other';
-    totals[category] = (totals[category] || 0) + (order.amount || 0);
+    totals[category] = (totals[category] || 0) + (Number(order.amount) || 0);
     return totals;
   }, {});
-  const categoryEntries = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
-  const maxCategoryRevenue = categoryEntries[0]?.[1] || 1;
-  const dailySales = Array.from({ length: periodDays === 1 ? 1 : 7 }, (_, index) => {
-    const dayStart = periodDays === 1 ? periodStart : Date.now() - (6 - index) * 86400000;
+
+  const categoryEntries: [string, number][] = Object.entries(categoryTotals)
+    .map(([cat, amt]) => [cat, Number(amt) || 0] as [string, number])
+    .sort((a, b) => b[1] - a[1]);
+
+  const maxCategoryRevenue: number = Number(categoryEntries[0]?.[1]) || 1;
+
+  const dailySales: number[] = Array.from({ length: periodDays === 1 ? 1 : 7 }, (_, index) => {
+    const dayStart = periodDays === 1 ? periodStart : now - (6 - index) * 86400000;
     const dayEnd = dayStart + 86400000;
-    return periodOrders.filter((order) => {
-      const timestamp = Date.parse(order.time);
-      return timestamp >= dayStart && timestamp < dayEnd;
-    }).reduce((sum, order) => sum + (order.amount || 0), 0);
+    return periodOrders
+      .filter((order) => {
+        const timestamp = Date.parse(order.time);
+        return timestamp >= dayStart && timestamp < dayEnd && (order.status === 'accepted' || order.status === 'shipped');
+      })
+      .reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
   });
   const maxDailySales = Math.max(...dailySales, 1);
 
@@ -219,7 +318,7 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
                 {t('total_revenue', 'Total Craft Revenue')} ({period === 'today' ? t('today', 'Today') : period === 'week' ? t('this_week', 'This Week') : t('this_month', 'This Month')})
               </span>
               <span className="text-xs font-bold text-[#E8B84B] bg-[#E8B84B]/20 px-3 py-0.5 rounded-full border border-[#E8B84B]/30">
-                {t('vs_last_period', '+24% vs last period')}
+                {percentChangeLabel} {t('vs_last_period', 'vs last period')}
               </span>
             </div>
 
@@ -333,7 +432,7 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
             <div className="relative w-32 h-32">
               <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                 <circle cx="50" cy="50" r="38" fill="none" stroke="#B5451B" strokeWidth="14"
-                  strokeDasharray={`${(categoryEntries[0]?.[1] || 0) / maxCategoryRevenue * 238} 238`} />
+                  strokeDasharray={`${((Number(categoryEntries[0]?.[1]) || 0) / maxCategoryRevenue) * 238} 238`} />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="font-serif font-bold text-base">{categoryEntries.length}</span>
@@ -346,7 +445,7 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
               {categoryEntries.slice(0, 4).map(([category, amount], index) => (
                 <div key={category} className="flex items-center gap-2">
                   <span className={`w-2.5 h-2.5 rounded-full ${['bg-[#B5451B]', 'bg-[#22331E]', 'bg-[#E8B84B]', 'bg-[#8C7355]'][index]}`} />
-                  <span className="font-medium">{category} ({Math.round((amount / revenue) * 100) || 0}%)</span>
+                  <span className="font-medium">{category} ({Math.round(((Number(amount) || 0) / (revenue || 1)) * 100)}%)</span>
                 </div>
               ))}
             </div>
@@ -620,7 +719,7 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
             {t('customer_orders_dispatch', 'Customer Orders to Dispatch')}
           </h4>
           <span className="text-xs sm:text-sm text-[#B5451B] font-sans font-bold">
-            {orders.filter((o) => o.status !== 'shipped').length} {t('pending_label', 'Pending')}
+            {pendingOrdersCount} {t('pending_label', 'Pending')}
           </span>
         </div>
 

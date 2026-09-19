@@ -93,10 +93,8 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                       damping: 32,
                     }}
                     className={`absolute inset-0 rounded-full z-0 ${
-                      item.id === 'settings'
-                        ? isAdminMode
-                          ? isDark ? 'bg-emerald-500/30' : 'bg-emerald-500/15'
-                          : isDark ? 'bg-[#B5451B]/30' : 'bg-[#B5451B]/15'
+                      isAdminMode
+                        ? isDark ? 'bg-emerald-500/30' : 'bg-emerald-500/20'
                         : isDark ? 'bg-[#B5451B]/30' : 'bg-[#B5451B]/15'
                     }`}
                   />
@@ -106,7 +104,9 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                 <div
                   className={`relative z-10 flex flex-col items-center justify-center w-full transition-colors duration-200 ${
                     isActive
-                      ? item.id === 'settings' && isAdminMode ? 'text-emerald-500' : 'text-[#B5451B]'
+                      ? isAdminMode
+                        ? isDark ? 'text-emerald-400' : 'text-emerald-700 font-bold'
+                        : 'text-[#B5451B]'
                       : isDark
                       ? 'text-[#F4ECDE]/60 group-hover:text-[#F4ECDE]'
                       : 'text-[#22331E]/60 group-hover:text-[#22331E]'
@@ -123,14 +123,16 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                     </span>
                     {/* Badge for Notifications Tab */}
                     {item.id === 'notifications' && unreadCount > 0 && (
-                      <span className="absolute -top-0.5 -right-1 w-2 h-2 bg-[#B5451B] rounded-full ring-2 ring-[#F4ECDE] dark:ring-[#1C221A] animate-pulse" />
+                      <span className={`absolute -top-0.5 -right-1 w-2 h-2 rounded-full ring-2 ring-[#F4ECDE] dark:ring-[#1C221A] animate-pulse ${
+                        isAdminMode ? 'bg-emerald-500' : 'bg-[#B5451B]'
+                      }`} />
                     )}
                   </div>
                   <span
                     className={`text-[9.5px] sm:text-[10.5px] tracking-tight font-sans truncate max-w-full text-center leading-tight mt-0.5 ${
                       isActive
-                        ? item.id === 'settings'
-                          ? isAdminMode ? 'font-bold text-emerald-500' : 'font-bold text-[#B5451B]'
+                        ? isAdminMode
+                          ? isDark ? 'font-bold text-emerald-400' : 'font-bold text-emerald-700'
                           : 'font-bold text-[#B5451B]'
                         : 'font-medium'
                     }`}

@@ -89,7 +89,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
       {/* Brand Header with 3-Lined Minimize Button Above */}
       <div
         className={`border-b border-current/10 flex items-center transition-all ${
-          isCollapsed ? 'p-3 flex-col gap-2.5 justify-center' : 'p-4 lg:p-5 grid grid-cols-[minmax(0,1fr)_auto] gap-2'
+          isCollapsed ? 'p-3 flex-col gap-2 justify-center' : 'p-3.5 lg:p-4 flex items-center justify-between gap-2'
         }`}
       >
         {!isCollapsed ? (
@@ -100,7 +100,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 sound.playTap();
                 onNavigate('home');
               }}
-              className="flex items-center gap-3 text-left group min-w-0 flex-1 cursor-pointer"
+              className="flex items-center gap-2.5 text-left group min-w-0 flex-1 cursor-pointer"
               title={t('app_title_tagline', 'ShilpSetu — Bridge of Craft')}
             >
               <div className="shrink-0 transition-transform group-hover:scale-105">
@@ -108,11 +108,15 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h1 className="font-serif font-black text-lg tracking-tight leading-none text-[#B5451B] truncate">
+                  <h1
+                    className={`font-serif font-black text-base lg:text-lg tracking-tight leading-none truncate ${
+                      isAdminMode ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#B5451B]'
+                    }`}
+                  >
                     SHILPSETU
                   </h1>
                   {isAdminMode && (
-                    <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-emerald-600 text-white rounded shadow-xs flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 text-[8.5px] font-mono font-bold uppercase tracking-wider bg-emerald-600 text-white rounded shadow-xs flex items-center gap-1 shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse" />
                       Admin
                     </span>
@@ -124,7 +128,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               </div>
             </button>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               {onToggleTheme && (
                 <button
                   type="button"
@@ -132,18 +136,18 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     sound.playTap();
                     onToggleTheme();
                   }}
-                  className={`w-10 h-10 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                  className={`w-8 h-8 rounded-lg border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
                     isDark
                       ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
                       : isAdminMode
-                      ? 'border-[#059669]/20 bg-[#E8F5E9] text-[#059669] hover:bg-[#C8E6C9]'
+                      ? 'border-emerald-600/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                       : 'border-[#B5451B]/20 bg-[#FAF6EE] text-[#B5451B] hover:bg-[#EFE4CF]'
                   }`}
                   title={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
                   aria-label={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
                   id="btn-sidebar-theme-toggle"
                 >
-                  <span className="material-symbols-outlined text-[19px]">
+                  <span className="material-symbols-outlined text-[17px]">
                     {isDark ? 'light_mode' : 'dark_mode'}
                   </span>
                 </button>
@@ -151,35 +155,41 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
               {/* 3-Lined Button to Minimize Navigation Bar */}
               <button
+                type="button"
                 onClick={toggleCollapsed}
-                className={`w-10 h-10 rounded-xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                className={`w-8 h-8 rounded-lg border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
                   isDark
                     ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
+                    : isAdminMode
+                    ? 'border-emerald-600/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                     : 'border-[#22331E]/15 bg-white/70 text-[#22331E] hover:bg-white'
                 }`}
                 title={t('minimize_nav_bar', 'Minimize navigation bar')}
                 aria-label={t('minimize_nav_bar', 'Minimize navigation bar')}
                 id="btn-collapse-sidebar"
               >
-                <span className="material-symbols-outlined text-[20px]">menu</span>
+                <span className="material-symbols-outlined text-[18px]">menu</span>
               </button>
             </div>
           </>
         ) : (
           /* Minimized Header with 3-Lined Button and Centered Logo */
-          <div className="flex flex-col items-center gap-2.5 w-full py-1">
+          <div className="flex flex-col items-center gap-2 w-full py-1">
             <button
+              type="button"
               onClick={toggleCollapsed}
-              className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+              className={`w-8 h-8 rounded-lg border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
                 isDark
                   ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
+                  : isAdminMode
+                  ? 'border-emerald-600/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                   : 'border-[#22331E]/15 bg-white/70 text-[#22331E] hover:bg-white'
               }`}
               title={t('expand_nav_bar', 'Expand navigation bar')}
               aria-label={t('expand_nav_bar', 'Expand navigation bar')}
               id="btn-expand-sidebar"
             >
-              <span className="material-symbols-outlined text-[20px]">menu</span>
+              <span className="material-symbols-outlined text-[18px]">menu</span>
             </button>
 
             {onToggleTheme && (
@@ -189,30 +199,31 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   sound.playTap();
                   onToggleTheme();
                 }}
-                className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                className={`w-8 h-8 rounded-lg border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
                   isDark
                     ? 'border-[#2D3A2B] bg-[#1F261D] text-[#E8B84B] hover:bg-[#283225]'
                     : isAdminMode
-                    ? 'border-[#059669]/20 bg-[#E8F5E9] text-[#059669] hover:bg-[#C8E6C9]'
+                    ? 'border-emerald-600/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                     : 'border-[#B5451B]/20 bg-[#FAF6EE] text-[#B5451B] hover:bg-[#EFE4CF]'
                 }`}
                 title={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
                 aria-label={isDark ? t('switch_light_mode', 'Switch to Light Mode') : t('switch_dark_mode', 'Switch to Dark Mode')}
                 id="btn-sidebar-collapsed-theme-toggle"
               >
-                <span className="material-symbols-outlined text-[18px]">
+                <span className="material-symbols-outlined text-[17px]">
                   {isDark ? 'light_mode' : 'dark_mode'}
                 </span>
               </button>
             )}
 
             <button
+              type="button"
               onClick={() => {
                 sound.playTap();
                 onNavigate('home');
               }}
               title={t('app_title_tagline', 'ShilpSetu — Bridge of Craft')}
-              className="cursor-pointer hover:scale-105 transition-transform"
+              className="mt-1 cursor-pointer hover:scale-105 transition-transform shrink-0"
             >
               <ShilpSetuLogo size="xs" isDark={isDark} />
             </button>
@@ -253,10 +264,8 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   isCollapsed ? 'justify-center py-2.5 px-0' : 'justify-between px-3 py-2.5'
                 } rounded-2xl text-xs font-medium font-sans transition-all group relative cursor-pointer ${
                   isActive
-                    ? item.id === 'settings'
-                      ? isAdminMode
-                        ? 'bg-emerald-500/20 text-emerald-400 font-bold'
-                        : 'bg-[#B5451B] text-white font-bold shadow-sm'
+                    ? isAdminMode
+                      ? 'bg-emerald-600 text-white font-bold shadow-sm'
                       : 'bg-[#B5451B] text-white font-bold shadow-sm'
                     : isDark
                     ? 'text-[#F4ECDE]/80 hover:bg-[#252E22] hover:text-white'
@@ -267,9 +276,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   <span
                     className={`material-symbols-outlined text-[20px] transition-transform group-hover:scale-110 ${
                       isActive
-                        ? item.id === 'settings'
-                          ? isAdminMode ? 'text-emerald-400' : 'text-white'
-                          : 'text-white'
+                        ? 'text-white'
+                        : isAdminMode
+                        ? 'text-emerald-500 dark:text-emerald-400'
                         : 'text-[#B5451B]'
                     }`}
                   >
@@ -282,11 +291,15 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 {effectiveBadge && (
                   <>
                     {!isCollapsed ? (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#E8B84B] text-[#1A1815] uppercase tracking-wider shrink-0 shadow-2xs">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 shadow-2xs ${
+                        isAdminMode ? 'bg-emerald-600 text-white' : 'bg-[#E8B84B] text-[#1A1815]'
+                      }`}>
                         {effectiveBadge}
                       </span>
                     ) : (
-                      <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-[#E8B84B] ring-2 ring-[#ECE0CC] dark:ring-[#161B14]" />
+                      <span className={`absolute top-1.5 right-2 w-2 h-2 rounded-full ring-2 ring-[#ECE0CC] dark:ring-[#161B14] ${
+                        isAdminMode ? 'bg-emerald-500' : 'bg-[#E8B84B]'
+                      }`} />
                     )}
                   </>
                 )}
@@ -298,7 +311,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         {/* Secondary Artisan Toolkit Section */}
         <div className="space-y-1 pt-2 border-t border-current/10">
           {!isCollapsed ? (
-            <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-[#B5451B] opacity-80 mb-2 font-sans">
+            <p className={`px-3 text-[10px] font-bold uppercase tracking-widest opacity-80 mb-2 font-sans ${
+              isAdminMode ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#B5451B]'
+            }`}>
               {t('artisan_tools', 'Artisan Studio & Tools')}
             </p>
           ) : (
@@ -321,7 +336,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   isCollapsed ? 'justify-center py-2.5 px-0' : 'justify-between px-3 py-2.5'
                 } rounded-2xl text-xs font-medium font-sans transition-all group relative cursor-pointer ${
                   isActive
-                    ? 'bg-[#B5451B] text-white font-bold shadow-sm'
+                    ? isAdminMode
+                      ? 'bg-emerald-600 text-white font-bold shadow-sm'
+                      : 'bg-[#B5451B] text-white font-bold shadow-sm'
                     : isDark
                     ? 'text-[#F4ECDE]/80 hover:bg-[#252E22] hover:text-white'
                     : 'text-[#22331E]/80 hover:bg-[#DFD3BE] hover:text-[#1A1815]'
@@ -330,7 +347,13 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} min-w-0`}>
                   <span
                     className={`material-symbols-outlined text-[20px] transition-transform group-hover:scale-110 ${
-                      isActive ? 'text-white' : isDark ? 'text-[#E8B84B]' : 'text-[#22331E]'
+                      isActive
+                        ? 'text-white'
+                        : isAdminMode
+                        ? 'text-emerald-500 dark:text-emerald-400'
+                        : isDark
+                        ? 'text-[#E8B84B]'
+                        : 'text-[#22331E]'
                     }`}
                   >
                     {item.icon}
@@ -351,7 +374,11 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   sound.playVoiceStart();
                   onOpenVoiceAssistant();
                 }}
-                className="w-full p-3 rounded-2xl bg-gradient-to-br from-[#B5451B] to-[#8C2C09] text-white text-left flex items-center gap-3 shadow-md hover:brightness-105 active:scale-98 transition-all border border-[#E8B84B]/40 cursor-pointer"
+                className={`w-full p-3 rounded-2xl text-white text-left flex items-center gap-3 shadow-md hover:brightness-105 active:scale-98 transition-all cursor-pointer ${
+                  isAdminMode
+                    ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 border border-emerald-400/40'
+                    : 'bg-gradient-to-br from-[#B5451B] to-[#8C2C09] border border-[#E8B84B]/40'
+                }`}
                 id="btn-desktop-shilpi-ai"
               >
                 <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
@@ -374,7 +401,11 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   sound.playVoiceStart();
                   onOpenVoiceAssistant();
                 }}
-                className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-br from-[#B5451B] to-[#8C2C09] text-white flex items-center justify-center shadow-md hover:brightness-105 active:scale-95 transition-all border border-[#E8B84B]/50 relative group cursor-pointer"
+                className={`w-12 h-12 mx-auto rounded-2xl text-white flex items-center justify-center shadow-md hover:brightness-105 active:scale-95 transition-all relative group cursor-pointer ${
+                  isAdminMode
+                    ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 border border-emerald-400/50'
+                    : 'bg-gradient-to-br from-[#B5451B] to-[#8C2C09] border border-[#E8B84B]/50'
+                }`}
                 title={t('shilpi_ai_assistant_title', 'SHILPI AI — Chat & Voice Assistant')}
                 id="btn-desktop-shilpi-ai-collapsed"
               >
@@ -405,7 +436,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             <img
               src={artisan.avatarUrl}
               alt={artisan.name}
-              className={`${isCollapsed ? 'w-9 h-9' : 'w-10 h-10'} rounded-full object-cover border-2 border-[#E8B84B]`}
+              className={`${isCollapsed ? 'w-9 h-9' : 'w-10 h-10'} rounded-full object-cover border-2 ${
+                isAdminMode ? 'border-emerald-500' : 'border-[#E8B84B]'
+              }`}
             />
             <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center drop-shadow-xs">
               <BlueVerifiedBadge size={14} />
@@ -422,7 +455,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   {artisan.craft.split('&')[0]}
                 </p>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E8B84B] text-[#1A1815] shrink-0 shadow-xs">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 shadow-xs ${
+                isAdminMode ? 'bg-emerald-600 text-white' : 'bg-[#E8B84B] text-[#1A1815]'
+              }`}>
                 {artisan.trustScore ?? 98}★
               </span>
             </>

@@ -203,6 +203,38 @@ const defaultInitialOrders: OrderRecord[] = [
     updatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
   },
   {
+    id: 'ord-8814',
+    artisanId: 'artisan_demo',
+    productId: 'p-3',
+    productTitle: 'Dhokra Brass Tribal Oil Lamp & Bells',
+    buyerName: 'TRIFED Tribal Co-operative Marketing Federation',
+    buyerType: 'government',
+    quantity: 12,
+    unitPrice: 2450,
+    totalAmount: 29400,
+    status: 'pending',
+    escrowStatus: 'held_in_sbi_escrow',
+    deliveryBy: '2026-10-15',
+    createdAt: new Date(Date.now() - 3600000 * 6).toISOString(),
+    updatedAt: new Date(Date.now() - 3600000 * 6).toISOString(),
+  },
+  {
+    id: 'ord-8815',
+    artisanId: 'artisan_demo',
+    productId: 'p-4',
+    productTitle: 'Terracotta Heritage Tea Set (Set of 6)',
+    buyerName: 'ITC WelcomHeritage Luxury Resorts',
+    buyerType: 'corporate',
+    quantity: 25,
+    unitPrice: 1650,
+    totalAmount: 41250,
+    status: 'pending',
+    escrowStatus: 'held_in_sbi_escrow',
+    deliveryBy: '2026-10-22',
+    createdAt: new Date(Date.now() - 3600000 * 14).toISOString(),
+    updatedAt: new Date(Date.now() - 3600000 * 14).toISOString(),
+  },
+  {
     id: 'ord-8813',
     artisanId: 'artisan_demo',
     productId: 'p-2',
@@ -217,6 +249,22 @@ const defaultInitialOrders: OrderRecord[] = [
     deliveryBy: '2026-10-18',
     createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 18).toISOString(),
+  },
+  {
+    id: 'ord-8811',
+    artisanId: 'artisan_demo',
+    productId: 'p-1',
+    productTitle: 'Kutch Hand-Carved Teak Keepsake Chest',
+    buyerName: 'Taj Khazana Luxury Boutiques',
+    buyerType: 'corporate',
+    quantity: 10,
+    unitPrice: 3450,
+    totalAmount: 34500,
+    status: 'shipped',
+    escrowStatus: 'released_to_artisan_sbi',
+    deliveryBy: '2026-09-28',
+    createdAt: new Date(Date.now() - 3600000 * 24 * 9).toISOString(),
+    updatedAt: new Date(Date.now() - 3600000 * 24 * 5).toISOString(),
   },
 ];
 
@@ -258,9 +306,10 @@ class LocalStoreManager {
 
   // Artisan operations
   getArtisanByPhone(phone: string): ArtisanRecord | null {
-    const cleaned = phone.replace(/\D/g, '');
+    const cleaned = phone.replace(/\D/g, '').slice(-10);
+    if (!cleaned) return null;
     for (const a of Object.values(this.store.artisans)) {
-      if (a.mobile.replace(/\D/g, '') === cleaned) return a;
+      if (a.mobile && a.mobile.replace(/\D/g, '').slice(-10) === cleaned) return a;
     }
     return null;
   }
@@ -278,19 +327,31 @@ class LocalStoreManager {
   }
 
   upsertArtisan(profile: Partial<ArtisanRecord> & { mobile: string; fullName: string }): ArtisanRecord {
-    const id = profile.id || `artisan_${profile.mobile.replace(/\D/g, '').slice(-10)}`;
+    const cleanMobile = profile.mobile ? profile.mobile.replace(/\D/g, '').slice(-10) : '';
+    const cleanEmail = profile.email ? profile.email.trim().toLowerCase() : null;
+
+    let existing: ArtisanRecord | undefined = undefined;
+    if (profile.id && this.store.artisans[profile.id]) {
+      existing = this.store.artisans[profile.id];
+    } else if (cleanEmail) {
+      existing = this.getArtisanByEmail(cleanEmail) || undefined;
+    }
+    if (!existing && cleanMobile) {
+      existing = this.getArtisanByPhone(cleanMobile) || undefined;
+    }
+
+    const id = existing?.id || profile.id || `artisan_${cleanMobile || Date.now()}`;
     const now = new Date().toISOString();
-    const existing = this.store.artisans[id];
 
     const record: ArtisanRecord = {
       id,
-      mobile: profile.mobile,
-      fullName: profile.fullName,
+      mobile: profile.mobile || existing?.mobile || '9876543210',
+      fullName: profile.fullName || existing?.fullName || 'Master Artisan',
       craft: profile.craft || existing?.craft || 'Traditional Handicrafts',
       state: profile.state || existing?.state || 'Uttar Pradesh',
       city: profile.city || existing?.city || 'Varanasi',
       gender: profile.gender || existing?.gender || 'other',
-      email: profile.email || existing?.email,
+      email: cleanEmail || existing?.email,
       language: profile.language || existing?.language || 'hi',
       trustScore: profile.trustScore ?? existing?.trustScore ?? 98,
       isVerified: profile.isVerified ?? existing?.isVerified ?? true,

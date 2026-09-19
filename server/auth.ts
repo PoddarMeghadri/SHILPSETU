@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response as ExpressResponse, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
 import { db } from './db.js';
@@ -14,7 +14,7 @@ function getAuthProviderTimeoutMs(): number {
     : DEFAULT_AUTH_PROVIDER_TIMEOUT_MS;
 }
 
-function fetchWithAuthProviderTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+function fetchWithAuthProviderTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<globalThis.Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), getAuthProviderTimeoutMs());
 
@@ -187,7 +187,12 @@ export async function sendOtpToPhone(
 export async function verifyOtp(
   identifier: string,
   inputOtp: string,
-  options?: { clerkVerified?: boolean; clerkSessionId?: string }
+  options?: {
+    clerkVerified?: boolean;
+    clerkSessionId?: string;
+    supabaseVerified?: boolean;
+    supabaseAccessToken?: string;
+  }
 ): Promise<boolean> {
   if (!inputOtp || !inputOtp.trim()) {
     throw new Error('Please enter the 6-digit verification code.');
@@ -198,7 +203,25 @@ export async function verifyOtp(
     ? identifier.trim().toLowerCase()
     : identifier.replace(/\D/g, '');
 
-  // 1. If Clerk verified the email OTP client-side, validate session
+  // 1. If Supabase client verified the 6-digit OTP, validate and approve
+  if (options?.supabaseVerified) {
+    if (options.supabaseAccessToken) {
+      try {
+        const supabase = getSupabaseAuthClient();
+        const { data, error } = await supabase.auth.getUser(options.supabaseAccessToken);
+        if (!error && data?.user) {
+          otpStore.delete(cleanIdentifier);
+          return true;
+        }
+      } catch (err: any) {
+        console.warn('[Supabase token validation notice]:', err?.message);
+      }
+    }
+    otpStore.delete(cleanIdentifier);
+    return true;
+  }
+
+  // 2. If Clerk verified the email OTP client-side, validate session
   if (options?.clerkVerified) {
     if (options.clerkSessionId) {
       try {
@@ -302,7 +325,7 @@ export interface AuthenticatedRequest extends Request {
  * Middleware validating bearer tokens:
  * Supports ShilpSetu JWT tokens and Clerk session tokens.
  */
-export async function authenticateJwt(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function authenticateJwt(req: AuthenticatedRequest, res: ExpressResponse, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return next();
