@@ -17,6 +17,14 @@ export interface ShilpiChatContext {
   artisan: ArtisanProfile;
   language: LanguageCode;
   products?: ProductItem[];
+  pricingInputs?: {
+    materialCost?: number;
+    laborHours?: number;
+    hourlyRate?: number;
+    heritagePremiumPercentage?: number;
+    marginPercentage?: number;
+    demandMultiplier?: number;
+  };
   isDark?: boolean;
 }
 
@@ -32,6 +40,7 @@ export function generateArtisanAIResponse(
   const artisanName = context.artisan.name.split(' ')[0] || 'Artisan';
   const craftName = context.artisan.craft.split('&')[0].trim();
   const isHindi = context.language === 'hi';
+  const pricing = context.pricingInputs || {};
 
   // 0. Stock & Inventory Queries (Direct check for low inventory)
   if (
@@ -88,6 +97,24 @@ export function generateArtisanAIResponse(
   }
 
   if (q.includes('price') || q.includes('pricing') || q.includes('dam') || q.includes('bhav') || q.includes('margin') || q.includes('cost') || q.includes('मूल्य') || q.includes('भाव') || q.includes('कीमत')) {
+    const materialCost = pricing.materialCost ?? 0;
+    const laborHours = pricing.laborHours ?? 0;
+    const hourlyRate = pricing.hourlyRate ?? 180;
+    const heritagePremium = pricing.heritagePremiumPercentage ?? 0;
+    const margin = pricing.marginPercentage ?? 20;
+    const laborCost = laborHours * hourlyRate;
+    const productionCost = materialCost + laborCost;
+    const premiumAmount = productionCost * (heritagePremium / 100);
+    const subtotal = productionCost + premiumAmount;
+    const suggestedPrice = Math.round(subtotal * (1 + margin / 100));
+    const hasInputs = materialCost > 0 && laborHours > 0;
+    const breakdown = hasInputs
+      ? isHindi
+        ? `\n\n**आपके दिए इनपुट का पारदर्शी हिसाब:**\n• सामग्री: ₹${materialCost.toLocaleString('en-IN')}\n• मेहनताना: ${laborHours} घंटे × ₹${hourlyRate} = ₹${laborCost.toLocaleString('en-IN')}\n• कारीगरी लागत: ₹${productionCost.toLocaleString('en-IN')}\n• विरासत प्रीमियम (${heritagePremium}%): ₹${Math.round(premiumAmount).toLocaleString('en-IN')}\n• लाभ मार्जिन (${margin}%): ₹${Math.round(subtotal * (margin / 100)).toLocaleString('en-IN')}\n• **सुझाया गया उचित मूल्य: ₹${suggestedPrice.toLocaleString('en-IN')}**`
+        : `\n\n**Transparent calculation using your inputs:**\n• Materials: ₹${materialCost.toLocaleString('en-IN')}\n• Labor: ${laborHours} hours × ₹${hourlyRate} = ₹${laborCost.toLocaleString('en-IN')}\n• Production cost: ₹${productionCost.toLocaleString('en-IN')}\n• Heritage/skill premium (${heritagePremium}%): ₹${Math.round(premiumAmount).toLocaleString('en-IN')}\n• Business margin (${margin}%): ₹${Math.round(subtotal * (margin / 100)).toLocaleString('en-IN')}\n• **Suggested fair price: ₹${suggestedPrice.toLocaleString('en-IN')}**`
+      : isHindi
+        ? `\n\nसटीक हिसाब के लिए सामग्री लागत, काम के घंटे, प्रति घंटे उचित मेहनताना और अपना मार्जिन बताइए।`
+        : `\n\nFor an exact breakdown, share material cost, crafting hours, a fair hourly rate, heritage premium (if justified), and your desired margin.`;
     return {
       reply: isHindi
         ? `शिल्पसेतु का **उचित मूल्य कैलकुलेटर** बिचौलियों के बिना वास्तविक शिल्प मूल्य तय करता है:\n\n` +
@@ -95,13 +122,13 @@ export function generateArtisanAIResponse(
           `• **कारीगरी समय**: घंटे × सम्मानजनक दैनिक मजदूरी (₹120-180/घंटा)\n` +
           `• **विरासत प्रीमियम**: 15-20% GI/कलात्मक विशिष्टता\n` +
           `• **उचित लाभ मार्जिन**: 20-25%\n\n` +
-          `कैलकुलेटर खोलें और अपने नए शिल्प का सटीक मूल्य निकालें।`
+          `कैलकुलेटर खोलें और अपने नए शिल्प का सटीक मूल्य निकालें।${breakdown}`
         : `ShilpSetu's **Fair Price Calculator** eliminates middlemen cuts and calculates true value:\n\n` +
           `• **Raw Materials**: Clay, glazes, fuel/firing\n` +
           `• **Artisan Labor**: Crafting hours × living wage (₹120–180/hr)\n` +
           `• **Heritage Premium**: 15–20% for GI/artisan uniqueness\n` +
           `• **Fair Margin**: 20–25% direct workshop profit\n\n` +
-          `Open the calculator to price your new creation accurately.`,
+          `Open the calculator to price your new creation accurately.${breakdown}`,
       suggestedAction: { label: 'Smart Fair Price Calculator', screen: 'pricing', icon: 'calculate' },
     };
   }
@@ -109,8 +136,8 @@ export function generateArtisanAIResponse(
   if (q.includes('gem') || q.includes('tender') || q.includes('bulk') || q.includes('b2b') || q.includes('order') || q.includes('सरकारी') || q.includes('टेंडर')) {
     return {
       reply: isHindi
-        ? `**GeM (Government e-Marketplace) और B2B पोर्टल** पर सीधे सरकारी विभागों और कॉर्पोरेट खरीदारों के ऑर्डर उपलब्ध हैं। शिल्पसेतु सत्यापित कारीगरों को 0% कमीशन पर सीधे टेंडर बिडिंग की सुविधा देता है।`
-        : `The **B2B & GeM Gateway** connects your ${craftName} workshop directly with verified government buyers and hotel chains with zero middlemen commission. Check active bulk RFQs right now!`,
+        ? `**GeM (Government e-Marketplace) और B2B पोर्टल** पर सरकारी विभागों, संस्थानों, होटल और कॉर्पोरेट खरीदारों की थोक आवश्यकताएँ मिल सकती हैं। बोली से पहले विक्रेता पात्रता, मात्रा, विनिर्देश, डिलीवरी और भुगतान की शर्तें आधिकारिक पोर्टल पर अवश्य जाँचें।`
+        : `The **B2B & GeM Gateway** helps you explore government, institutional, hospitality, and corporate bulk opportunities for your ${craftName}. Verify seller requirements, specifications, delivery, payment terms, and the live RFQ on the official portal before bidding.`,
       suggestedAction: { label: 'Open GeM & B2B Tenders', screen: 'b2b', icon: 'gavel' },
     };
   }
@@ -146,11 +173,11 @@ export function generateArtisanAIResponse(
   if (q.includes('gi tag') || q.includes('geographical indication') || q.includes('जीआई')) {
     return {
       reply:
-        `**Geographical Indication (GI) Tag Benefits for ${artisanName}:**\n\n` +
-        `1. **Legal Authenticity**: Protects your regional craft identity (like Bishnupur Terracotta or Banarasi Silk) from cheap plastic counterfeits.\n` +
-        `2. **Premium Pricing**: GI certified products command a **35–50% higher price** among institutional and export buyers.\n` +
-        `3. **Govt Subsidies**: Direct access to national exhibitions, Shilp Guru awards, and subsidized raw material quotas.\n\n` +
-        `Your ShilpSetu Trust Score (${context.artisan.trustScore}/100) automatically reflects verified regional craft provenance!`,
+        `**Geographical Indication (GI) guidance for ${artisanName}:**\n\n` +
+        `1. **Authenticity**: A GI identifies a craft's regional identity and can help buyers distinguish genuine work.\n` +
+        `2. **Buyer confidence**: Explain the verified region and technique in your listing; do not promise a fixed premium.\n` +
+        `3. **Eligibility**: Check the current official GI authority and scheme requirements before applying.\n\n` +
+        `Your ShilpSetu Trust Score (${context.artisan.trustScore ?? 98}/100) can support transparent provenance, but it is not a certification.`,
     };
   }
 
@@ -169,11 +196,28 @@ export function generateArtisanAIResponse(
   if (q.includes('caption') || q.includes('post') || q.includes('reel') || q.includes('hashtags')) {
     return {
       reply:
-        `**Ready-to-Post Instagram Caption for Your Craft:**\n\n` +
-        `"From raw earth to sacred form. Every curve of this ${craftName} carries 4 generations of unbroken devotion from ${context.artisan.location}. Zero middlemen, straight from my potter's wheel to your sanctuary. ✨\n\n` +
-        `🏺 DM or tap the link in bio to order authentic mastercraft.\n\n` +
-        `#HandmadeInIndia #VocalForLocal #ArtisanDirect #${craftName.replace(/\s+/g, '')} #ShilpSetu"`,
+        `**Ready-to-Post Instagram Caption Template:**\n\n` +
+        `"Handmade ${craftName} from ${context.artisan.location}. Made with [your material] using [your technique]. Each piece carries the maker's care and a story I can share with you. ✨\n\n` +
+        `Message me for dimensions, care details, availability, and a direct order. Replace the bracketed details with your own verified story.\n\n` +
+        `#HandmadeInIndia #ArtisanDirect #${craftName.replace(/\s+/g, '')} #ShilpSetu"`,
       suggestedAction: { label: 'Open Social Share Kit', screen: 'social', icon: 'share' },
+    };
+  }
+
+  if (
+    q.includes('weather') ||
+    q.includes('movie') ||
+    q.includes('recipe') ||
+    q.includes('cricket') ||
+    q.includes('politics') ||
+    q.includes('मौसम') ||
+    q.includes('फिल्म') ||
+    q.includes('खाना')
+  ) {
+    return {
+      reply: isHindi
+        ? `मैं इस विषय पर संक्षेप में मदद कर सकता हूँ। आपकी कार्यशाला पर लौटें तो मैं ${craftName} की उचित कीमत, GeM/B2B ऑर्डर, 4K कैटलॉग या विरासत कहानी में भी मदद करूँ?`
+        : `I can help briefly with that. Bringing it back to your workshop, would you like help with a fair ${craftName} price, GeM/B2B orders, a 4K catalog, or a truthful heritage story?`,
     };
   }
 
@@ -235,6 +279,7 @@ export async function sendShilpiChatMessage(
           location: context.artisan.location,
           trustScore: context.artisan.trustScore ?? 98,
         },
+        pricingInputs: context.pricingInputs,
       }),
     });
 

@@ -300,7 +300,7 @@ app.post('/api/tenders/:id/bid', authenticateJwt, (req: AuthenticatedRequest, re
 // Shilpi AI Chat
 app.post('/api/shilpi-chat', async (req, res) => {
   try {
-    const { message, history = [], language = 'en', artisanContext, products } = req.body;
+    const { message, history = [], language = 'en', artisanContext, products, pricingInputs } = req.body;
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Message is required' });
     }
@@ -311,6 +311,7 @@ app.post('/api/shilpi-chat', async (req, res) => {
       language,
       artisanContext,
       products,
+      pricingInputs,
     });
 
     // Save to chat history if artisanId is known
