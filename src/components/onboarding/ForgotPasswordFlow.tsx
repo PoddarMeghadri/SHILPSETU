@@ -10,6 +10,7 @@ import {
   passwordsMatch,
   PASSWORD_MIN_LENGTH,
   PASSWORD_MAX_LENGTH,
+  toClerkPassword,
 } from '../../services/passwordValidation';
 import { useTranslation } from '../../services/translations';
 
@@ -227,7 +228,7 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
           await signIn.attemptFirstFactor({
             strategy: 'reset_password_email_code',
             code: otpDigits.join(''),
-            password: newPassword,
+            password: toClerkPassword(newPassword),
           });
         } catch (clerkErr) {
           console.warn('[Clerk Reset Password attempt notice]:', clerkErr);

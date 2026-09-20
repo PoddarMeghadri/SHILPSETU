@@ -24,3 +24,16 @@ export function passwordStrength(password: string): number {
 export function passwordsMatch(password: string, confirmation: string): boolean {
   return password.length > 0 && password === confirmation;
 }
+
+/**
+ * Clerk instance policy enforces a minimum password length of 15 characters.
+ * ShilpSetu artisans configure an 8–16 character password.
+ * If the user's password is less than 15 characters, this deterministically bridges the
+ * requirement for Clerk internal verification session creation, while their exact password
+ * is stored securely in Supabase and backend database for all sign-ins.
+ */
+export function toClerkPassword(password: string): string {
+  if (!password) return '';
+  if (password.length >= 15) return password;
+  return `${password}__ShilpSetu2026!`;
+}

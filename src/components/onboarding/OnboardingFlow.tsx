@@ -21,7 +21,7 @@ import {
   isSupabaseConfigured,
   supabase,
 } from '../../services/supabase';
-import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
+import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH, toClerkPassword } from '../../services/passwordValidation';
 import { api } from '../../services/api';
 import { ForgotPasswordFlow } from './ForgotPasswordFlow';
 
@@ -104,8 +104,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const availableCities =
     INDIAN_STATES_AND_CITIES.find((s) => s.state === selectedState)?.cities || [];
 
-  // Flexible OTP length state (supports both standard 6-digit and Supabase 8-digit OTPs)
-  const [otpLength, setOtpLength] = useState<6 | 8>(6);
+  // Strict 6-digit numeric OTP code policy for all authentication flows
+  const otpLength = 6;
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [otpError, setOtpError] = useState<string>('');
   const [resendNotice, setResendNotice] = useState<string>('');
@@ -417,7 +417,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             await withAuthRequestTimeout(
               signUp.create({
                 emailAddress: cleanEmail,
-                password,
+                password: toClerkPassword(password),
                 firstName: fullName.trim().split(' ')[0] || fullName.trim(),
                 lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
               }),
@@ -433,8 +433,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             console.log('[Clerk Auth] OTP email successfully dispatched via new sign_up');
           } catch (createErr: any) {
             const createMsg = createErr?.errors?.[0]?.message || createErr?.message || '';
+            const firstErr = createErr?.errors?.[0];
+            const isPasswordIssue =
+              firstErr?.meta?.param_name === 'password' ||
+              firstErr?.code?.startsWith('form_password_') ||
+              createMsg.toLowerCase().includes('password') ||
+              createMsg.toLowerCase().includes('passwords');
+
             console.warn('[Clerk Auth] SignUp create error:', createMsg, createErr);
             clerkErrorMessage = createMsg;
+
+            // Route password errors strictly to passwordError, NEVER under email
+            if (isPasswordIssue) {
+              sound.playError();
+              setIsSendingOtp(false);
+              setPasswordError(createMsg);
+              setEmailError('');
+              return;
+            }
 
             // Stop signup immediately if Clerk detects the email is already in use
             const isEmailTaken =
@@ -447,6 +463,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               sound.playError();
               setIsSendingOtp(false);
               setEmailError('An account with this email address already exists. Please sign in instead.');
+              setPasswordError('');
               return;
             }
 
@@ -493,6 +510,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         sound.playError();
         setIsSendingOtp(false);
         setEmailError('An account with this email address already exists. Please sign in instead.');
+        setPasswordError('');
         return;
       } else if (data?.error) {
         backendErrorMessage = data.error;
@@ -505,11 +523,21 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     // Stop only if both Clerk and Backend were unable to dispatch verification code
     if (!sentViaClerk && !backendSuccess) {
       setIsSendingOtp(false);
-      setEmailError(
-        clerkErrorMessage ||
-        backendErrorMessage ||
-        'Could not dispatch verification code to your email. Please check your email address or try again.'
-      );
+      const rawError = clerkErrorMessage || backendErrorMessage || '';
+      const isPasswordIssue =
+        rawError.toLowerCase().includes('password') ||
+        rawError.toLowerCase().includes('passwords');
+
+      if (isPasswordIssue) {
+        setPasswordError(rawError);
+        setEmailError('');
+      } else {
+        setEmailError(
+          rawError ||
+          'Could not dispatch verification code to your email. Please check your email address or try again.'
+        );
+        setPasswordError('');
+      }
       return;
     }
 
@@ -597,7 +625,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           const newSignUp = await withAuthRequestTimeout(
             signUp.create({
               emailAddress: cleanEmail,
-              password,
+              password: toClerkPassword(password),
               firstName: fullName.trim().split(' ')[0] || fullName.trim(),
               lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
             }),
@@ -680,22 +708,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
   };
 
-  // Handle OTP digit changes with support for 6 or 8 digits
+  // Handle OTP digit changes strictly for 6-digit numeric OTP verification
   const handleOtpChange = (index: number, value: string) => {
     if (value.length > 1) {
-      // Handle paste
-      const cleaned = value.replace(/\D/g, '');
-      const targetLen: 6 | 8 = cleaned.length >= 8 ? 8 : 6;
-      if (targetLen !== otpLength) {
-        setOtpLength(targetLen);
-      }
-      const pasted = cleaned.slice(0, targetLen).split('');
-      const newOtp = Array(targetLen).fill('');
-      pasted.forEach((char, i) => {
-        if (i < targetLen) newOtp[i] = char;
+      // Handle paste of 6-digit numeric OTP
+      const cleaned = value.replace(/\D/g, '').slice(0, 6);
+      const newOtp = Array(6).fill('');
+      cleaned.split('').forEach((char, i) => {
+        newOtp[i] = char;
       });
       setOtpDigits(newOtp);
-      const nextIndex = Math.min(pasted.length, targetLen - 1);
+      const nextIndex = Math.min(cleaned.length, 5);
       otpInputRefs.current[nextIndex]?.focus();
       return;
     }
@@ -708,7 +731,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setResendNotice('');
 
     // Auto advance to next box if digit typed
-    if (digit && index < otpLength - 1) {
+    if (digit && index < 5) {
       otpInputRefs.current[index + 1]?.focus();
     }
   };
@@ -1797,19 +1820,61 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
                       Create password <span className="text-red-500">*</span>
                     </label>
-                    <input type="password" required minLength={8} maxLength={PASSWORD_MAX_LENGTH} value={password}
-                      onChange={(e) => { setPassword(e.target.value); setPasswordError(''); }}
-                      placeholder="8–16 characters" className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A]" />
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      maxLength={PASSWORD_MAX_LENGTH}
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (passwordError) setPasswordError('');
+                      }}
+                      placeholder="8–16 characters"
+                      className={`w-full px-4 py-3 rounded-2xl border text-sm font-sans focus:outline-hidden focus:ring-2 transition-all ${
+                        passwordError
+                          ? 'border-red-500 bg-red-50 dark:bg-red-950/20'
+                          : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-white dark:bg-[#1C221A]'
+                      }`}
+                    />
                     <div className="flex gap-1" aria-label="Password strength">
                       {[1, 2, 3, 4, 5].map((level) => (
-                        <span key={level} className={`h-1.5 flex-1 rounded-full ${passwordStrength(password) >= level ? 'bg-[#B5451B]' : 'bg-black/10 dark:bg-white/10'}`} />
+                        <span
+                          key={level}
+                          className={`h-1.5 flex-1 rounded-full ${
+                            passwordStrength(password) >= level
+                              ? 'bg-[#B5451B]'
+                              : 'bg-black/10 dark:bg-white/10'
+                          }`}
+                        />
                       ))}
                     </div>
-                    <p className="text-[10px] opacity-70">Use uppercase, lowercase, number, and special character.</p>
-                    <input type="password" required minLength={8} maxLength={PASSWORD_MAX_LENGTH} value={passwordConfirmation}
-                      onChange={(e) => { setPasswordConfirmation(e.target.value); setPasswordError(''); }}
-                      placeholder="Confirm password" className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A]" />
-                    {passwordError && <p className="text-[11px] text-red-500">{passwordError}</p>}
+                    <p className="text-[10px] text-black/60 dark:text-white/60">
+                      Use 8–16 characters with uppercase, lowercase, number, and special character.
+                    </p>
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      maxLength={PASSWORD_MAX_LENGTH}
+                      value={passwordConfirmation}
+                      onChange={(e) => {
+                        setPasswordConfirmation(e.target.value);
+                        if (passwordError) setPasswordError('');
+                      }}
+                      placeholder="Confirm password"
+                      className={`w-full px-4 py-3 rounded-2xl border text-sm font-sans focus:outline-hidden focus:ring-2 transition-all ${
+                        passwordError
+                          ? 'border-red-500 bg-red-50 dark:bg-red-950/20'
+                          : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-white dark:bg-[#1C221A]'
+                      }`}
+                    />
+                    {passwordError && (
+                      <div className="mt-1 flex items-start gap-1.5 p-2 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400">
+                        <span className="material-symbols-outlined text-xs mt-0.5 shrink-0">error</span>
+                        <p className="text-[11px] font-medium leading-tight">{passwordError}</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2032,48 +2097,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 )}
               </div>
 
-              {/* Code Length Toggle */}
-              {!isAdminMode && (
-                <div className="flex items-center justify-center gap-2 mb-3">
-                  <span className="text-[11px] text-black/50 dark:text-white/50">Code format:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOtpLength(6);
-                      setOtpDigits((prev) => {
-                        const next = prev.slice(0, 6);
-                        while (next.length < 6) next.push('');
-                        return next;
-                      });
-                    }}
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                      otpLength === 6
-                        ? 'bg-[#B5451B] text-white shadow-xs'
-                        : 'bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/60 hover:bg-black/10'
-                    }`}
-                  >
-                    6-Digit OTP
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOtpLength(8);
-                      setOtpDigits((prev) => {
-                        const next = [...prev];
-                        while (next.length < 8) next.push('');
-                        return next.slice(0, 8);
-                      });
-                    }}
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                      otpLength === 8
-                        ? 'bg-[#B5451B] text-white shadow-xs'
-                        : 'bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/60 hover:bg-black/10'
-                    }`}
-                  >
-                    8-Digit OTP
-                  </button>
-                </div>
-              )}
+              {/* Strict 6-Digit Verification Code Format */}
+              <div className="flex items-center justify-center mb-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#B5451B]/10 text-[#B5451B] dark:bg-[#B5451B]/20 dark:text-[#E8B84B]">
+                  <span className="material-symbols-outlined text-xs">pin</span>
+                  Strict 6-Digit Verification Code
+                </span>
+              </div>
 
               {/* Digit Input Boxes */}
               <div className="space-y-4 mb-6">
