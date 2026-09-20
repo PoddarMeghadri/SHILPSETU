@@ -26,7 +26,7 @@ export interface OnboardingUserData {
   state: string;
   city: string;
   mobile: string;
-  email: string;
+  email?: string;
   password?: string;
   selectedCraft: string;
   selectedLanguage?: LanguageCode;
