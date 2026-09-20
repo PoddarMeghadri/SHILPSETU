@@ -24,7 +24,7 @@ import { sound } from './services/sound';
 import { useLanguage } from './context/LanguageContext';
 import { useAdminMode } from './context/AdminModeContext';
 import { api } from './services/api';
-import { upsertSupabaseProfile } from './services/supabase';
+import { upsertSupabaseProfile, isSupabaseConfigured, supabase } from './services/supabase';
 
 export function App() {
   const { language, setLanguage } = useLanguage();
@@ -145,6 +145,65 @@ export function App() {
     }).catch(console.warn);
   }, []);
 
+  // Check active Supabase session for seamless cross-environment auth recovery
+  useEffect(() => {
+    if (isSupabaseConfigured()) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          setHasCompletedOnboarding(true);
+          localStorage.setItem('shilpsetu_auth_done', 'true');
+          if (session.access_token) {
+            localStorage.setItem('shilpsetu_token', session.access_token);
+          }
+          // Also fetch profile from Supabase profiles table
+          Promise.resolve(
+            supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle()
+          )
+            .then(({ data: prof }) => {
+              if (prof) {
+                setArtisan((prev) => {
+                  const rawLoc = prof.location || '';
+                  const state = rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : prev.state;
+                  const city = rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : prev.city;
+                  const merged = {
+                    ...prev,
+                    name: prof.full_name || prev.name,
+                    email: prof.email || prev.email,
+                    mobile: prof.mobile_number || prev.mobile,
+                    craft: prof.craft_specialty || prev.craft,
+                    location: prof.location || prev.location,
+                    state: state || prev.state,
+                    city: city || prev.city,
+                  };
+                  localStorage.setItem('shilpsetu_artisan', JSON.stringify(merged));
+                  return merged;
+                });
+              }
+            })
+            .catch(() => {});
+        }
+      }).catch(console.warn);
+
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          setHasCompletedOnboarding(true);
+          localStorage.setItem('shilpsetu_auth_done', 'true');
+          if (session.access_token) {
+            localStorage.setItem('shilpsetu_token', session.access_token);
+          }
+        }
+      });
+
+      return () => {
+        authListener?.subscription?.unsubscribe();
+      };
+    }
+  }, []);
+
   // Persist theme changes
   const handleToggleTheme = () => {
     setIsDark((prev) => {
@@ -263,6 +322,9 @@ export function App() {
     sound.playTap();
     localStorage.removeItem('shilpsetu_auth_done');
     localStorage.removeItem('shilpsetu_token');
+    if (isSupabaseConfigured()) {
+      supabase.auth.signOut().catch(() => {});
+    }
     if (isAdminMode) {
       exitAdminMode();
     }

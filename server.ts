@@ -13,6 +13,9 @@ import {
   isValidEmail,
   hashPassword,
   verifyPassword,
+  validatePasswordRules,
+  generatePasswordResetToken,
+  verifyPasswordResetToken,
 } from './server/auth.js';
 import {
   generateShilpiReply,
@@ -182,6 +185,128 @@ app.post('/api/auth/send-otp', async (req, res) => {
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to send verification code' });
+  }
+});
+
+// Forgot Password - Step 1: Send 6-digit OTP strictly to registered email
+app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please provide a valid registered email address.' });
+    }
+
+    const artisan = db.getArtisanByEmail(email);
+    if (!artisan) {
+      return res.status(404).json({
+        error: 'No account found with this email address. Please check your email or sign up.',
+        code: 'ACCOUNT_NOT_FOUND',
+      });
+    }
+
+    const result = await sendOtpToEmail(email, artisan.mobile, { shouldCreateUser: false });
+    res.json({
+      success: true,
+      message: `A 6-digit verification code has been strictly sent to ${email}.`,
+      cooldownSeconds: result.cooldownSeconds || 30,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to send verification code.' });
+  }
+});
+
+// Forgot Password - Step 2: Strictly verify 6-digit OTP
+app.post('/api/auth/forgot-password/verify-otp', async (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const otp = typeof req.body.otp === 'string' ? req.body.otp.trim() : '';
+    const { clerkVerified, clerkSessionId, supabaseVerified, supabaseAccessToken } = req.body;
+
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Valid email address is required.' });
+    }
+
+    if (!otp || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: 'Please enter the exact 6-digit verification code sent to your email.' });
+    }
+
+    const artisan = db.getArtisanByEmail(email);
+    if (!artisan) {
+      return res.status(404).json({ error: 'No account found with this email address.' });
+    }
+
+    const isValid = await verifyOtp(email, otp, {
+      clerkVerified,
+      clerkSessionId,
+      supabaseVerified,
+      supabaseAccessToken,
+    });
+
+    if (!isValid) {
+      return res.status(400).json({ error: 'Invalid verification code. Please enter the OTP sent to your email.' });
+    }
+
+    const resetToken = generatePasswordResetToken(email);
+    res.json({
+      success: true,
+      message: 'Email verification confirmed.',
+      resetToken,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Verification failed.' });
+  }
+});
+
+// Forgot Password - Step 3: Set new password and confirm it (with same password conditions)
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
+    const resetToken = typeof req.body.resetToken === 'string' ? req.body.resetToken.trim() : '';
+    const otp = typeof req.body.otp === 'string' ? req.body.otp.trim() : '';
+
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Valid email address is required.' });
+    }
+
+    // Verify authentication via resetToken OR 6-digit OTP
+    let isAuthorized = false;
+    if (resetToken && verifyPasswordResetToken(resetToken, email)) {
+      isAuthorized = true;
+    } else if (otp && /^\d{6}$/.test(otp)) {
+      isAuthorized = await verifyOtp(email, otp);
+    }
+
+    if (!isAuthorized) {
+      return res.status(401).json({
+        error: 'Your verification session has expired or is invalid. Please verify your OTP code again.',
+      });
+    }
+
+    // Strictly enforce identical password rules
+    const passwordError = validatePasswordRules(newPassword);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+
+    const artisan = db.getArtisanByEmail(email);
+    if (!artisan) {
+      return res.status(404).json({ error: 'Account not found.' });
+    }
+
+    const newHash = hashPassword(newPassword);
+    const updated = db.updateArtisanPassword(email, newHash);
+
+    if (!updated) {
+      return res.status(500).json({ error: 'Failed to update account password. Please try again.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully. You can now sign in with your new password.',
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to reset password.' });
   }
 });
 

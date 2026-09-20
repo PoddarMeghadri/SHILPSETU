@@ -368,6 +368,17 @@ class LocalStoreManager {
     return record;
   }
 
+  updateArtisanPassword(email: string, passwordHash: string): boolean {
+    const cleanEmail = email.trim().toLowerCase();
+    const artisan = this.getArtisanByEmail(cleanEmail);
+    if (!artisan) return false;
+    artisan.passwordHash = passwordHash;
+    artisan.updatedAt = new Date().toISOString();
+    this.store.artisans[artisan.id] = artisan;
+    this.save(this.store);
+    return true;
+  }
+
   // Products operations
   getProducts(artisanId?: string): ProductRecord[] {
     const list = Object.values(this.store.products);
@@ -519,6 +530,7 @@ export const db = {
   getArtisanByEmail: (email: string) => localStore.getArtisanByEmail(email),
   getArtisanById: (id: string) => localStore.getArtisanById(id),
   upsertArtisan: (profile: any) => localStore.upsertArtisan(profile),
+  updateArtisanPassword: (email: string, passwordHash: string) => localStore.updateArtisanPassword(email, passwordHash),
   getProducts: (artisanId?: string) => localStore.getProducts(artisanId),
   createProduct: (product: any) => localStore.createProduct(product),
   updateProduct: (id: string, updates: any) => localStore.updateProduct(id, updates),

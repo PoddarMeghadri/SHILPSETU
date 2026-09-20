@@ -89,6 +89,41 @@ export function verifyPassword(password: string, storedHash?: string): boolean {
   }
 }
 
+export function validatePasswordRules(password: string): string | null {
+  if (!password || typeof password !== 'string') return 'Password is required.';
+  if (password.length < 8) return 'Password must be at least 8 characters.';
+  if (password.length > 16) return 'Password must be no more than 16 characters.';
+  if (!/[A-Z]/.test(password)) return 'Password must include an uppercase letter.';
+  if (!/[a-z]/.test(password)) return 'Password must include a lowercase letter.';
+  if (!/\d/.test(password)) return 'Password must include a number.';
+  if (!/[^A-Za-z0-9]/.test(password)) return 'Password must include a special character.';
+  return null;
+}
+
+export function generatePasswordResetToken(email: string): string {
+  return jwt.sign(
+    {
+      email: email.trim().toLowerCase(),
+      purpose: 'password_reset',
+    },
+    JWT_SECRET,
+    { expiresIn: '15m' }
+  );
+}
+
+export function verifyPasswordResetToken(token: string, expectedEmail: string): boolean {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    return Boolean(
+      decoded &&
+      decoded.purpose === 'password_reset' &&
+      decoded.email === expectedEmail.trim().toLowerCase()
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Dispatches a real email OTP to the provided email address using Supabase Auth mailer
  * and Clerk, while recording local fallback state.
@@ -141,23 +176,9 @@ export async function sendOtpToEmail(
     }
   }
 
-  // Also trigger Supabase Auth OTP mailer if Supabase credentials are functional
-  try {
-    const supabase = getSupabaseAuthClient();
-    const { error: supaErr } = await supabase.auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        shouldCreateUser: options.shouldCreateUser !== false,
-      },
-    });
-    if (supaErr) {
-      console.warn('[Supabase Auth OTP Notice]:', supaErr.message);
-    } else {
-      console.log('[Supabase Auth] Email OTP successfully requested for:', normalizedEmail);
-    }
-  } catch (supaErr: any) {
-    console.warn('[Supabase Auth Dispatch Notice]:', supaErr?.message);
-  }
+  // Note: We strictly generate and verify 6-digit numeric OTP codes.
+  // Never trigger Supabase signInWithOtp or magiclink templates, as they send login links instead of 6-digit OTPs.
+  console.log('[Auth Service] Generated 6-digit verification code for:', normalizedEmail);
 
   return {
     success: true,

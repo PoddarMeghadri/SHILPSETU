@@ -10,9 +10,20 @@ import { useAdminMode } from '../../context/AdminModeContext';
 import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { CRAFT_OPTIONS, getLocalizedCraftName, getEnterWorkshopLabel } from '../../data/crafts';
 import { fetchAuthRequest, withAuthRequestTimeout } from '../../services/authRequest';
-import { sendSupabaseOtp, verifySupabaseOtp, upsertSupabaseProfile, getSupabase, signInSupabaseWithEmailOrMobile } from '../../services/supabase';
+import {
+  sendSupabaseOtp,
+  verifySupabaseOtp,
+  upsertSupabaseProfile,
+  getSupabase,
+  signInSupabaseWithEmailOrMobile,
+  signUpWithSupabase,
+  updateSupabasePassword,
+  isSupabaseConfigured,
+  supabase,
+} from '../../services/supabase';
 import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
 import { api } from '../../services/api';
+import { ForgotPasswordFlow } from './ForgotPasswordFlow';
 
 export interface OnboardingUserData {
   fullName: string;
@@ -85,7 +96,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [passwordError, setPasswordError] = useState<string>('');
 
   // Clerk Auth Flow & Cooldown State
-  const [authFlowMode, setAuthFlowMode] = useState<'sign_up' | 'sign_in' | 'backend'>('sign_up');
+  const [authFlowMode, setAuthFlowMode] = useState<'sign_up' | 'sign_in' | 'forgot_password' | 'backend'>('sign_up');
   const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
   const [resendCooldown, setResendCooldown] = useState<number>(0);
 
@@ -165,46 +176,91 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setIsSendingOtp(true);
       setSignInError('');
       try {
-        // 1. Attempt Supabase direct sign-in if client exists
+        // 1. Attempt Supabase direct sign-in with email or mobile
         let supabaseSuccess = false;
         let supabaseUser: any = null;
+        let supabaseProfile: any = null;
         try {
           const sbResult = await signInSupabaseWithEmailOrMobile(identifier, signInPassword);
           if (sbResult.signedIn) {
             supabaseSuccess = true;
             supabaseUser = sbResult.user;
+            supabaseProfile = sbResult.profile;
+          } else if (sbResult.isEmailNotConfirmed) {
+            sound.playError();
+            setSignInError(sbResult.error || 'Your email is not yet confirmed. Please verify the code sent to your email.');
+            setIsSendingOtp(false);
+            return;
           }
         } catch (sbErr) {
           console.warn('[Supabase Sign In Notice]:', sbErr);
         }
 
-        // 2. Authenticate with backend /api/auth/login directly (no OTP required)
-        const res = await fetchAuthRequest('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier, password: signInPassword }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok && !supabaseSuccess) {
-          throw new Error(data.error || 'The email/mobile number or password is incorrect.');
+        // 2. Authenticate with backend /api/auth/login directly
+        let backendSuccess = false;
+        let backendData: any = {};
+        try {
+          const res = await fetchAuthRequest('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier, password: signInPassword }),
+          });
+          backendData = await res.json().catch(() => ({}));
+          if (res.ok) {
+            backendSuccess = true;
+          }
+        } catch (beErr) {
+          console.warn('[Backend Login Notice]:', beErr);
+        }
+
+        if (!backendSuccess && !supabaseSuccess) {
+          throw new Error(backendData.error || 'The email/mobile number or password is incorrect.');
         }
 
         // Successful direct sign-in! No OTP step needed.
         sound.playSuccess();
-        if (data.token) {
-          localStorage.setItem('shilpsetu_token', data.token);
-        }
+        const activeToken = backendData.token || (supabaseUser ? `supa_${supabaseUser.id}` : `artisan_auth_${Date.now()}`);
+        localStorage.setItem('shilpsetu_token', activeToken);
+        localStorage.setItem('shilpsetu_auth_done', 'true');
 
-        const loggedIn = data.artisan || {};
-        const artisanName = loggedIn.fullName || loggedIn.name || supabaseUser?.user_metadata?.full_name || 'Master Artisan';
-        const artisanEmail = loggedIn.email || (identifier.includes('@') ? identifier : supabaseUser?.email) || '';
-        const artisanMobile = loggedIn.mobile || (!identifier.includes('@') ? identifier : '') || '';
-        const artisanState = loggedIn.state || 'Uttar Pradesh';
-        const artisanCity = loggedIn.city || 'Varanasi';
-        const storedCraft = String(loggedIn.craft || 'pottery').toLowerCase();
-        const craftId = CRAFT_OPTIONS.find((c) =>
-          storedCraft.includes(c.name.toLowerCase().split(' ')[0]) || storedCraft.includes(c.id.toLowerCase())
-        )?.id || 'pottery';
+        const loggedIn = backendData.artisan || {};
+        const artisanName =
+          supabaseProfile?.full_name ||
+          loggedIn.fullName ||
+          loggedIn.name ||
+          supabaseUser?.user_metadata?.full_name ||
+          'Master Artisan';
+        const artisanEmail =
+          supabaseProfile?.email ||
+          loggedIn.email ||
+          (identifier.includes('@') ? identifier : supabaseUser?.email) ||
+          '';
+        const artisanMobile =
+          supabaseProfile?.mobile_number ||
+          loggedIn.mobile ||
+          (!identifier.includes('@') ? identifier : '') ||
+          '';
+        const rawLocation = supabaseProfile?.location || '';
+        const artisanState =
+          (rawLocation.includes(',') ? rawLocation.split(',')[1].trim() : '') ||
+          loggedIn.state ||
+          'Uttar Pradesh';
+        const artisanCity =
+          (rawLocation.includes(',') ? rawLocation.split(',')[0].trim() : rawLocation) ||
+          loggedIn.city ||
+          'Varanasi';
+        const storedCraft = String(
+          supabaseProfile?.desired_workshop ||
+          supabaseProfile?.craft_specialty ||
+          loggedIn.craft ||
+          'pottery'
+        ).toLowerCase();
+        const craftId =
+          CRAFT_OPTIONS.find(
+            (c) =>
+              storedCraft.includes(c.name.toLowerCase().split(' ')[0]) ||
+              storedCraft.includes(c.id.toLowerCase())
+          )?.id || 'pottery';
 
         setFullName(artisanName);
         setEmail(artisanEmail);
@@ -324,11 +380,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
     let sentViaClerk = false;
     let clerkErrorMessage = '';
-    const supabaseOtp = await sendSupabaseOtp(cleanEmail);
-    const sentViaSupabase = supabaseOtp.sent;
 
-    // 1. Clerk Email Verification Flow (Dispatches the 6-digit OTP verification code)
-    if (!sentViaSupabase && isSignUpLoaded && signUp) {
+    // 1. Clerk Email Verification Flow: Strictly dispatches 6-digit numeric OTP verification code.
+    // Note: Never call Supabase auth.signUp or auth.signInWithOtp during OTP dispatch,
+    // as Supabase's default mailer sends magic links / login links instead of 6-digit OTPs.
+    if (isSignUpLoaded && signUp) {
       try {
         console.log('[Clerk Auth] Current signUp status:', signUp.status, 'email:', signUp.emailAddress);
 
@@ -447,10 +503,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
 
     // Stop only if both Clerk and Backend were unable to dispatch verification code
-    if (!sentViaClerk && !backendSuccess && !sentViaSupabase) {
+    if (!sentViaClerk && !backendSuccess) {
       setIsSendingOtp(false);
       setEmailError(
-        clerkErrorMessage || supabaseOtp.error ||
+        clerkErrorMessage ||
         backendErrorMessage ||
         'Could not dispatch verification code to your email. Please check your email address or try again.'
       );
@@ -710,11 +766,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     // 1. Verify 6-digit code with Supabase Auth
     let supabaseSuccess = false;
     let supabaseAccessToken = '';
+    let supabaseUserId = '';
     try {
       const supabaseVerification = await verifySupabaseOtp(cleanEmail, fullOtp);
       if (supabaseVerification.verified) {
         supabaseSuccess = true;
         supabaseAccessToken = supabaseVerification.session?.access_token || '';
+        supabaseUserId = supabaseVerification.session?.user?.id || supabaseVerification.user?.id || '';
       }
     } catch (sbErr: any) {
       console.warn('[Supabase client verification check]:', sbErr);
@@ -723,6 +781,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     if (supabaseSuccess) {
       const supaToken = supabaseAccessToken || `artisan_supa_${Date.now()}`;
       localStorage.setItem('shilpsetu_token', supaToken);
+      localStorage.setItem('shilpsetu_auth_done', 'true');
+
+      // Ensure Supabase password is synchronized
+      if (password) {
+        try {
+          await updateSupabasePassword(password);
+        } catch (_) {}
+      }
 
       // Non-blocking backend registration with supabaseVerified flag
       try {
@@ -767,6 +833,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
       try {
         await upsertSupabaseProfile({
+          userId: supabaseUserId || undefined,
           fullName: fullName.trim() || 'Master Artisan',
           email: cleanEmail,
           mobileNumber: cleanMobile,
@@ -1202,7 +1269,23 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B] focus:outline-hidden focus:ring-2 focus:ring-[#B5451B]/30" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] mb-1.5">Password</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
+                      Password
+                    </label>
+                    <button
+                      type="button"
+                      id="signin-forgot-password-link"
+                      onClick={() => {
+                        sound.playTap();
+                        setAuthFlowMode('forgot_password');
+                        setSignInError('');
+                      }}
+                      className="text-[11px] text-[#B5451B] dark:text-[#E8B84B] font-semibold hover:underline cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
                   <input type="password" required value={signInPassword}
                     onChange={(e) => { setSignInPassword(e.target.value); setSignInError(''); }}
                     placeholder="Enter your password"
@@ -1243,8 +1326,36 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           </motion.div>
         )}
 
+        {/* FORGOT PASSWORD FLOW (STRICT 6-DIGIT OTP + NEW PASSWORD CONFIRMATION) */}
+        {authFlowMode === 'forgot_password' && (
+          <motion.div
+            key="forgot-password-screen"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ duration: 0.3 }}
+            className="w-full"
+          >
+            <ForgotPasswordFlow
+              isDark={isDark}
+              initialEmail={signInIdentifier.includes('@') ? signInIdentifier.trim() : email}
+              onSuccess={(recoveredEmail) => {
+                setSignInIdentifier(recoveredEmail);
+                setSignInPassword('');
+                setAuthFlowMode('sign_in');
+                setCurrentStep(1);
+              }}
+              onCancel={() => {
+                setAuthFlowMode('sign_in');
+                setCurrentStep(1);
+              }}
+              onToggleTheme={() => handleSelectTheme(isDark ? 'light' : 'dark')}
+            />
+          </motion.div>
+        )}
+
         {/* STEP 1: PERSONAL DETAILS (FULL NAME*, MOBILE NUMBER*, EMAIL ADDRESS) */}
-        {currentStep === 1 && authFlowMode !== 'sign_in' && (
+        {currentStep === 1 && authFlowMode === 'sign_up' && (
           <motion.div
             key="details-screen"
             initial={{ opacity: 0, x: 50 }}

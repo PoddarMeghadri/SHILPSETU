@@ -16,46 +16,152 @@ export function normalizeSupabaseUrl(rawUrl?: string): string {
   }
 }
 
-const env = (import.meta as any).env || {};
-const supabaseUrl = normalizeSupabaseUrl(env.VITE_SUPABASE_URL || env.SUPABASE_URL || '');
-const supabaseAnonKey = (env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || '') as string;
+// 1. Audit & Enforce Supabase Client Initialization
+const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL || '';
+const rawSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY || '';
 
-let supabaseClient: SupabaseClient | null = null;
+const supabaseUrl = normalizeSupabaseUrl(rawSupabaseUrl);
+const supabaseAnonKey = (rawSupabaseAnonKey || '').trim();
 
-/**
- * Lazy initialization of Supabase client in the browser.
- * Only instantiated if environment variables are supplied.
- */
-export function getSupabase(): SupabaseClient | null {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return null;
-  }
-  if (!supabaseClient) {
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-  }
-  return supabaseClient;
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Critical: Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in current environment!');
 }
 
-export async function sendSupabaseOtp(email: string, shouldCreateUser = true) {
-  const client = getSupabase();
-  if (!client) return { sent: false, error: 'Supabase is not configured' };
-  const { error } = await client.auth.signInWithOtp({
-    email: email.trim().toLowerCase(),
-    options: {
-      shouldCreateUser,
-    },
-  });
-  return { sent: !error, error: error?.message };
+/**
+ * Singleton Supabase client configured with cross-origin persistent localStorage session storage
+ */
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  },
+});
+
+export function isSupabaseConfigured(): boolean {
+  return Boolean(supabaseUrl && supabaseAnonKey);
+}
+
+/**
+ * Lazy / accessor method for Supabase client
+ */
+export function getSupabase(): SupabaseClient | null {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+  return supabase;
+}
+
+/**
+ * Real Supabase Auth signUp with password and user metadata
+ */
+export async function signUpWithSupabase({
+  email,
+  password,
+  fullName,
+  mobile,
+  craft,
+  state,
+  city,
+  language,
+}: {
+  email: string;
+  password?: string;
+  fullName: string;
+  mobile?: string;
+  craft?: string;
+  state?: string;
+  city?: string;
+  language?: string;
+}): Promise<{
+  success: boolean;
+  user?: any;
+  session?: any;
+  error?: string;
+  isAlreadyRegistered?: boolean;
+}> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase is not configured' };
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanMobile = mobile?.replace(/\D/g, '') || '';
+
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password: password || 'ShilpSetu@2026',
+      options: {
+        data: {
+          full_name: fullName.trim(),
+          mobile_number: cleanMobile,
+          craft_specialty: craft || 'Terracotta Pottery',
+          state: state || 'Uttar Pradesh',
+          city: city || 'Varanasi',
+          preferred_language: language || 'hi',
+        },
+      },
+    });
+
+    if (error) {
+      const errMsg = error.message.toLowerCase();
+      const isAlready =
+        errMsg.includes('already registered') ||
+        errMsg.includes('already exists') ||
+        errMsg.includes('user already exists');
+
+      return {
+        success: false,
+        error: error.message,
+        isAlreadyRegistered: isAlready,
+      };
+    }
+
+    // Auto-upsert profile if user id is returned immediately
+    if (data.user?.id) {
+      await upsertSupabaseProfile({
+        userId: data.user.id,
+        fullName: fullName.trim(),
+        email: cleanEmail,
+        mobileNumber: cleanMobile,
+        preferredLanguage: language || 'hi',
+        desiredWorkshop: craft || 'pottery',
+        location: `${city || 'Varanasi'}, ${state || 'Uttar Pradesh'}`,
+        craftSpecialty: craft || 'Terracotta Pottery',
+      }).catch(console.warn);
+    }
+
+    return {
+      success: true,
+      user: data.user,
+      session: data.session,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'Supabase signup failed',
+    };
+  }
+}
+
+/**
+ * Client-side OTP / magiclink email triggers are disabled because Supabase Auth
+ * sends hyperlink login buttons (magic links) rather than 6-digit numeric OTPs.
+ * All email verification codes are strictly delivered as 6-digit numeric OTPs via Clerk.
+ */
+export async function sendSupabaseOtp(_email: string, _shouldCreateUser = true) {
+  // Intentionally disabled to prevent sending login links
+  return { sent: false, error: 'Strict OTP mode enforced: Login links are disabled' };
 }
 
 export async function verifySupabaseOtp(email: string, token: string) {
-  const client = getSupabase();
-  if (!client) return { verified: false, error: 'Supabase is not configured' };
+  if (!isSupabaseConfigured()) return { verified: false, error: 'Supabase is not configured' };
   const cleanEmail = email.trim().toLowerCase();
   const cleanToken = token.trim();
 
   // Try 'signup' OTP type first (used when user registers / signs up)
-  let { data, error } = await client.auth.verifyOtp({
+  let { data, error } = await supabase.auth.verifyOtp({
     email: cleanEmail,
     token: cleanToken,
     type: 'signup',
@@ -63,26 +169,13 @@ export async function verifySupabaseOtp(email: string, token: string) {
 
   // Fallback to standard 'email' OTP type (used for signInWithOtp)
   if (error || (!data?.session && !data?.user)) {
-    const emailAttempt = await client.auth.verifyOtp({
+    const emailAttempt = await supabase.auth.verifyOtp({
       email: cleanEmail,
       token: cleanToken,
       type: 'email',
     });
     if (!emailAttempt.error && (emailAttempt.data?.session || emailAttempt.data?.user)) {
       data = emailAttempt.data;
-      error = null;
-    }
-  }
-
-  // Fallback to 'magiclink' OTP type
-  if (error || (!data?.session && !data?.user)) {
-    const magiclinkAttempt = await client.auth.verifyOtp({
-      email: cleanEmail,
-      token: cleanToken,
-      type: 'magiclink',
-    });
-    if (!magiclinkAttempt.error && (magiclinkAttempt.data?.session || magiclinkAttempt.data?.user)) {
-      data = magiclinkAttempt.data;
       error = null;
     }
   }
@@ -95,11 +188,9 @@ export async function verifySupabaseOtp(email: string, token: string) {
   };
 }
 
-export async function sendSupabasePasswordReset(email: string) {
-  const client = getSupabase();
-  if (!client) return { sent: false, error: 'Supabase is not configured' };
-  const { error } = await client.auth.resetPasswordForEmail(email.trim().toLowerCase());
-  return { sent: !error, error: error?.message };
+export async function sendSupabasePasswordReset(_email: string) {
+  // Intentionally disabled to prevent sending login/reset links
+  return { sent: false, error: 'Strict OTP mode enforced: Reset links are disabled' };
 }
 
 let isProfilesTableMissing = false;
@@ -118,18 +209,18 @@ function isTableMissingError(err: any): boolean {
 }
 
 export async function upsertSupabaseProfile(profile: {
+  userId?: string;
   fullName: string;
   email?: string;
   mobileNumber?: string;
-  preferredLanguage: string;
-  desiredWorkshop: string;
-  location: string;
-  craftSpecialty: string;
+  preferredLanguage?: string;
+  desiredWorkshop?: string;
+  location?: string;
+  craftSpecialty?: string;
   avatarUrl?: string;
   bio?: string;
 }): Promise<{ saved: boolean; localOnly?: boolean; error?: string }> {
-  const client = getSupabase();
-  if (!client) {
+  if (!isSupabaseConfigured()) {
     return { saved: true, localOnly: true };
   }
 
@@ -140,8 +231,11 @@ export async function upsertSupabaseProfile(profile: {
   }
 
   try {
-    const { data: sessionData } = await client.auth.getSession();
-    let userId = sessionData?.session?.user?.id;
+    let userId = profile.userId;
+    if (!userId) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      userId = sessionData?.session?.user?.id;
+    }
 
     const cleanEmail = profile.email?.trim().toLowerCase();
     const cleanMobile = profile.mobileNumber?.replace(/\D/g, '');
@@ -150,7 +244,7 @@ export async function upsertSupabaseProfile(profile: {
     if (!userId && !isProfilesTableMissing) {
       try {
         if (cleanEmail) {
-          const { data: existingByEmail, error: emailErr } = await client
+          const { data: existingByEmail, error: emailErr } = await supabase
             .from('profiles')
             .select('id')
             .eq('email', cleanEmail)
@@ -166,7 +260,7 @@ export async function upsertSupabaseProfile(profile: {
           }
         }
         if (!userId && cleanMobile && !isProfilesTableMissing) {
-          const { data: existingByMobile, error: mobileErr } = await client
+          const { data: existingByMobile, error: mobileErr } = await supabase
             .from('profiles')
             .select('id')
             .eq('mobile_number', cleanMobile)
@@ -210,7 +304,7 @@ export async function upsertSupabaseProfile(profile: {
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await client.from('profiles').upsert(payload, { onConflict: 'id' });
+    const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
 
     if (error) {
       if (isTableMissingError(error)) {
@@ -221,7 +315,7 @@ export async function upsertSupabaseProfile(profile: {
       console.warn('[Supabase] upsert notice:', error.message);
       // Fallback: try updating by email if ID conflict failed
       if (cleanEmail) {
-        const { error: updateErr } = await client.from('profiles').update(payload).eq('email', cleanEmail);
+        const { error: updateErr } = await supabase.from('profiles').update(payload).eq('email', cleanEmail);
         if (!updateErr) return { saved: true };
       }
       return { saved: false, error: error.message };
@@ -239,14 +333,17 @@ export async function upsertSupabaseProfile(profile: {
 }
 
 export async function signInSupabaseWithEmailOrMobile(identifier: string, password: string) {
-  const client = getSupabase();
-  if (!client) return { signedIn: false, error: 'Supabase is not configured' };
+  if (!isSupabaseConfigured()) return { signedIn: false, error: 'Supabase is not configured' };
   let email = identifier.trim().toLowerCase();
   if (!email.includes('@')) {
     if (isProfilesTableMissing) {
       return { signedIn: false, error: 'Mobile lookup requires the remote profiles table. Please use your email address to sign in.' };
     }
-    const { data, error } = await client.from('profiles').select('email').eq('mobile_number', identifier.replace(/\D/g, '')).maybeSingle();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('mobile_number', identifier.replace(/\D/g, ''))
+      .maybeSingle();
     if (error) {
       if (isTableMissingError(error)) {
         isProfilesTableMissing = true;
@@ -258,15 +355,44 @@ export async function signInSupabaseWithEmailOrMobile(identifier: string, passwo
   }
 
   if (!email) return { signedIn: false, error: 'No account is linked to that mobile number.' };
-  const { data, error } = await client.auth.signInWithPassword({ email, password });
-  return { signedIn: !error, error: error?.message, user: data?.user };
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    const msg = error.message;
+    if (msg.toLowerCase().includes('email not confirmed')) {
+      return {
+        signedIn: false,
+        error: 'Your email address is not yet confirmed. Please verify the code sent to your email or reset your password.',
+        isEmailNotConfirmed: true,
+      };
+    }
+    return { signedIn: false, error: msg };
+  }
+
+  // Fetch full profile from remote profiles table
+  let profileData: any = null;
+  try {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .maybeSingle();
+    profileData = prof;
+  } catch (_) {}
+
+  return {
+    signedIn: true,
+    user: data.user,
+    session: data.session,
+    profile: profileData,
+  };
 }
 
 export async function updateSupabasePassword(newPassword: string) {
   const validationError = validatePassword(newPassword);
   if (validationError) return { updated: false, error: validationError };
-  const client = getSupabase();
-  if (!client) return { updated: false, error: 'Supabase is not configured' };
-  const { error } = await client.auth.updateUser({ password: newPassword });
+  if (!isSupabaseConfigured()) return { updated: false, error: 'Supabase is not configured' };
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
   return { updated: !error, error: error?.message };
 }
