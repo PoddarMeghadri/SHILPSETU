@@ -354,6 +354,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setOtpDigits(['', '', '', '', '', '']);
     setCurrentStep(2);
     return;
+  };
 
   // Resend verification code with cooldown protection
   const handleResendOtp = async () => {
