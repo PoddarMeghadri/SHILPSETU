@@ -60,6 +60,23 @@ alter table profiles add column if not exists craft_specialty text;
 alter table profiles add column if not exists avatar_url text;
 alter table profiles add column if not exists bio text;
 
+-- Normalize identity fields before enforcing uniqueness for normal users.
+update profiles
+set email = lower(trim(email))
+where email is not null;
+update profiles
+set mobile_number = regexp_replace(mobile_number, '\D', '', 'g')
+where mobile_number is not null;
+create unique index if not exists profiles_email_unique_ci
+  on profiles (lower(email))
+  where email is not null and trim(email) <> '';
+create unique index if not exists profiles_mobile_unique
+  on profiles (mobile_number)
+  where mobile_number is not null and mobile_number <> '';
+alter table profiles drop constraint if exists profiles_mobile_number_digits;
+alter table profiles add constraint profiles_mobile_number_digits
+  check (mobile_number is null or mobile_number ~ '^[0-9]{10,15}$');
+
 do $$ begin
   alter table orders drop constraint if exists orders_status_check;
   -- Preserve existing orders while narrowing the lifecycle vocabulary.

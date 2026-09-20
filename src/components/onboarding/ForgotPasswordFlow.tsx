@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useSignIn } from '@clerk/clerk-react';
 import { ShilpSetuLogo } from '../common/ShilpSetuLogo';
 import { sound } from '../../services/sound';
-import { api } from '../../services/api';
 import {
   validatePassword,
   passwordStrength,
   passwordsMatch,
   PASSWORD_MIN_LENGTH,
   PASSWORD_MAX_LENGTH,
-  toClerkPassword,
 } from '../../services/passwordValidation';
+import { sendSupabaseOtp, verifySupabaseOtp, updateSupabasePassword } from '../../services/supabase';
 import { useTranslation } from '../../services/translations';
 
 interface ForgotPasswordFlowProps {
@@ -32,7 +30,6 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
   onToggleTheme,
 }) => {
   const { t } = useTranslation();
-  const { isLoaded: isSignInLoaded, signIn } = useSignIn();
 
   // Current step in the password recovery process
   const [currentStep, setCurrentStep] = useState<Step>('email');
@@ -90,48 +87,17 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
 
     setEmailError('');
     setIsSendingOtp(true);
-
-    let sentViaClerk = false;
-    let clerkMsg = '';
-
-    // 1. Dispatch 6-digit OTP code via Clerk reset_password_email_code strategy
-    if (isSignInLoaded && signIn) {
-      try {
-        await signIn.create({
-          strategy: 'reset_password_email_code',
-          identifier: cleanEmail,
-        });
-        sentViaClerk = true;
-        console.log('[Clerk Auth] 6-digit reset password OTP dispatched to:', cleanEmail);
-      } catch (clerkErr: any) {
-        clerkMsg = clerkErr?.errors?.[0]?.message || clerkErr?.message || '';
-        console.warn('[Clerk Auth reset password dispatch notice]:', clerkMsg);
-      }
-    }
-
-    // 2. Synchronize with backend forgot-password OTP store
-    let backendSuccess = false;
-    let backendMsg = '';
-    try {
-      const res = await api.forgotPasswordSendOtp(cleanEmail);
-      backendSuccess = true;
-      setResendCooldown(res.cooldownSeconds || 30);
-    } catch (err: any) {
-      backendMsg = err.message || '';
-      console.warn('[Backend reset password sync notice]:', backendMsg);
-    }
-
-    if (!sentViaClerk && !backendSuccess) {
-      sound.playTap();
-      setEmailError(backendMsg || clerkMsg || 'Unable to send verification code. Please check your email or sign up.');
+    const supabaseResult = await sendSupabaseOtp(cleanEmail, false);
+    if (supabaseResult.sent) {
+      setResendCooldown(30);
+      setOtpDigits(['', '', '', '', '', '']);
+      setOtpError('');
+      setCurrentStep('otp');
       setIsSendingOtp(false);
       return;
     }
 
-    sound.playSuccess();
-    setOtpDigits(['', '', '', '', '', '']);
-    setOtpError('');
-    setCurrentStep('otp');
+    setEmailError(supabaseResult.error || 'Unable to send verification code.');
     setIsSendingOtp(false);
   };
 
@@ -187,10 +153,13 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
     setIsVerifyingOtp(true);
 
     try {
-      const res = await api.forgotPasswordVerifyOtp(email.trim().toLowerCase(), fullOtp);
-      sound.playSuccess();
-      setResetToken(res.resetToken);
-      setCurrentStep('new_password');
+      const supabaseResult = await verifySupabaseOtp(email.trim().toLowerCase(), fullOtp, 'email');
+      if (supabaseResult.verified) {
+        setCurrentStep('new_password');
+        setResetToken('');
+        return;
+      }
+      throw new Error(supabaseResult.error || 'The verification code is invalid or expired.');
     } catch (err: any) {
       sound.playTap();
       setOtpError(err.message || 'Incorrect verification code. Please check the code sent to your email.');
@@ -222,28 +191,13 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
     setIsSubmittingPassword(true);
 
     try {
-      // 1. Attempt Clerk password update if session was opened with reset_password_email_code
-      if (isSignInLoaded && signIn) {
-        try {
-          await signIn.attemptFirstFactor({
-            strategy: 'reset_password_email_code',
-            code: otpDigits.join(''),
-            password: toClerkPassword(newPassword),
-          });
-        } catch (clerkErr) {
-          console.warn('[Clerk Reset Password attempt notice]:', clerkErr);
-        }
+      const supabaseResult = await updateSupabasePassword(newPassword);
+      if (supabaseResult.updated) {
+        sound.playSuccess();
+        setCurrentStep('success');
+        return;
       }
-
-      // 2. Synchronize database and backend password
-      await api.resetPassword({
-        email: email.trim().toLowerCase(),
-        otp: otpDigits.join(''),
-        newPassword,
-        resetToken,
-      });
-      sound.playSuccess();
-      setCurrentStep('success');
+      throw new Error(supabaseResult.error || 'Unable to update your password.');
     } catch (err: any) {
       sound.playTap();
       setPasswordError(err.message || 'Failed to reset password. Please try again.');

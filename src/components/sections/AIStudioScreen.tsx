@@ -1295,7 +1295,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
                 isDark ? 'text-[#F4ECDE]' : 'text-[#22331E]'
               }`}
             >
-              {t('enhanced_catalog', 'Enhanced Studio Catalog')}
+              {t('edit', 'Edit')}
             </h3>
             <span className="text-xs text-[#B5451B] font-sans font-bold">
               {studioProducts.length} {t('crafts_count', 'Crafts')}
@@ -1428,4 +1428,3 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
     </div>
   );
 };
-

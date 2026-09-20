@@ -5,7 +5,7 @@ import { db } from './db.js';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shilpsetu_artisan_jwt_secret_key_2026';
-const DEFAULT_AUTH_PROVIDER_TIMEOUT_MS = 30_000;
+const DEFAULT_AUTH_PROVIDER_TIMEOUT_MS = 10_000;
 
 function getAuthProviderTimeoutMs(): number {
   const configured = Number(process.env.AUTH_PROVIDER_TIMEOUT_MS);
@@ -44,28 +44,6 @@ function getSupabaseAuthClient() {
   });
 }
 
-// In-memory OTP storage with TTL and attempt limits for email-based OTP verification
-interface OtpEntry {
-  otp: string;
-  expiresAt: number;
-  attempts: number;
-  lastSentAt: number;
-  email: string;
-  phone?: string;
-}
-
-const otpStore = new Map<string, OtpEntry>();
-
-// Clean up expired OTPs periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of otpStore.entries()) {
-    if (entry.expiresAt < now) {
-      otpStore.delete(key);
-    }
-  }
-}, 60000);
-
 export function isValidEmail(email: string): boolean {
   if (!email || typeof email !== 'string') return false;
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -96,7 +74,7 @@ export function validatePasswordRules(password: string): string | null {
   if (!/[A-Z]/.test(password)) return 'Password must include an uppercase letter.';
   if (!/[a-z]/.test(password)) return 'Password must include a lowercase letter.';
   if (!/\d/.test(password)) return 'Password must include a number.';
-  if (!/[^A-Za-z0-9]/.test(password)) return 'Password must include a special character.';
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) return 'Password must include a special character.';
   return null;
 }
 
@@ -124,67 +102,23 @@ export function verifyPasswordResetToken(token: string, expectedEmail: string): 
   }
 }
 
-/**
- * Dispatches a real email OTP to the provided email address using Supabase Auth mailer
- * and Clerk, while recording local fallback state.
- */
+/** Dispatch a numeric email OTP through Supabase Auth. */
 export async function sendOtpToEmail(
   email: string,
-  phone?: string,
+  _phone?: string,
   options: { shouldCreateUser?: boolean } = {}
 ): Promise<{ success: boolean; message: string; cooldownSeconds: number }> {
   const normalizedEmail = email?.trim().toLowerCase();
-
   if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
     throw new Error('Valid Email ID is strictly mandatory for artisan verification');
   }
-
-  const existing = otpStore.get(normalizedEmail);
-  const now = Date.now();
-
-  // Rate limiting: 30 seconds cooldown between OTP requests
-  if (existing && now - existing.lastSentAt < 30000) {
-    const waitSec = Math.ceil((30000 - (now - existing.lastSentAt)) / 1000);
-    throw new Error(`Please wait ${waitSec} seconds before requesting a new code`);
-  }
-
-  // Generate 6-digit OTP
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = now + 10 * 60 * 1000; // 10 minutes expiry
-
-  otpStore.set(normalizedEmail, {
-    otp,
-    expiresAt,
-    attempts: 0,
-    lastSentAt: now,
+  const supabase = getSupabaseAuthClient();
+  const { error } = await supabase.auth.signInWithOtp({
     email: normalizedEmail,
-    phone: phone ? phone.replace(/\D/g, '') : undefined,
+    options: { shouldCreateUser: options.shouldCreateUser !== false },
   });
-
-  // If phone is also provided, index by phone as well for lookup convenience
-  if (phone) {
-    const cleanedPhone = phone.replace(/\D/g, '');
-    if (cleanedPhone) {
-      otpStore.set(cleanedPhone, {
-        otp,
-        expiresAt,
-        attempts: 0,
-        lastSentAt: now,
-        email: normalizedEmail,
-        phone: cleanedPhone,
-      });
-    }
-  }
-
-  // Note: We strictly generate and verify 6-digit numeric OTP codes.
-  // Never trigger Supabase signInWithOtp or magiclink templates, as they send login links instead of 6-digit OTPs.
-  console.log('[Auth Service] Generated 6-digit verification code for:', normalizedEmail);
-
-  return {
-    success: true,
-    message: `Verification code sent successfully to ${normalizedEmail}. Please check your inbox and spam folder.`,
-    cooldownSeconds: 30,
-  };
+  if (error) throw new Error(error.message);
+  return { success: true, message: `Verification code sent successfully to ${normalizedEmail}.`, cooldownSeconds: 30 };
 }
 
 /**
@@ -200,123 +134,31 @@ export async function sendOtpToPhone(
   return sendOtpToEmail(email, phone);
 }
 
-/**
- * Verifies a 6-digit OTP code against the provided email or phone identifier,
- * checking Clerk verification session, Supabase email verification tokens, and local store.
- * Backdoors and mock codes are strictly rejected.
- */
+/** Verify a 6-digit OTP through Supabase Auth. */
 export async function verifyOtp(
   identifier: string,
   inputOtp: string,
   options?: {
-    clerkVerified?: boolean;
-    clerkSessionId?: string;
     supabaseVerified?: boolean;
     supabaseAccessToken?: string;
+    clerkVerified?: boolean;
+    clerkSessionId?: string;
   }
 ): Promise<boolean> {
-  if (!inputOtp || !inputOtp.trim()) {
-    throw new Error('Please enter the 6-digit verification code.');
+  const normalizedInput = inputOtp?.trim();
+  if (!/^\d{6}$/.test(normalizedInput || '')) throw new Error('Please enter the 6-digit verification code.');
+  const cleanIdentifier = identifier.trim().toLowerCase();
+  if (!cleanIdentifier.includes('@')) throw new Error('OTP verification requires the registered email address.');
+
+  const supabase = getSupabaseAuthClient();
+  if (options?.supabaseVerified && options.supabaseAccessToken) {
+    const { data, error } = await supabase.auth.getUser(options.supabaseAccessToken);
+    if (!error && data.user) return true;
   }
-
-  const normalizedInput = inputOtp.trim();
-  const cleanIdentifier = identifier.includes('@')
-    ? identifier.trim().toLowerCase()
-    : identifier.replace(/\D/g, '');
-
-  // 1. If Supabase client verified the 6-digit OTP, validate and approve
-  if (options?.supabaseVerified) {
-    if (options.supabaseAccessToken) {
-      try {
-        const supabase = getSupabaseAuthClient();
-        const { data, error } = await supabase.auth.getUser(options.supabaseAccessToken);
-        if (!error && data?.user) {
-          otpStore.delete(cleanIdentifier);
-          return true;
-        }
-      } catch (err: any) {
-        console.warn('[Supabase token validation notice]:', err?.message);
-      }
-    }
-    otpStore.delete(cleanIdentifier);
-    return true;
+  for (const type of ['email', 'signup', 'recovery'] as const) {
+    const { data, error } = await supabase.auth.verifyOtp({ email: cleanIdentifier, token: normalizedInput, type });
+    if (!error && (data.user || data.session)) return true;
   }
-
-  // 2. If Clerk verified the email OTP client-side, validate session
-  if (options?.clerkVerified) {
-    if (options.clerkSessionId) {
-      try {
-        const cleanSecret = (process.env.CLERK_SECRET_KEY || '')
-          .replace(/^CLERK_SECRET_KEY=/, '')
-          .replace(/^["']|["']$/g, '')
-          .trim();
-        if (cleanSecret) {
-          const clerkRes = await fetch(`https://api.clerk.com/v1/sessions/${options.clerkSessionId}`, {
-            headers: { Authorization: `Bearer ${cleanSecret}` },
-          });
-          if (clerkRes.ok) {
-            const sessData = await clerkRes.json();
-            if (sessData.status === 'active') {
-              otpStore.delete(cleanIdentifier);
-              return true;
-            }
-          }
-        }
-      } catch (clerkErr: any) {
-        console.warn('[Clerk session verify warning]:', clerkErr?.message);
-      }
-    }
-    // Clerk client-side verification confirmed
-    otpStore.delete(cleanIdentifier);
-    return true;
-  }
-
-  // 2. Check real email verification code sent via Supabase Auth (supports email, magiclink, signup)
-  if (cleanIdentifier.includes('@')) {
-    try {
-      const supabase = getSupabaseAuthClient();
-      for (const otpType of ['email', 'magiclink', 'signup'] as const) {
-        const { data, error } = await supabase.auth.verifyOtp({
-          email: cleanIdentifier,
-          token: normalizedInput,
-          type: otpType,
-        });
-        if (!error && (data?.user || data?.session)) {
-          otpStore.delete(cleanIdentifier);
-          return true;
-        }
-      }
-    } catch (sbErr: any) {
-      console.warn('[Supabase verifyOtp notice]:', sbErr.message);
-    }
-  }
-
-  // 3. Check local in-memory OTP store (matching code delivered via email dispatch)
-  const entry = otpStore.get(cleanIdentifier);
-  if (entry && entry.otp === normalizedInput && Date.now() <= entry.expiresAt) {
-    otpStore.delete(cleanIdentifier);
-    if (entry.email) otpStore.delete(entry.email);
-    if (entry.phone) otpStore.delete(entry.phone);
-    return true;
-  }
-
-  // 4. Handle expired or failed attempts
-  if (entry) {
-    if (Date.now() > entry.expiresAt) {
-      otpStore.delete(cleanIdentifier);
-      throw new Error('Verification code has expired. Please click Resend Code.');
-    }
-
-    if (entry.attempts >= 5) {
-      otpStore.delete(cleanIdentifier);
-      throw new Error('Too many failed attempts. Please request a new verification code.');
-    }
-
-    entry.attempts += 1;
-    const remaining = 5 - entry.attempts;
-    throw new Error(`Incorrect verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
-  }
-
   throw new Error('Incorrect verification code. Please enter the OTP sent to your email.');
 }
 

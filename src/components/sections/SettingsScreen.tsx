@@ -3,8 +3,8 @@ import { LanguageCode, ScreenId } from '../../types';
 import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
 import { useAdminMode } from '../../context/AdminModeContext';
-import { useUser } from '@clerk/clerk-react';
-import { validatePassword, passwordsMatch } from '../../services/passwordValidation';
+import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
+import { updateSupabasePassword } from '../../services/supabase';
 
 interface SettingsScreenProps {
   isOffline: boolean;
@@ -27,7 +27,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 }) => {
   const { t } = useTranslation(language);
   const { isAdminMode } = useAdminMode();
-  const { user } = useUser();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -35,6 +34,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [passwordMessage, setPasswordMessage] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const panelClass = `rounded-3xl p-5 border shadow-xs space-y-3 ${
     isDark
       ? 'bg-[#1C221A] border-[#2D3A2B] text-[#F4ECDE]'
@@ -46,21 +48,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto pb-28 md:pb-12 pt-2 px-3 sm:px-6 lg:px-8 space-y-6">
-      <div className="flex items-center gap-3 px-1">
-        <div className="flex items-center gap-3">
-          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
-            isAdminMode
-              ? 'bg-emerald-500/15 text-emerald-500'
-              : 'bg-[#B5451B]/15 text-[#B5451B]'
-          }`}>
-            <span className="material-symbols-outlined text-2xl">settings</span>
-          </div>
-          <div>
-            <h2 className="font-serif font-bold text-xl">{t('settings', 'Settings')}</h2>
-          </div>
-        </div>
-      </div>
-
       <div className={panelClass}>
         <h4 className="font-serif font-bold text-base">{t('workshop_settings', 'Workshop Settings')}</h4>
         <div className="space-y-2">
@@ -128,7 +115,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
       <div className={panelClass}>
         <h4 className="font-serif font-bold text-base">{t('account_settings', 'Account Settings')}</h4>
-        {!isAdminMode && user && (
+        {!isAdminMode && (
           <button type="button" onClick={() => { sound.playTap(); setPasswordMessage(''); setShowPasswordModal(true); }}
             className={`${rowClass} w-full p-3.5 flex items-center justify-between text-left hover:bg-black/5`}>
             <div className="flex items-center gap-3">
@@ -160,20 +147,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             const validation = validatePassword(newPassword);
             if (validation) { setPasswordMessage(validation); return; }
             if (!passwordsMatch(newPassword, passwordConfirmation)) { setPasswordMessage('Passwords do not match.'); return; }
-            if (!user?.updatePassword) { setPasswordMessage('Password changes are unavailable for this sign-in method.'); return; }
             setIsSavingPassword(true);
             try {
-              await user.updatePassword({ currentPassword, newPassword });
+              const result = await updateSupabasePassword(newPassword);
+              if (!result.updated) throw new Error(result.error || 'Unable to update password.');
               setPasswordMessage('Password updated successfully.');
               setCurrentPassword(''); setNewPassword(''); setPasswordConfirmation('');
               setTimeout(() => setShowPasswordModal(false), 900);
-            } catch (error: any) { setPasswordMessage(error?.errors?.[0]?.message || 'Unable to update password.'); }
+            } catch (error: any) { setPasswordMessage(error?.message || 'Unable to update password.'); }
             finally { setIsSavingPassword(false); }
           }} className={`w-full max-w-sm rounded-3xl p-6 border shadow-2xl space-y-3 ${isDark ? 'bg-[#1C221A] border-[#2D3A2B] text-[#F4ECDE]' : 'bg-[#F4ECDE] border-[#22331E]/20 text-[#1A1815]'}`}>
             <h4 className="font-serif font-bold text-lg">Change password</h4>
-            <input aria-label="Current password" type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" className="w-full rounded-xl border p-2.5 bg-transparent text-sm" />
-            <input aria-label="New password" type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" className="w-full rounded-xl border p-2.5 bg-transparent text-sm" />
-            <input aria-label="Confirm new password" type="password" required value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} placeholder="Confirm new password" className="w-full rounded-xl border p-2.5 bg-transparent text-sm" />
+            <div className="relative"><input aria-label="Current password" type={showCurrentPassword ? 'text' : 'password'} required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label="Toggle current password" onClick={() => setShowCurrentPassword((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showCurrentPassword ? 'visibility_off' : 'visibility'}</span></button></div>
+            <div className="relative"><input aria-label="New password" type={showNewPassword ? 'text' : 'password'} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label="Toggle new password" onClick={() => setShowNewPassword((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showNewPassword ? 'visibility_off' : 'visibility'}</span></button></div>
+            <div className="flex gap-1" aria-label="Password strength meter">{[1, 2, 3, 4, 5].map((level) => <span key={level} className={`h-1.5 flex-1 rounded-full ${passwordStrength(newPassword) >= level ? 'bg-[#B5451B]' : 'bg-black/10 dark:bg-white/10'}`} />)}</div>
+            <ul className="text-[10px] opacity-70 space-y-0.5"><li>{newPassword.length >= PASSWORD_MIN_LENGTH && newPassword.length <= PASSWORD_MAX_LENGTH ? '✓' : '○'} 8–16 characters</li><li>{/[A-Z]/.test(newPassword) && /[a-z]/.test(newPassword) ? '✓' : '○'} Uppercase and lowercase</li><li>{/\d/.test(newPassword) ? '✓' : '○'} Number</li><li>{/[!@#$%^&*(),.?":{}|<>]/.test(newPassword) ? '✓' : '○'} Special character</li></ul>
+            <div className="relative"><input aria-label="Confirm new password" type={showPasswordConfirmation ? 'text' : 'password'} required value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} placeholder="Confirm new password" className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label="Toggle password confirmation" onClick={() => setShowPasswordConfirmation((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showPasswordConfirmation ? 'visibility_off' : 'visibility'}</span></button></div>
             {passwordMessage && <p role="status" className="text-xs text-[#B5451B]">{passwordMessage}</p>}
             <div className="flex gap-2 pt-2">
               <button type="button" onClick={() => setShowPasswordModal(false)} className="flex-1 py-2.5 rounded-2xl border text-xs font-bold">Cancel</button>
