@@ -24,7 +24,7 @@ const supabaseUrl = normalizeSupabaseUrl(rawSupabaseUrl);
 const supabaseAnonKey = (rawSupabaseAnonKey || '').trim();
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.info('[Supabase Info] Supabase credentials not present in client environment; running with built-in artisan persistence and Clerk authentication.');
+  console.info('[Supabase Info] Supabase credentials are not present in the client environment.');
 }
 
 /**
@@ -39,13 +39,29 @@ export const supabase = createClient(
   supabaseAnonKey || fallbackSupabaseAnonKey,
   {
     auth: {
-      persistSession: Boolean(supabaseUrl && supabaseAnonKey),
-      autoRefreshToken: Boolean(supabaseUrl && supabaseAnonKey),
-      detectSessionInUrl: Boolean(supabaseUrl && supabaseAnonKey),
-      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      ...(typeof window !== 'undefined' ? { storage: window.localStorage } : {}),
     },
   }
 );
+
+const AUTH_TIMEOUT_MS = 10_000;
+
+async function withAuthTimeout<T>(operation: PromiseLike<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(operation),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out. Please try again.`)), AUTH_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabaseAnonKey);
@@ -97,9 +113,9 @@ export async function signUpWithSupabase({
   const cleanMobile = mobile?.replace(/\D/g, '') || '';
 
   try {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await withAuthTimeout(supabase.auth.signUp({
       email: cleanEmail,
-      password: password || 'ShilpSetu@2026',
+      password: password || '',
       options: {
         data: {
           full_name: fullName.trim(),
@@ -110,7 +126,7 @@ export async function signUpWithSupabase({
           preferred_language: language || 'hi',
         },
       },
-    });
+    }), 'Creating your account');
 
     if (error) {
       const errMsg = error.message.toLowerCase();
@@ -128,7 +144,7 @@ export async function signUpWithSupabase({
 
     // Auto-upsert profile if user id is returned immediately
     if (data.user?.id) {
-      await upsertSupabaseProfile({
+      const profileResult = await upsertSupabaseProfile({
         userId: data.user.id,
         fullName: fullName.trim(),
         email: cleanEmail,
@@ -137,7 +153,10 @@ export async function signUpWithSupabase({
         desiredWorkshop: craft || 'pottery',
         location: `${city || 'Varanasi'}, ${state || 'Uttar Pradesh'}`,
         craftSpecialty: craft || 'Terracotta Pottery',
-      }).catch(console.warn);
+      });
+      if (!profileResult.saved) {
+        return { success: false, error: profileResult.error || 'Unable to save your profile.' };
+      }
     }
 
     return {
@@ -153,35 +172,40 @@ export async function signUpWithSupabase({
   }
 }
 
-/**
- * Client-side OTP / magiclink email triggers are disabled because Supabase Auth
- * sends hyperlink login buttons (magic links) rather than 6-digit numeric OTPs.
- * All email verification codes are strictly delivered as 6-digit numeric OTPs via Clerk.
- */
-export async function sendSupabaseOtp(_email: string, _shouldCreateUser = true) {
-  // Intentionally disabled to prevent sending login links
-  return { sent: false, error: 'Strict OTP mode enforced: Login links are disabled' };
+/** Send a numeric email OTP through Supabase Auth. */
+export async function sendSupabaseOtp(email: string, shouldCreateUser = true) {
+  if (!isSupabaseConfigured()) return { sent: false, error: 'Supabase is not configured' };
+  const cleanEmail = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return { sent: false, error: 'A valid email address is required.' };
+  try {
+    const { error } = await withAuthTimeout(
+      supabase.auth.signInWithOtp({ email: cleanEmail, options: { shouldCreateUser } }),
+      'Sending your verification code'
+    );
+    return error ? { sent: false, error: error.message } : { sent: true };
+  } catch (error) {
+    return { sent: false, error: error instanceof Error ? error.message : 'Unable to send verification code.' };
+  }
 }
 
-export async function verifySupabaseOtp(email: string, token: string) {
+export async function verifySupabaseOtp(email: string, token: string, type: 'email' | 'signup' | 'recovery' = 'email') {
   if (!isSupabaseConfigured()) return { verified: false, error: 'Supabase is not configured' };
   const cleanEmail = email.trim().toLowerCase();
   const cleanToken = token.trim();
+  if (!/^\d{6}$/.test(cleanToken)) return { verified: false, error: 'Enter the 6-digit verification code.' };
 
   // Try 'signup' OTP type first (used when user registers / signs up)
-  let { data, error } = await supabase.auth.verifyOtp({
-    email: cleanEmail,
-    token: cleanToken,
-    type: 'signup',
-  });
+  let { data, error } = await withAuthTimeout(
+    supabase.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type }),
+    'Verifying your code'
+  );
 
   // Fallback to standard 'email' OTP type (used for signInWithOtp)
   if (error || (!data?.session && !data?.user)) {
-    const emailAttempt = await supabase.auth.verifyOtp({
-      email: cleanEmail,
-      token: cleanToken,
-      type: 'email',
-    });
+    const emailAttempt = await withAuthTimeout(
+      supabase.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: 'email' }),
+      'Verifying your code'
+    );
     if (!emailAttempt.error && (emailAttempt.data?.session || emailAttempt.data?.user)) {
       data = emailAttempt.data;
       error = null;
@@ -196,9 +220,19 @@ export async function verifySupabaseOtp(email: string, token: string) {
   };
 }
 
-export async function sendSupabasePasswordReset(_email: string) {
-  // Intentionally disabled to prevent sending login/reset links
-  return { sent: false, error: 'Strict OTP mode enforced: Reset links are disabled' };
+export async function sendSupabasePasswordReset(email: string) {
+  if (!isSupabaseConfigured()) return { sent: false, error: 'Supabase is not configured' };
+  try {
+    const { error } = await withAuthTimeout(
+      supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined,
+      }),
+      'Sending your recovery code'
+    );
+    return error ? { sent: false, error: error.message } : { sent: true };
+  } catch (error) {
+    return { sent: false, error: error instanceof Error ? error.message : 'Unable to send recovery code.' };
+  }
 }
 
 let isProfilesTableMissing = false;
@@ -364,7 +398,10 @@ export async function signInSupabaseWithEmailOrMobile(identifier: string, passwo
 
   if (!email) return { signedIn: false, error: 'No account is linked to that mobile number.' };
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await withAuthTimeout(
+    supabase.auth.signInWithPassword({ email, password }),
+    'Signing you in'
+  );
 
   if (error) {
     const msg = error.message;

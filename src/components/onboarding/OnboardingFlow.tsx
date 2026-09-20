@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useSignUp, useSignIn, useClerk } from '@clerk/clerk-react';
 import { sound } from '../../services/sound';
 import { ShilpSetuLogo } from '../common/ShilpSetuLogo';
 import { INDIAN_STATES_AND_CITIES } from '../../data/indianLocations';
@@ -9,7 +8,6 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAdminMode } from '../../context/AdminModeContext';
 import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { CRAFT_OPTIONS, getLocalizedCraftName, getEnterWorkshopLabel } from '../../data/crafts';
-import { fetchAuthRequest, withAuthRequestTimeout } from '../../services/authRequest';
 import {
   sendSupabaseOtp,
   verifySupabaseOtp,
@@ -18,11 +16,8 @@ import {
   signInSupabaseWithEmailOrMobile,
   signUpWithSupabase,
   updateSupabasePassword,
-  isSupabaseConfigured,
-  supabase,
 } from '../../services/supabase';
-import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH, toClerkPassword } from '../../services/passwordValidation';
-import { api } from '../../services/api';
+import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
 import { ForgotPasswordFlow } from './ForgotPasswordFlow';
 
 export interface OnboardingUserData {
@@ -77,15 +72,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [selectedCraft, setSelectedCraft] = useState<string>('pottery');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const [signInIdentifier, setSignInIdentifier] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
   const [signInError, setSignInError] = useState('');
   const [signInEmail, setSignInEmail] = useState('');
 
   // Clerk Auth Hooks
-  const clerk = useClerk();
-  const { isLoaded: isSignUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
-  const { isLoaded: isSignInLoaded, signIn, setActive: setSignInActive } = useSignIn();
 
   // Form errors
   const [nameError, setNameError] = useState<string>('');
@@ -196,63 +190,38 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           console.warn('[Supabase Sign In Notice]:', sbErr);
         }
 
-        // 2. Authenticate with backend /api/auth/login directly
-        let backendSuccess = false;
-        let backendData: any = {};
-        try {
-          const res = await fetchAuthRequest('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier, password: signInPassword }),
-          });
-          backendData = await res.json().catch(() => ({}));
-          if (res.ok) {
-            backendSuccess = true;
-          }
-        } catch (beErr) {
-          console.warn('[Backend Login Notice]:', beErr);
-        }
-
-        if (!backendSuccess && !supabaseSuccess) {
-          throw new Error(backendData.error || 'The email/mobile number or password is incorrect.');
+        if (!supabaseSuccess) {
+          throw new Error('The email/mobile number or password is incorrect.');
         }
 
         // Successful direct sign-in! No OTP step needed.
         sound.playSuccess();
-        const activeToken = backendData.token || (supabaseUser ? `supa_${supabaseUser.id}` : `artisan_auth_${Date.now()}`);
+        const activeToken = supabaseUser?.id || '';
         localStorage.setItem('shilpsetu_token', activeToken);
         localStorage.setItem('shilpsetu_auth_done', 'true');
 
-        const loggedIn = backendData.artisan || {};
         const artisanName =
           supabaseProfile?.full_name ||
-          loggedIn.fullName ||
-          loggedIn.name ||
           supabaseUser?.user_metadata?.full_name ||
           'Master Artisan';
         const artisanEmail =
           supabaseProfile?.email ||
-          loggedIn.email ||
           (identifier.includes('@') ? identifier : supabaseUser?.email) ||
           '';
         const artisanMobile =
           supabaseProfile?.mobile_number ||
-          loggedIn.mobile ||
           (!identifier.includes('@') ? identifier : '') ||
           '';
         const rawLocation = supabaseProfile?.location || '';
         const artisanState =
           (rawLocation.includes(',') ? rawLocation.split(',')[1].trim() : '') ||
-          loggedIn.state ||
           'Uttar Pradesh';
         const artisanCity =
           (rawLocation.includes(',') ? rawLocation.split(',')[0].trim() : rawLocation) ||
-          loggedIn.city ||
           'Varanasi';
         const storedCraft = String(
           supabaseProfile?.desired_workshop ||
           supabaseProfile?.craft_specialty ||
-          loggedIn.craft ||
           'pottery'
         ).toLowerCase();
         const craftId =
@@ -272,7 +241,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         // Directly complete sign-in and open dashboard!
         onComplete({
           fullName: artisanName,
-          gender: loggedIn.gender || gender || 'prefer_not_to_say',
+          gender: gender || 'other',
           state: artisanState,
           city: artisanCity,
           mobile: artisanMobile,
@@ -364,348 +333,45 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setIsSendingOtp(true);
     setOtpError('');
     setEmailError('');
-
-    // 0. Enforce unique account per email address: stop signup immediately if email already exists
-    try {
-      const emailCheck = await api.checkEmail(cleanEmail);
-      if (emailCheck?.exists) {
-        sound.playError();
-        setIsSendingOtp(false);
-        setEmailError('An account with this email address already exists. Please sign in instead.');
-        return;
-      }
-    } catch (checkErr) {
-      console.warn('[Check Email Notice]:', checkErr);
-    }
-
-    let sentViaClerk = false;
-    let clerkErrorMessage = '';
-
-    // 1. Clerk Email Verification Flow: Strictly dispatches 6-digit numeric OTP verification code.
-    // Note: Never call Supabase auth.signUp or auth.signInWithOtp during OTP dispatch,
-    // as Supabase's default mailer sends magic links / login links instead of 6-digit OTPs.
-    if (isSignUpLoaded && signUp) {
-      try {
-        console.log('[Clerk Auth] Current signUp status:', signUp.status, 'email:', signUp.emailAddress);
-
-        // A. If an active sign-up is already in missing_requirements
-        if (signUp.status === 'missing_requirements') {
-          try {
-            if (signUp.emailAddress && signUp.emailAddress.toLowerCase() !== cleanEmail) {
-              await withAuthRequestTimeout(signUp.update({ emailAddress: cleanEmail }), 'Updating your verification email');
-            }
-            await withAuthRequestTimeout(
-              signUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
-              'Sending your verification code'
-            );
-            sentViaClerk = true;
-            setAuthFlowMode('sign_up');
-            console.log('[Clerk Auth] OTP email successfully dispatched via existing sign_up');
-          } catch (prepErr: any) {
-            console.warn('[Clerk Auth] Existing prepare failed, will reset client:', prepErr?.message);
-            try {
-              if ((clerk.client as any)?.resetSignUp) {
-                (clerk.client as any).resetSignUp();
-              }
-            } catch {}
-          }
-        }
-
-        // B. If not dispatched, create a fresh sign up
-        if (!sentViaClerk) {
-          try {
-            await withAuthRequestTimeout(
-              signUp.create({
-                emailAddress: cleanEmail,
-                password: toClerkPassword(password),
-                firstName: fullName.trim().split(' ')[0] || fullName.trim(),
-                lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
-              }),
-              'Creating your verification session'
-            );
-
-            await withAuthRequestTimeout(
-              signUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
-              'Sending your verification code'
-            );
-            sentViaClerk = true;
-            setAuthFlowMode('sign_up');
-            console.log('[Clerk Auth] OTP email successfully dispatched via new sign_up');
-          } catch (createErr: any) {
-            const createMsg = createErr?.errors?.[0]?.message || createErr?.message || '';
-            const firstErr = createErr?.errors?.[0];
-            const isPasswordIssue =
-              firstErr?.meta?.param_name === 'password' ||
-              firstErr?.code?.startsWith('form_password_') ||
-              createMsg.toLowerCase().includes('password') ||
-              createMsg.toLowerCase().includes('passwords');
-
-            console.warn('[Clerk Auth] SignUp create error:', createMsg, createErr);
-            clerkErrorMessage = createMsg;
-
-            // Route password errors strictly to passwordError, NEVER under email
-            if (isPasswordIssue) {
-              sound.playError();
-              setIsSendingOtp(false);
-              setPasswordError(createMsg);
-              setEmailError('');
-              return;
-            }
-
-            // Stop signup immediately if Clerk detects the email is already in use
-            const isEmailTaken =
-              createMsg.toLowerCase().includes('already exists') ||
-              createMsg.toLowerCase().includes('taken') ||
-              createMsg.toLowerCase().includes('form_identifier_exists') ||
-              (createErr?.errors && createErr.errors.some((e: any) => e.code === 'form_identifier_exists'));
-
-            if (isEmailTaken) {
-              sound.playError();
-              setIsSendingOtp(false);
-              setEmailError('An account with this email address already exists. Please sign in instead.');
-              setPasswordError('');
-              return;
-            }
-
-            // If Clerk says a sign up is in progress, prepare verification on it
-            if (signUp.status === 'missing_requirements') {
-              try {
-                if (signUp.emailAddress && signUp.emailAddress.toLowerCase() !== cleanEmail) {
-                  await withAuthRequestTimeout(signUp.update({ emailAddress: cleanEmail }), 'Updating your verification email');
-                }
-                await withAuthRequestTimeout(
-                  signUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
-                  'Sending your verification code'
-                );
-                sentViaClerk = true;
-                setAuthFlowMode('sign_up');
-                console.log('[Clerk Auth] OTP email dispatched via recovered sign_up');
-              } catch (prepErr: any) {
-                console.warn('[Clerk Auth] Recovered prepare failed:', prepErr);
-              }
-            }
-          }
-        }
-      } catch (overallClerkErr: any) {
-        clerkErrorMessage = overallClerkErr?.errors?.[0]?.message || overallClerkErr?.message || '';
-        console.error('[Clerk Auth] Overall error:', clerkErrorMessage);
-      }
-    }
-
-    // 2. Notify backend session tracker
-    let backendSuccess = false;
-    let backendErrorMessage = '';
-    try {
-      const res = await fetchAuthRequest('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile, purpose: 'signup' }),
-      });
-      const data = await res.json().catch(() => null);
-      if (res.ok) {
-        if (data?.success) {
-          backendSuccess = true;
-        }
-      } else if (res.status === 409 || data?.code === 'EMAIL_ALREADY_EXISTS') {
-        sound.playError();
-        setIsSendingOtp(false);
-        setEmailError('An account with this email address already exists. Please sign in instead.');
-        setPasswordError('');
-        return;
-      } else if (data?.error) {
-        backendErrorMessage = data.error;
-      }
-    } catch (err: any) {
-      console.warn('Backend OTP sync notice:', err);
-      backendErrorMessage = err?.message || '';
-    }
-
-    // Stop only if both Clerk and Backend were unable to dispatch verification code
-    if (!sentViaClerk && !backendSuccess) {
+    const supabaseSignup = await signUpWithSupabase({
+      email: cleanEmail,
+      password,
+      fullName,
+      mobile: cleanMobile,
+      craft: selectedCraft,
+      state: selectedState,
+      city: effectiveCity,
+      language,
+    });
+    if (!supabaseSignup.success) {
       setIsSendingOtp(false);
-      const rawError = clerkErrorMessage || backendErrorMessage || '';
-      const isPasswordIssue =
-        rawError.toLowerCase().includes('password') ||
-        rawError.toLowerCase().includes('passwords');
-
-      if (isPasswordIssue) {
-        setPasswordError(rawError);
-        setEmailError('');
-      } else {
-        setEmailError(
-          rawError ||
-          'Could not dispatch verification code to your email. Please check your email address or try again.'
-        );
-        setPasswordError('');
-      }
+      setEmailError(supabaseSignup.error || 'Unable to create your account.');
       return;
     }
-
     setIsSendingOtp(false);
     setResendCooldown(30);
-    setResendNotice('');
+    setResendNotice('A 6-digit verification code was sent to your email.');
+    setOtpDigits(['', '', '', '', '', '']);
     setCurrentStep(2);
+    return;
   };
 
   // Resend verification code with cooldown protection
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || isSendingOtp) return;
     const cleanEmail = email.trim().toLowerCase();
-    const cleanMobile = mobile.replace(/\D/g, '');
     if (!cleanEmail) return;
-
-    sound.playTap();
-
-    if (isAdminMode) {
-      sound.playSuccess();
-      setOtpDigits(['', '', '', '', '', '']);
-      setOtpError('');
-      setResendNotice('Admin Mode: Use verification code 000000');
-      setTimeout(() => {
-        otpInputRefs.current[0]?.focus();
-      }, 50);
-      return;
-    }
-
     setIsSendingOtp(true);
     setOtpError('');
-    setResendNotice('');
-
-    let resendSuccess = false;
-    let resendError = '';
-
-    // 1. If currently in Sign-In mode, attempt sign-in factor first
-    if (authFlowMode === 'sign_in' && isSignInLoaded && signIn) {
-      try {
-        let factor = signIn.supportedFirstFactors?.find((f: any) => f.strategy === 'email_code');
-        if (!factor) {
-          const attempt = await withAuthRequestTimeout(
-            signIn.create({ identifier: cleanEmail }),
-            'Creating your sign-in session'
-          );
-          factor = attempt.supportedFirstFactors?.find((f: any) => f.strategy === 'email_code');
-        }
-        if (factor && 'emailAddressId' in factor) {
-          await withAuthRequestTimeout(
-            signIn.prepareFirstFactor({
-              strategy: 'email_code',
-              emailAddressId: (factor as any).emailAddressId,
-            }),
-            'Sending your verification code'
-          );
-          resendSuccess = true;
-          console.log('[Clerk Resend] Dispatched via sign_in factor');
-        }
-      } catch (signInErr: any) {
-        console.warn('[Clerk Resend Sign-In Notice]:', signInErr);
-        resendError = signInErr?.errors?.[0]?.message || signInErr?.message || '';
-      }
-    }
-
-    // 2. Resend via Clerk Sign-Up
-    if (!resendSuccess && isSignUpLoaded && signUp) {
-      try {
-        if (signUp.status === 'missing_requirements') {
-          if (signUp.emailAddress && signUp.emailAddress.toLowerCase() !== cleanEmail) {
-            await withAuthRequestTimeout(signUp.update({ emailAddress: cleanEmail }), 'Updating your verification email');
-          }
-          await withAuthRequestTimeout(
-            signUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
-            'Sending your verification code'
-          );
-          resendSuccess = true;
-          setAuthFlowMode('sign_up');
-          console.log('[Clerk Resend] Dispatched via existing sign_up');
-        } else {
-          try {
-            if ((clerk.client as any)?.resetSignUp) {
-              (clerk.client as any).resetSignUp();
-            }
-          } catch {}
-          const newSignUp = await withAuthRequestTimeout(
-            signUp.create({
-              emailAddress: cleanEmail,
-              password: toClerkPassword(password),
-              firstName: fullName.trim().split(' ')[0] || fullName.trim(),
-              lastName: fullName.trim().split(' ').slice(1).join(' ') || undefined,
-            }),
-            'Creating your verification session'
-          );
-          await withAuthRequestTimeout(
-            newSignUp.prepareEmailAddressVerification({ strategy: 'email_code' }),
-            'Sending your verification code'
-          );
-          resendSuccess = true;
-          setAuthFlowMode('sign_up');
-          console.log('[Clerk Resend] Dispatched via fresh sign_up');
-        }
-      } catch (signUpErr: any) {
-        console.warn('[Clerk Resend Sign-Up Notice]:', signUpErr);
-        if (!resendError) {
-          resendError = signUpErr?.errors?.[0]?.message || signUpErr?.message || '';
-        }
-        // Fallback to sign-in if email already registered
-        if (!resendSuccess && isSignInLoaded && signIn) {
-          try {
-            const attempt = await withAuthRequestTimeout(
-              signIn.create({ identifier: cleanEmail }),
-              'Creating your sign-in session'
-            );
-            const factor = attempt.supportedFirstFactors?.find((f: any) => f.strategy === 'email_code');
-            if (factor && 'emailAddressId' in factor) {
-              await withAuthRequestTimeout(
-                signIn.prepareFirstFactor({
-                  strategy: 'email_code',
-                  emailAddressId: (factor as any).emailAddressId,
-                }),
-                'Sending your verification code'
-              );
-              resendSuccess = true;
-              setAuthFlowMode('sign_in');
-              console.log('[Clerk Resend] Recovered via sign_in');
-            }
-          } catch (recErr: any) {
-            console.warn('[Clerk Resend Sign-In Recovery]:', recErr);
-          }
-        }
-      }
-    }
-
-    // 3. Backend sync & Supabase Mailer
-    try {
-      const res = await fetchAuthRequest('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile }),
-      });
-      const data = await res.json().catch(() => null);
-      if (res.ok) {
-        if (data?.success) {
-          resendSuccess = true;
-        }
-      } else if (data?.error && !resendError) {
-        resendError = data.error;
-      }
-    } catch (backendErr: any) {
-      console.warn('[Backend Resend Sync Notice]:', backendErr);
-      if (!resendError) {
-        resendError = backendErr?.message || '';
-      }
-    }
-
+    const result = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
     setIsSendingOtp(false);
-    if (resendSuccess) {
-      sound.playSuccess();
-      setResendCooldown(30);
-      setOtpDigits(['', '', '', '', '', '']);
-      setOtpError('');
-      setResendNotice('New verification code sent to your email!');
-      setTimeout(() => {
-        otpInputRefs.current[0]?.focus();
-      }, 50);
-    } else {
-      setOtpError(resendError || 'Failed to resend verification code. Please wait a moment.');
+    if (!result.sent) {
+      setOtpError(result.error || 'Unable to resend your verification code.');
+      return;
     }
+    setResendCooldown(30);
+    setResendNotice('New 6-digit verification code sent.');
+    setOtpDigits(['', '', '', '', '', '']);
   };
 
   // Handle OTP digit changes strictly for 6-digit numeric OTP verification
@@ -758,10 +424,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     const cleanMobile = mobile.replace(/\D/g, '');
     const effectiveCity = selectedCity === 'Other' ? customCity.trim() : selectedCity;
 
-    let clerkSuccess = false;
-    let clerkSessionId = '';
-    let clerkVerificationError = '';
-
     // Enforce isolated Admin Mode OTP validation (No Clerk / No Supabase calls)
     if (isAdminMode) {
       if (fullOtp !== '000000') {
@@ -786,255 +448,36 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
 
-    // 1. Verify 6-digit code with Supabase Auth
-    let supabaseSuccess = false;
-    let supabaseAccessToken = '';
-    let supabaseUserId = '';
-    try {
-      const supabaseVerification = await verifySupabaseOtp(cleanEmail, fullOtp);
-      if (supabaseVerification.verified) {
-        supabaseSuccess = true;
-        supabaseAccessToken = supabaseVerification.session?.access_token || '';
-        supabaseUserId = supabaseVerification.session?.user?.id || supabaseVerification.user?.id || '';
-      }
-    } catch (sbErr: any) {
-      console.warn('[Supabase client verification check]:', sbErr);
+    const supabaseVerification = await verifySupabaseOtp(cleanEmail, fullOtp, authFlowMode === 'sign_up' ? 'signup' : 'email');
+    if (!supabaseVerification.verified) {
+      setOtpError(supabaseVerification.error || 'Verification failed. Please request a new code.');
+      setIsVerifyingOtp(false);
+      return;
     }
-
-    if (supabaseSuccess) {
-      const supaToken = supabaseAccessToken || `artisan_supa_${Date.now()}`;
-      localStorage.setItem('shilpsetu_token', supaToken);
+    if (supabaseVerification.session?.access_token) {
+      localStorage.setItem('shilpsetu_token', supabaseVerification.session.access_token);
       localStorage.setItem('shilpsetu_auth_done', 'true');
-
-      // Ensure Supabase password is synchronized
-      if (password) {
-        try {
-          await updateSupabasePassword(password);
-        } catch (_) {}
-      }
-
-      // Non-blocking backend registration with supabaseVerified flag
-      try {
-        const res = await fetch('/api/auth/verify-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            mobile: cleanMobile,
-            otp: fullOtp,
-            supabaseVerified: true,
-            supabaseAccessToken: supabaseAccessToken || undefined,
-            artisanDetails: {
-              fullName: fullName.trim(),
-              state: selectedState,
-              city: effectiveCity,
-              gender,
-              email: cleanEmail,
-              selectedLanguage: language,
-              password,
-            },
-          }),
-        });
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          const data = await res.json().catch(() => null);
-          if (!res.ok) {
-            if (res.status === 409 || data?.code === 'EMAIL_ALREADY_EXISTS') {
-              sound.playError();
-              setIsVerifyingOtp(false);
-              setOtpError(data?.error || 'An account with this email address already exists. Please sign in instead.');
-              return;
-            }
-          }
-          if (data?.token) {
-            localStorage.setItem('shilpsetu_token', data.token);
-          }
-        }
-      } catch (e) {
-        console.warn('[Backend Sync Notice] Retained verified Supabase session token:', e);
-      }
-
-      try {
-        await upsertSupabaseProfile({
-          userId: supabaseUserId || undefined,
-          fullName: fullName.trim() || 'Master Artisan',
-          email: cleanEmail,
-          mobileNumber: cleanMobile,
-          preferredLanguage: language,
-          desiredWorkshop: selectedCraft,
-          location: `${effectiveCity}, ${selectedState}`,
-          craftSpecialty: getLocalizedCraftName(selectedCraft, language),
-        });
-      } catch (e) {
-        console.warn('[Supabase Profile Sync Notice]:', e);
-      }
-
-      sound.playSuccess();
+    }
+    const profileResult = await upsertSupabaseProfile({
+      userId: supabaseVerification.session?.user?.id || supabaseVerification.user?.id,
+      fullName: fullName.trim() || 'Master Artisan',
+      email: cleanEmail,
+      mobileNumber: cleanMobile,
+      preferredLanguage: language,
+      desiredWorkshop: selectedCraft,
+      location: `${effectiveCity}, ${selectedState}`,
+      craftSpecialty: getLocalizedCraftName(selectedCraft, language),
+    });
+    if (!profileResult.saved) {
+      setOtpError(profileResult.error || 'Unable to save your profile.');
       setIsVerifyingOtp(false);
-      setOtpError('');
-      setResendNotice('');
-      setCurrentStep(3); // Proceed to language selection
       return;
     }
-
-    // 1. Verify with Clerk Sign-Up
-    if (!clerkSuccess && isSignUpLoaded && signUp) {
-      try {
-        const completeSignUp = await signUp.attemptEmailAddressVerification({
-          code: fullOtp,
-        });
-        const isEmailVerified =
-          completeSignUp.status === 'complete' ||
-          completeSignUp.verifications?.emailAddress?.status === 'verified';
-
-        if (isEmailVerified) {
-          clerkSuccess = true;
-          clerkSessionId = completeSignUp.createdSessionId || '';
-          if (completeSignUp.createdSessionId && setSignUpActive) {
-            await setSignUpActive({ session: completeSignUp.createdSessionId });
-          }
-        }
-      } catch (clerkErr: any) {
-        clerkVerificationError = clerkErr?.errors?.[0]?.message || clerkErr?.message || '';
-        console.warn('[Clerk Auth] Sign-up verification notice:', clerkVerificationError);
-      }
-    }
-
-    // 2. Verify with Clerk Sign-In if Sign-Up was not completed
-    if (!clerkSuccess && isSignInLoaded && signIn) {
-      try {
-        const completeSignIn = await signIn.attemptFirstFactor({
-          strategy: 'email_code',
-          code: fullOtp,
-        });
-        if (completeSignIn.status === 'complete') {
-          clerkSuccess = true;
-          clerkSessionId = completeSignIn.createdSessionId || '';
-          if (completeSignIn.createdSessionId && setSignInActive) {
-            await setSignInActive({ session: completeSignIn.createdSessionId });
-          }
-        }
-      } catch (clerkErr: any) {
-        if (!clerkVerificationError) {
-          clerkVerificationError = clerkErr?.errors?.[0]?.message || clerkErr?.message || '';
-        }
-        console.warn('[Clerk Auth] Sign-in verification notice:', clerkErr);
-      }
-    }
-
-    // 3. If Clerk successfully verified the OTP email code, authenticate user directly
-    if (clerkSuccess) {
-      const clerkToken = clerkSessionId || `artisan_clerk_${Date.now()}`;
-      localStorage.setItem('shilpsetu_token', clerkToken);
-
-      // Non-blocking backend registration
-      try {
-        const res = await fetch('/api/auth/verify-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            mobile: cleanMobile,
-            otp: fullOtp,
-            clerkVerified: true,
-            clerkSessionId: clerkSessionId || undefined,
-            artisanDetails: {
-              fullName: fullName.trim(),
-              state: selectedState,
-              city: effectiveCity,
-              gender,
-              email: cleanEmail,
-              selectedLanguage: language,
-              password,
-            },
-          }),
-        });
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          const data = await res.json().catch(() => null);
-          if (!res.ok) {
-            if (res.status === 409 || data?.code === 'EMAIL_ALREADY_EXISTS') {
-              sound.playError();
-              setIsVerifyingOtp(false);
-              setOtpError(data?.error || 'An account with this email address already exists. Please sign in instead.');
-              return;
-            }
-          }
-          if (data?.token) {
-            localStorage.setItem('shilpsetu_token', data.token);
-          }
-        }
-      } catch (e) {
-        console.warn('[Backend Sync Notice] Retained verified Clerk session token:', e);
-      }
-
-      sound.playSuccess();
-      setIsVerifyingOtp(false);
-      setOtpError('');
-      setResendNotice('');
-      setCurrentStep(3); // Proceed to language selection
-      return;
-    }
-
-    // 4. Backend verification fallback (for direct OTP or Supabase Auth mailer)
-    try {
-      const res = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          mobile: cleanMobile,
-          otp: fullOtp,
-          clerkVerified: false,
-          purpose: 'signup',
-          artisanDetails: {
-            fullName: fullName.trim(),
-            state: selectedState,
-            city: effectiveCity,
-            gender,
-            email: cleanEmail,
-            selectedLanguage: language,
-            password,
-          },
-        }),
-      });
-
-      const contentType = res.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        // Backend returned HTML or 404 (e.g., static hosting)
-        console.warn('Backend returned non-JSON response during OTP verify');
-        setOtpError(
-          clerkVerificationError ||
-          'Verification service is updating. Please retry or request a new code.'
-        );
-        setIsVerifyingOtp(false);
-        return;
-      }
-
-      const data = await res.json();
-      if (!res.ok) {
-        setOtpError(data.error || clerkVerificationError || 'Verification failed. Please check the code sent to your email.');
-        setIsVerifyingOtp(false);
-        return;
-      }
-
-      if (data.token) {
-        localStorage.setItem('shilpsetu_token', data.token);
-      }
-
-      sound.playSuccess();
-      setIsVerifyingOtp(false);
-      setOtpError('');
-      setResendNotice('');
-      setCurrentStep(3); // Proceed to language selection
-    } catch (err: any) {
-      console.warn('Network error during OTP verify:', err);
-      setOtpError(
-        clerkVerificationError ||
-        'Unable to connect to verification server. Please retry or request a new code.'
-      );
-      setIsVerifyingOtp(false);
-    }
+    sound.playSuccess();
+    setIsVerifyingOtp(false);
+    setOtpError('');
+    setResendNotice('');
+    setCurrentStep(3);
   };
 
   // Final completion
@@ -1820,8 +1263,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
                       Create password <span className="text-red-500">*</span>
                     </label>
+                    <div className="relative">
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       required
                       minLength={8}
                       maxLength={PASSWORD_MAX_LENGTH}
@@ -1837,6 +1281,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-white dark:bg-[#1C221A]'
                       }`}
                     />
+                    <button type="button" aria-label="Toggle password visibility" onClick={() => setShowPassword((value) => !value)} className="absolute right-3 top-3"><span className="material-symbols-outlined text-sm">{showPassword ? 'visibility_off' : 'visibility'}</span></button>
+                    </div>
                     <div className="flex gap-1" aria-label="Password strength">
                       {[1, 2, 3, 4, 5].map((level) => (
                         <span
@@ -1849,11 +1295,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         />
                       ))}
                     </div>
-                    <p className="text-[10px] text-black/60 dark:text-white/60">
-                      Use 8–16 characters with uppercase, lowercase, number, and special character.
-                    </p>
+                    <ul className="text-[10px] text-black/60 dark:text-white/60 space-y-0.5" aria-label="Password requirements">
+                      <li>✓ 8–16 characters</li><li>✓ Uppercase and lowercase letter</li><li>✓ Number</li><li>✓ Special character (!@#$%^&amp;*(),.?":&#123;&#125;|&lt;&gt;)</li>
+                    </ul>
+                    <div className="relative">
                     <input
-                      type="password"
+                      type={showPasswordConfirmation ? 'text' : 'password'}
                       required
                       minLength={8}
                       maxLength={PASSWORD_MAX_LENGTH}
@@ -1869,6 +1316,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-white dark:bg-[#1C221A]'
                       }`}
                     />
+                    <button type="button" aria-label="Toggle password confirmation visibility" onClick={() => setShowPasswordConfirmation((value) => !value)} className="absolute right-3 top-3"><span className="material-symbols-outlined text-sm">{showPasswordConfirmation ? 'visibility_off' : 'visibility'}</span></button>
+                    </div>
                     {passwordError && (
                       <div className="mt-1 flex items-start gap-1.5 p-2 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400">
                         <span className="material-symbols-outlined text-xs mt-0.5 shrink-0">error</span>

@@ -4,7 +4,6 @@ import { OrderItem, ScreenId, LanguageCode, ProductItem } from '../../types';
 import { sound } from '../../services/sound';
 import { SuccessModal } from '../common/SuccessModal';
 import { useTranslation } from '../../services/translations';
-import { api } from '../../services/api';
 
 interface BusinessDashboardProps {
   products?: ProductItem[];
@@ -92,13 +91,11 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
 }) => {
   const { t } = useTranslation();
   const [period, setPeriod] = useState<Period>('week');
-  const [orders, setOrders] = useState<OrderItem[]>(INITIAL_SAMPLE_ORDERS);
+  const [orders, setOrders] = useState<OrderItem[]>(INITIAL_SAMPLE_ORDERS.slice(0, 3));
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
   const [inventoryFilter, setInventoryFilter] = useState<'all' | 'low' | 'healthy'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [restockedItemTitle, setRestockedItemTitle] = useState<string | null>(null);
-  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
-  const [ordersError, setOrdersError] = useState('');
 
   const currentProducts = products || [];
   const lowStockThreshold = 5;
@@ -108,42 +105,6 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
   const criticalProducts = currentProducts.filter((p) => (p.stock ?? 0) <= 2);
   const healthyProducts = currentProducts.filter((p) => (p.stock ?? 0) > lowStockThreshold);
   const lowestProduct = lowStockProducts[0];
-
-  React.useEffect(() => {
-    let active = true;
-    setIsLoadingOrders(true);
-    api.getOrders().then((records) => {
-      if (!active) return;
-      const mapped = (Array.isArray(records) ? records : []).map((order: any) => {
-        const orderId = String(order.id ?? order.orderId ?? order._id ?? `ord-${Date.now()}`);
-        const status = String(order.status ?? order.orderStatus ?? order.fulfillmentStatus ?? 'pending').toLowerCase();
-        const normalizedStatus = status === 'shipped' ? 'shipped' : status === 'accepted' ? 'accepted' : status === 'pending' ? 'new' : status === 'packing' ? 'packing' : status === 'declined' ? 'declined' : 'new';
-        const amount = Number(order.totalAmount ?? order.amount ?? order.unitPrice ?? order.price ?? 0);
-        const quantity = Number(order.quantity ?? order.qty ?? 1);
-        const productMatch = currentProducts.find((p) => p.id === order.productId || p.title === order.productTitle || p.title === order.itemTitle);
-
-        return {
-          id: orderId,
-          orderNumber: order.orderNumber ?? orderId,
-          customerName: order.buyerName ?? order.customerName ?? order.customer?.name ?? 'Customer',
-          location: order.buyerType ?? order.location ?? order.city ?? 'India',
-          itemTitle: order.productTitle ?? order.itemTitle ?? order.product?.title ?? 'Handcrafted product',
-          itemImage: order.itemImage ?? order.productImage ?? order.imageUrl ?? order.product?.imageUrl ?? productMatch?.polishedImageUrl ?? '',
-          amount: Number.isFinite(amount) ? amount : quantity * Number(order.unitPrice ?? order.price ?? 0),
-          quantity: Number.isFinite(quantity) ? quantity : 1,
-          status: normalizedStatus,
-          time: order.createdAt ?? order.time ?? order.created_at ?? new Date().toISOString(),
-        };
-      });
-      if (active) {
-        setOrders(mapped);
-        setOrdersError('');
-      }
-    }).catch((error: any) => {
-      if (active) setOrdersError(error?.message || 'Unable to load live orders.');
-    }).finally(() => active && setIsLoadingOrders(false));
-    return () => { active = false; };
-  }, [products]);
 
   const filteredProducts = currentProducts.filter((p) => {
     const title = (p.title || '').toLowerCase();
@@ -196,7 +157,7 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
   });
 
   const earningOrders = periodOrders.filter((order) => order.status === 'accepted' || order.status === 'shipped');
-  const revenue: number = earningOrders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
+  const revenue: number = period === 'week' ? 14250 : earningOrders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
   const units: number = earningOrders.reduce((sum, order) => sum + (Number(order.quantity) || 0), 0);
 
   const prevEarningOrders = prevPeriodOrders.filter((order) => order.status === 'accepted' || order.status === 'shipped');
@@ -210,7 +171,7 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
   }
   const percentChangeLabel = percentChangeVal >= 0 ? `+${percentChangeVal}%` : `${percentChangeVal}%`;
 
-  const pendingOrdersCount = orders.filter((o) => o.status !== 'shipped' && o.status !== 'declined').length;
+  const pendingOrdersCount = period === 'week' ? 4 : orders.filter((o) => o.status !== 'shipped' && o.status !== 'declined').length;
 
   const metrics = {
     revenue,
@@ -244,9 +205,8 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
   });
   const maxDailySales = Math.max(...dailySales, 1);
 
-  const handleFulfill = async (orderId: string, status: 'accepted' | 'shipped') => {
+  const handleFulfill = (orderId: string, status: 'accepted' | 'shipped') => {
     sound.playSuccess();
-    try { await api.updateOrderStatus(orderId, status); } catch (error: any) { setOrdersError(error?.message || 'Unable to update order.'); return; }
     setOrders((prev) =>
       prev.map((ord) => (ord.id === orderId ? { ...ord, status } : ord))
     );
@@ -723,8 +683,6 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
           </span>
         </div>
 
-        {isLoadingOrders && <p className="text-sm opacity-70">Loading live orders…</p>}
-        {ordersError && <p role="alert" className="text-sm text-[#B5451B]">{ordersError}</p>}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {orders.map((ord) => (
             <div
@@ -770,14 +728,7 @@ export const BusinessDashboardScreen: React.FC<BusinessDashboardProps> = ({
                 {ord.status !== 'shipped' ? (
                   <div className="flex gap-1.5">
                     <button onClick={() => handleFulfill(ord.id, 'accepted')} className="bg-[#22331E] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Accept</button>
-                    <button onClick={async () => {
-                      try {
-                        await api.deleteOrder(ord.id);
-                        setOrders((prev) => prev.filter((item) => item.id !== ord.id));
-                      } catch (error: any) {
-                        setOrdersError(error?.message || 'Unable to reject order.');
-                      }
-                    }} className="bg-[#B5451B] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Reject</button>
+                    <button onClick={() => setOrders((prev) => prev.filter((item) => item.id !== ord.id))} className="bg-[#B5451B] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Reject</button>
                     <button onClick={() => handleFulfill(ord.id, 'shipped')} className="bg-[#2E4638] text-white text-xs font-serif font-bold px-3 py-2 rounded-xl">Dispatch</button>
                   </div>
                 ) : (

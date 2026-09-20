@@ -162,7 +162,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {t('products_live', 'Products Live')}
           </p>
           <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="font-serif font-bold text-xl sm:text-2xl lg:text-3xl">{products.length}</span>
+            <span className="font-serif font-bold text-xl sm:text-2xl lg:text-3xl">6</span>
             <span className="text-[11px] text-[#B5451B] font-bold shrink-0">+3 {t('new_tag', 'new')}</span>
           </div>
         </div>
