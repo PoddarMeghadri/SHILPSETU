@@ -24,20 +24,28 @@ const supabaseUrl = normalizeSupabaseUrl(rawSupabaseUrl);
 const supabaseAnonKey = (rawSupabaseAnonKey || '').trim();
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Critical: Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in current environment!');
+  console.info('[Supabase Info] Supabase credentials not present in client environment; running with built-in artisan persistence and Clerk authentication.');
 }
 
 /**
- * Singleton Supabase client configured with cross-origin persistent localStorage session storage
+ * Singleton Supabase client configured with cross-origin persistent localStorage session storage.
+ * Uses a safe fallback URL and anon key when not configured so external browsers and hosts never crash.
  */
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-  },
-});
+const fallbackSupabaseUrl = 'https://placeholder-project.supabase.co';
+const fallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
+
+export const supabase = createClient(
+  supabaseUrl || fallbackSupabaseUrl,
+  supabaseAnonKey || fallbackSupabaseAnonKey,
+  {
+    auth: {
+      persistSession: Boolean(supabaseUrl && supabaseAnonKey),
+      autoRefreshToken: Boolean(supabaseUrl && supabaseAnonKey),
+      detectSessionInUrl: Boolean(supabaseUrl && supabaseAnonKey),
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    },
+  }
+);
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabaseAnonKey);
