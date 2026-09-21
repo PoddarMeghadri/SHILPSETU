@@ -9,7 +9,7 @@ import {
   PASSWORD_MIN_LENGTH,
   PASSWORD_MAX_LENGTH,
 } from '../../services/passwordValidation';
-import { sendSupabaseOtp, verifySupabaseOtp, updateSupabasePassword } from '../../services/supabase';
+import { sendSupabaseRecoveryOtp, verifySupabaseOtp, updateSupabasePassword } from '../../services/supabase';
 import { useTranslation } from '../../services/translations';
 
 interface ForgotPasswordFlowProps {
@@ -87,7 +87,7 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
 
     setEmailError('');
     setIsSendingOtp(true);
-    const supabaseResult = await sendSupabaseOtp(cleanEmail, false);
+    const supabaseResult = await sendSupabaseRecoveryOtp(cleanEmail);
     if (supabaseResult.sent) {
       setResendCooldown(30);
       setOtpDigits(['', '', '', '', '', '']);
@@ -153,7 +153,7 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
     setIsVerifyingOtp(true);
 
     try {
-      const supabaseResult = await verifySupabaseOtp(email.trim().toLowerCase(), fullOtp, 'email');
+      const supabaseResult = await verifySupabaseOtp(email.trim().toLowerCase(), fullOtp, 'recovery');
       if (supabaseResult.verified) {
         setCurrentStep('new_password');
         setResetToken('');

@@ -448,7 +448,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
 
-    const supabaseVerification = await verifySupabaseOtp(cleanEmail, fullOtp, authFlowMode === 'sign_up' ? 'signup' : 'email');
+    const supabaseVerification = await verifySupabaseOtp(
+      cleanEmail,
+      fullOtp,
+      authFlowMode === 'sign_up' ? 'signup' : 'email'
+    );
     if (!supabaseVerification.verified) {
       setOtpError(supabaseVerification.error || 'Verification failed. Please request a new code.');
       setIsVerifyingOtp(false);
