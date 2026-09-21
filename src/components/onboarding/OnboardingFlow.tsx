@@ -805,21 +805,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 className="space-y-2.5"
               >
                 <div className="flex flex-col items-center justify-center gap-1">
-                  <div className="flex items-center justify-center gap-2.5">
-                    <h1
-                      className={`font-serif font-black text-3xl md:text-4xl tracking-wider uppercase ${
-                        isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
-                      }`}
-                    >
-                      {t('app_title', 'SHILPSETU')}
-                    </h1>
-                    {isAdminMode && (
-                      <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-[#059669] text-white rounded-md shadow-xs flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse" />
-                        ADMIN
-                      </span>
-                    )}
-                  </div>
+                  <h1
+                    className={`font-serif font-black text-3xl md:text-4xl tracking-wider uppercase ${
+                      isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                    }`}
+                  >
+                    {t('app_title', 'SHILPSETU')}
+                  </h1>
                 </div>
                 <p className={`font-sans font-bold text-xs md:text-sm tracking-[0.18em] uppercase max-w-xs leading-relaxed ${
                   isDark ? 'text-[#E8B84B]' : 'text-[#8C6B1B]'
@@ -1060,11 +1052,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     >
                       {t('app_title', 'SHILPSETU')}
                     </span>
-                    {isAdminMode && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-[#059669] text-white rounded-md shadow-xs">
-                        Admin
-                      </span>
-                    )}
                   </div>
                 </div>
 
@@ -1666,13 +1653,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
                       }`}
                     >
-                      {t('app_title', 'SHILPSETU')} AUTH
+                      {isAdminMode ? t('app_title', 'SHILPSETU') : `${t('app_title', 'SHILPSETU')} AUTH`}
                     </span>
-                    {isAdminMode && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-[#059669] text-white rounded-md shadow-xs">
-                        Admin
-                      </span>
-                    )}
                   </div>
                 </div>
 
