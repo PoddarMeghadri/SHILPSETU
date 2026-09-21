@@ -56,6 +56,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             fullName: artisan.name,
             avatarUrl: uploadRes.publicUrl,
             craftSpecialty: artisan.craft,
+            city: artisan.city,
             location: artisan.location,
             mobileNumber: artisan.mobile,
             email: artisan.email,

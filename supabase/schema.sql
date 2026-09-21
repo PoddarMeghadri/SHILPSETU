@@ -9,13 +9,20 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   mobile_number TEXT,
   preferred_language TEXT NOT NULL DEFAULT 'hi',
   desired_workshop TEXT,
+  city TEXT,
   location TEXT,
   craft_specialty TEXT,
   avatar_url TEXT,
   bio TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT unique_user_email UNIQUE (email),
+  CONSTRAINT unique_user_mobile UNIQUE (mobile_number)
 );
+
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE public.profiles ADD CONSTRAINT unique_user_email UNIQUE (email);
+ALTER TABLE public.profiles ADD CONSTRAINT unique_user_mobile UNIQUE (mobile_number);
 
 -- 2. Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;

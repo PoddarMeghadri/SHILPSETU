@@ -48,6 +48,8 @@ export interface ArtisanProfile {
   gender?: 'male' | 'female' | 'other';
   title: string;
   location: string;
+  city?: string;
+  state?: string;
   craft: string;
   avatarUrl: string;
   bannerUrl?: string;

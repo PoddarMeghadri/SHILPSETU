@@ -204,8 +204,8 @@ export function App() {
           if (registeredName || prof) {
             setArtisan((prev) => {
               const rawLoc = prof?.location || '';
-              const state = rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : prev.state;
-              const city = rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : prev.city;
+              const state = prof?.state || (rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : prev.state);
+              const city = prof?.city || (rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : prev.city);
               const merged = {
                 ...prev,
                 name: registeredName || prev.name,
@@ -292,6 +292,7 @@ export function App() {
         mobileNumber: updated.mobile || '',
         email: updated.email || '',
         craftSpecialty: updated.craft,
+        city: updated.city,
         location: updated.location,
         avatarUrl: updated.avatarUrl,
         bio: updated.bio,
@@ -461,11 +462,25 @@ export function App() {
         ? artisan.name
         : 'Master Artisan');
 
+    // Check if an existing avatar was already saved for this user
+    let existingAvatar = artisan.avatarUrl;
+    try {
+      const stored = localStorage.getItem('shilpsetu_artisan');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.avatarUrl && parsed.avatarUrl !== DEFAULT_ARTISAN_AVATAR) {
+          existingAvatar = parsed.avatarUrl;
+        }
+      }
+    } catch (_) {}
+
     const updatedArtisan: ArtisanProfile = {
       ...artisan,
       name: registeredName,
       gender: data.gender || 'male',
-      avatarUrl: DEFAULT_ARTISAN_AVATAR,
+      avatarUrl: existingAvatar || DEFAULT_ARTISAN_AVATAR,
+      city: data.city?.trim() || artisan.city,
+      state: data.state?.trim() || artisan.state,
       location: userLocation || (isAdminMode ? 'New Delhi, Delhi' : artisan.location),
       mobile: data.mobile?.trim() || (isAdminMode ? '9999999999' : artisan.mobile),
       email: data.email?.trim() ? data.email.trim() : (isAdminMode ? 'admin@shilpsetu.in' : undefined),
@@ -488,6 +503,7 @@ export function App() {
       mobileNumber: updatedArtisan.mobile,
       preferredLanguage: data.selectedLanguage || language,
       desiredWorkshop: data.selectedCraft,
+      city: updatedArtisan.city,
       location: userLocation,
       craftSpecialty: craftInfo.craft,
       avatarUrl: updatedArtisan.avatarUrl,

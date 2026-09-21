@@ -168,13 +168,10 @@ export async function checkAccountUniqueness(
   if (isSupabaseConfigured() && !isProfilesTableMissing) {
     try {
       const filters: string[] = [];
-      if (cleanEmail) filters.push(`email.ilike.${cleanEmail}`);
+      if (cleanEmail) filters.push(`email.eq.${cleanEmail}`);
       if (cleanMobile) filters.push(`mobile_number.eq.${cleanMobile}`);
       if (cleanDigits && cleanDigits !== cleanMobile) {
         filters.push(`mobile_number.eq.${cleanDigits}`);
-      }
-      if (cleanDigits) {
-        filters.push(`mobile_number.ilike.%${cleanDigits}%`);
       }
 
       const { data: matchingUsers, error: checkError } = await supabase
@@ -195,11 +192,11 @@ export async function checkAccountUniqueness(
           if (existingUser.email && cleanEmail && existingUser.email.trim().toLowerCase() === cleanEmail) {
             return {
               unique: false,
-              error: 'An account is already registered with this email address. Please sign in instead.',
+              error: 'An account is already registered with this email address. Please sign in.',
               field: 'email',
             };
           }
-          if (existingUser.mobile_number && cleanDigits) {
+          if (existingUser.mobile_number && (cleanMobile || cleanDigits)) {
             const storedDigits = existingUser.mobile_number.replace(/\D/g, '');
             if (
               existingUser.mobile_number.trim() === cleanMobile ||
@@ -208,7 +205,7 @@ export async function checkAccountUniqueness(
             ) {
               return {
                 unique: false,
-                error: 'An account is already registered with this mobile number. Please sign in instead.',
+                error: 'An account is already registered with this mobile number. Please sign in.',
                 field: 'mobile',
               };
             }
@@ -235,7 +232,7 @@ export async function checkAccountUniqueness(
       if (backendCheck && !backendCheck.unique) {
         return {
           unique: false,
-          error: backendCheck.error,
+          error: backendCheck.error || (backendCheck.field === 'mobile' ? 'An account is already registered with this mobile number. Please sign in.' : 'An account is already registered with this email address. Please sign in.'),
           field: backendCheck.field,
         };
       }
@@ -290,6 +287,7 @@ export async function upsertSupabaseProfile(profile: {
   mobileNumber?: string;
   preferredLanguage?: string;
   desiredWorkshop?: string;
+  city?: string;
   location?: string;
   craftSpecialty?: string;
   avatarUrl?: string;
@@ -365,14 +363,17 @@ export async function upsertSupabaseProfile(profile: {
         : `artisan_${Date.now()}`;
     }
 
-    const payload = {
+    const effectiveCity = profile.city?.trim() || (profile.location?.includes(',') ? profile.location.split(',')[0].trim() : (profile.location?.trim() || ''));
+
+    const payload: any = {
       id: userId,
       full_name: profile.fullName?.trim() || 'Master Artisan',
       email: cleanEmail || null,
       mobile_number: cleanMobile || null,
+      city: effectiveCity || null,
       preferred_language: profile.preferredLanguage || 'hi',
       desired_workshop: profile.desiredWorkshop || 'pottery',
-      location: profile.location || 'Varanasi, Uttar Pradesh',
+      location: profile.location || (effectiveCity ? `${effectiveCity}, Uttar Pradesh` : 'Varanasi, Uttar Pradesh'),
       craft_specialty: profile.craftSpecialty || 'Terracotta Pottery',
       avatar_url: profile.avatarUrl || null,
       bio: profile.bio || null,
@@ -386,6 +387,13 @@ export async function upsertSupabaseProfile(profile: {
         isProfilesTableMissing = true;
         console.warn('[Supabase Sync] public.profiles table is not created in Supabase yet. Artisan profile safely persisted to local and backend storage.');
         return { saved: true, localOnly: true };
+      }
+      // If city column is missing in older remote schema, retry without city column
+      if (error.message?.includes('city') || error.message?.includes('column')) {
+        const fallbackPayload = { ...payload };
+        delete fallbackPayload.city;
+        const { error: retryErr } = await supabase.from('profiles').upsert(fallbackPayload, { onConflict: 'id' });
+        if (!retryErr) return { saved: true };
       }
       console.warn('[Supabase] upsert notice:', error.message);
       // Fallback: try updating by email if ID conflict failed
@@ -448,12 +456,12 @@ export async function signInSupabaseWithEmailOrMobile(identifier: string, passwo
     return { signedIn: false, error: msg };
   }
 
-  // Fetch full profile from remote profiles table
+  // Fetch full profile from remote profiles table including city and avatar_url
   let profileData: any = null;
   try {
     const { data: prof } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, full_name, email, mobile_number, city, location, preferred_language, desired_workshop, craft_specialty, avatar_url, bio, updated_at')
       .eq('id', data.user.id)
       .maybeSingle();
     profileData = prof;
@@ -477,7 +485,7 @@ export async function updateSupabasePassword(newPassword: string) {
 
 /**
  * Upload an artisan profile photo (DP) to Supabase Storage 'avatars' bucket.
- * Falls back to server-side admin upload if client storage permission is restricted.
+ * Enforces immediate persistent update of public.profiles.avatar_url.
  */
 export async function uploadAvatarToSupabase(
   fileOrBase64: File | Blob | string,
@@ -509,15 +517,20 @@ export async function uploadAvatarToSupabase(
       });
       const data = await resp.json();
       if (resp.ok && data.publicUrl) {
+        if (isSupabaseConfigured() && safeUserId.includes('-')) {
+          try {
+            await supabase.from('profiles').update({ avatar_url: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', safeUserId);
+          } catch (_) {}
+        }
         return { publicUrl: data.publicUrl };
       }
       return { error: data.error || 'Avatar upload failed' };
     }
 
-    // Direct client upload attempt
+    // Direct client upload attempt to Supabase Storage 'avatars'
     if (isSupabaseConfigured() && typeof fileOrBase64 !== 'string') {
       const fileExt = (fileOrBase64 as File).name?.split('.').pop() || 'jpg';
-      const filePath = `${safeUserId}/avatar_${Date.now()}.${fileExt}`;
+      const filePath = `${safeUserId}/avatar.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
@@ -529,14 +542,25 @@ export async function uploadAvatarToSupabase(
       if (!uploadError) {
         const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
         if (data?.publicUrl) {
-          // Update profile column if userId is UUID
+          // Immediately update profile record with the permanent URL
           if (safeUserId.includes('-')) {
             try {
-              await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', safeUserId);
+              await supabase.from('profiles').update({ avatar_url: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', safeUserId);
             } catch (_) {}
           }
+          // Also sync to localStorage
+          try {
+            const stored = localStorage.getItem('shilpsetu_artisan');
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              parsed.avatarUrl = data.publicUrl;
+              localStorage.setItem('shilpsetu_artisan', JSON.stringify(parsed));
+            }
+          } catch (_) {}
           return { publicUrl: data.publicUrl };
         }
+      } else {
+        console.warn('[Supabase Client Avatar Upload]:', uploadError.message);
       }
     }
 
@@ -551,6 +575,19 @@ export async function uploadAvatarToSupabase(
     });
     const data = await resp.json();
     if (resp.ok && data.publicUrl) {
+      if (isSupabaseConfigured() && safeUserId.includes('-')) {
+        try {
+          await supabase.from('profiles').update({ avatar_url: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', safeUserId);
+        } catch (_) {}
+      }
+      try {
+        const stored = localStorage.getItem('shilpsetu_artisan');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          parsed.avatarUrl = data.publicUrl;
+          localStorage.setItem('shilpsetu_artisan', JSON.stringify(parsed));
+        }
+      } catch (_) {}
       return { publicUrl: data.publicUrl };
     }
     return { error: data.error || 'Failed to upload avatar' };

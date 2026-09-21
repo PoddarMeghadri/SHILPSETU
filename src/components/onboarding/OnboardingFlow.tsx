@@ -373,9 +373,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         setIsSendingOtp(false);
         sound.playError();
         if (uniqueness.field === 'mobile' || uniqueness.error?.includes('mobile')) {
-          setMobileError(uniqueness.error || 'An account is already registered with this mobile number. Please sign in instead.');
+          setMobileError(uniqueness.error || 'An account is already registered with this mobile number. Please sign in.');
         } else {
-          setEmailError(uniqueness.error || 'An account is already registered with this email address. Please sign in instead.');
+          setEmailError(uniqueness.error || 'An account is already registered with this email address. Please sign in.');
         }
         return;
       }
@@ -565,6 +565,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         selectedState ||
         'Uttar Pradesh';
       const artisanCity =
+        profile?.city ||
         (rawLocation.includes(',') ? rawLocation.split(',')[0].trim() : rawLocation) ||
         selectedCity ||
         'Varanasi';
@@ -640,6 +641,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       mobileNumber: cleanMobile,
       preferredLanguage: language,
       desiredWorkshop: selectedCraft,
+      city: effectiveCity,
       location: `${effectiveCity}, ${selectedState}`,
       craftSpecialty: getLocalizedCraftName(selectedCraft, language),
     });
@@ -1367,7 +1369,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                               if (!check.unique) {
                                 setMobileError(
                                   check.error ||
-                                    'An account is already registered with this mobile number. Please sign in instead.'
+                                    'An account is already registered with this mobile number. Please sign in.'
                                 );
                               }
                             } catch (_) {}
@@ -1452,7 +1454,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                             if (!check.unique) {
                               setEmailError(
                                 check.error ||
-                                  'An account is already registered with this email address. Please sign in instead.'
+                                  'An account is already registered with this email address. Please sign in.'
                               );
                             }
                           } catch (_) {}

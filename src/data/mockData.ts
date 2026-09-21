@@ -41,6 +41,8 @@ export const INITIAL_ARTISAN: ArtisanProfile & { mobile?: string; email?: string
   gender: 'male',
   title: 'Master Clay Sculptor & Potter',
   location: 'Varanasi, Uttar Pradesh',
+  city: 'Varanasi',
+  state: 'Uttar Pradesh',
   craft: 'Terracotta & Heritage Pottery',
   avatarUrl: DEFAULT_ARTISAN_AVATAR,
   completeness: 88,

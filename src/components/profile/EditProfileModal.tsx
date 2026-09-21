@@ -152,8 +152,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         udyamNumber: artisan.udyamNumber || '',
       });
       const parsed = parseLocationString(artisan.location);
-      setSelectedState(parsed.state || 'Uttar Pradesh');
-      setSelectedCity(parsed.city || 'Varanasi');
+      setSelectedState(artisan.state || parsed.state || 'Uttar Pradesh');
+      setSelectedCity(artisan.city || parsed.city || 'Varanasi');
       setSelectedPortraitForDelete(artisan.avatarUrl || null);
     }
   }, [isOpen, artisan]);
@@ -311,6 +311,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         mobile: safeMobile,
         email: safeEmail,
         avatarUrl: safeAvatar,
+        city: selectedCity,
+        state: selectedState,
         location: combinedLocation,
         recentPhotos: cleanedRecentPhotos,
         completeness: Math.min(
@@ -334,6 +336,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           email: safeEmail,
           mobileNumber: safeMobile,
           avatarUrl: safeAvatar,
+          city: selectedCity,
           location: combinedLocation,
           bio: safeBio,
           craftSpecialty: artisan.craft,

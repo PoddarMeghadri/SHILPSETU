@@ -164,7 +164,7 @@ app.post('/api/auth/check-identity', async (req, res) => {
               if (email && p.email && p.email.trim().toLowerCase() === email) {
                 return res.json({
                   unique: false,
-                  error: 'An account is already registered with this email address. Please sign in instead.',
+                  error: 'An account is already registered with this email address. Please sign in.',
                   field: 'email',
                 });
               }
@@ -177,7 +177,7 @@ app.post('/api/auth/check-identity', async (req, res) => {
                 ) {
                   return res.json({
                     unique: false,
-                    error: 'An account is already registered with this mobile number. Please sign in instead.',
+                    error: 'An account is already registered with this mobile number. Please sign in.',
                     field: 'mobile',
                   });
                 }
@@ -196,7 +196,7 @@ app.post('/api/auth/check-identity', async (req, res) => {
       if (existingEmail) {
         return res.json({
           unique: false,
-          error: 'An account is already registered with this email address. Please sign in instead.',
+          error: 'An account is already registered with this email address. Please sign in.',
           field: 'email',
         });
       }
@@ -207,7 +207,7 @@ app.post('/api/auth/check-identity', async (req, res) => {
       if (existingPhone) {
         return res.json({
           unique: false,
-          error: 'An account is already registered with this mobile number. Please sign in instead.',
+          error: 'An account is already registered with this mobile number. Please sign in.',
           field: 'mobile',
         });
       }
@@ -892,7 +892,11 @@ app.post('/api/storage/avatar', uploadMiddleware.single('image'), async (req, re
 
       if (publicUrl && userId && userId !== 'artisan_demo') {
         try {
-          await sbAdmin.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+          if (userId.includes('@')) {
+            await sbAdmin.from('profiles').update({ avatar_url: publicUrl, updated_at: new Date().toISOString() }).eq('email', userId);
+          } else {
+            await sbAdmin.from('profiles').update({ avatar_url: publicUrl, updated_at: new Date().toISOString() }).eq('id', userId);
+          }
         } catch (_) {}
       }
     }
@@ -903,6 +907,15 @@ app.post('/api/storage/avatar', uploadMiddleware.single('image'), async (req, re
       } else if (req.body.imageBase64) {
         publicUrl = await saveBase64Image(req.body.imageBase64, 'avatar');
       }
+    }
+
+    if (publicUrl && userId && userId !== 'artisan_demo') {
+      try {
+        const artisan = db.getArtisanById(userId) || (userId.includes('@') ? db.getArtisanByEmail(userId) : null);
+        if (artisan) {
+          db.upsertArtisan({ ...artisan, avatarUrl: publicUrl });
+        }
+      } catch (_) {}
     }
 
     res.json({ publicUrl, filePath });
