@@ -12,6 +12,8 @@ interface LanguageSelectionScreenProps {
   onBack: () => void;
   isDark?: boolean;
   onToggleTheme?: () => void;
+  isSignIn?: boolean;
+  continueButtonText?: string;
 }
 
 export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = ({
@@ -20,6 +22,8 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
   onBack,
   isDark = false,
   onToggleTheme,
+  isSignIn = false,
+  continueButtonText,
 }) => {
   const { isAdminMode } = useAdminMode();
   const [selectedLang, setSelectedLang] = useState<LanguageCode>(initialLanguage);
@@ -288,7 +292,7 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
                 : 'bg-[#B5451B] hover:bg-[#9C3A14]'
             }`}
           >
-            <span>{activeMeta.continueButton}</span>
+            <span>{isSignIn ? (continueButtonText || 'Continue') : activeMeta.continueButton}</span>
             <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">
               {activeMeta.isRtl ? 'arrow_backward' : 'arrow_forward'}
             </span>

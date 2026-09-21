@@ -98,13 +98,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const availableCities =
     INDIAN_STATES_AND_CITIES.find((s) => s.state === selectedState)?.cities || [];
 
-  // Flexible 6-digit (or 9-digit) numeric OTP code support
-  const [otpLength, setOtpLength] = useState<number>(6);
+  // Flexible 6-digit numeric OTP code support
+  const [otpLength] = useState<number>(6);
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [otpError, setOtpError] = useState<string>('');
   const [resendNotice, setResendNotice] = useState<string>('');
   const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
-  const [showSupabaseOtpTip, setShowSupabaseOtpTip] = useState<boolean>(true);
+  const [showSignInPassword, setShowSignInPassword] = useState<boolean>(false);
+  const [pendingSignInData, setPendingSignInData] = useState<{
+    user?: any;
+    session?: any;
+    profile?: any;
+    identifier?: string;
+    targetEmail?: string;
+  } | null>(null);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Listen for Supabase authenticated session (e.g., if user clicked an email link)
@@ -129,8 +136,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         if (supaEmail) {
           setEmail(supaEmail);
           localStorage.setItem('shilpsetu_token', session.access_token);
-          sound.playSuccess();
-          setCurrentStep(3);
         }
       }
     });
@@ -169,101 +174,112 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       }
       setIsSendingOtp(true);
       setSignInError('');
+
+      // Admin bypass mode
+      if (isAdminMode) {
+        const targetEmail = identifier.includes('@') ? identifier.toLowerCase() : 'admin@shilpsetu.in';
+        setEmail(targetEmail);
+        setOtpDigits(['', '', '', '', '', '']);
+        setResendCooldown(30);
+        setResendNotice('Admin bypass mode active. Enter 000000 to authenticate.');
+        setCurrentStep(2);
+        setIsSendingOtp(false);
+        sound.playSuccess();
+        return;
+      }
+
       try {
-        // 1. Attempt Supabase direct sign-in with email or mobile
+        // 1. Verify credentials with Supabase password sign-in
         let supabaseSuccess = false;
         let supabaseUser: any = null;
+        let supabaseSession: any = null;
         let supabaseProfile: any = null;
         try {
           const sbResult = await signInSupabaseWithEmailOrMobile(identifier, signInPassword);
           if (sbResult.signedIn) {
             supabaseSuccess = true;
             supabaseUser = sbResult.user;
+            supabaseSession = sbResult.session;
             supabaseProfile = sbResult.profile;
           } else if (sbResult.isEmailNotConfirmed) {
             sound.playError();
             setSignInError(sbResult.error || 'Your email is not yet confirmed. Please verify the code sent to your email.');
             setIsSendingOtp(false);
             return;
+          } else {
+            sound.playError();
+            setSignInError(sbResult.error || 'The email/mobile number or password is incorrect.');
+            setIsSendingOtp(false);
+            return;
           }
-        } catch (sbErr) {
+        } catch (sbErr: any) {
           console.warn('[Supabase Sign In Notice]:', sbErr);
+          sound.playError();
+          setSignInError(sbErr?.message || 'The email/mobile number or password is incorrect.');
+          setIsSendingOtp(false);
+          return;
         }
 
         if (!supabaseSuccess) {
-          throw new Error('The email/mobile number or password is incorrect.');
+          sound.playError();
+          setSignInError('The email/mobile number or password is incorrect.');
+          setIsSendingOtp(false);
+          return;
         }
 
-        // Successful direct sign-in! No OTP step needed.
-        sound.playSuccess();
-        const activeToken = supabaseUser?.id || '';
-        localStorage.setItem('shilpsetu_token', activeToken);
-        localStorage.setItem('shilpsetu_auth_done', 'true');
+        // 2. Resolve registered email address
+        const targetEmail = (
+          supabaseProfile?.email ||
+          (identifier.includes('@') ? identifier.trim().toLowerCase() : supabaseUser?.email) ||
+          ''
+        ).trim().toLowerCase();
+
+        if (!targetEmail) {
+          sound.playError();
+          setSignInError('Could not find registered email address for this account.');
+          setIsSendingOtp(false);
+          return;
+        }
+
+        // 3. Send strictly 6-digit OTP to the registered email address (shouldCreateUser: false)
+        const otpResult = await sendSupabaseOtp(targetEmail, false);
+        if (!otpResult.sent) {
+          sound.playError();
+          setSignInError(otpResult.error || 'Unable to send 6-digit verification code to your registered email.');
+          setIsSendingOtp(false);
+          return;
+        }
+
+        // 4. Stash sign-in metadata and transition to 6-digit OTP verification screen
+        setPendingSignInData({
+          user: supabaseUser,
+          session: supabaseSession,
+          profile: supabaseProfile,
+          identifier,
+          targetEmail,
+        });
 
         const artisanName =
           supabaseProfile?.full_name ||
           supabaseUser?.user_metadata?.full_name ||
           'Master Artisan';
-        const artisanEmail =
-          supabaseProfile?.email ||
-          (identifier.includes('@') ? identifier : supabaseUser?.email) ||
-          '';
         const artisanMobile =
           supabaseProfile?.mobile_number ||
           (!identifier.includes('@') ? identifier : '') ||
           '';
-        const rawLocation = supabaseProfile?.location || '';
-        const artisanState =
-          (rawLocation.includes(',') ? rawLocation.split(',')[1].trim() : '') ||
-          'Uttar Pradesh';
-        const artisanCity =
-          (rawLocation.includes(',') ? rawLocation.split(',')[0].trim() : rawLocation) ||
-          'Varanasi';
-        const storedCraft = String(
-          supabaseProfile?.desired_workshop ||
-          supabaseProfile?.craft_specialty ||
-          'pottery'
-        ).toLowerCase();
-        const craftId =
-          CRAFT_OPTIONS.find(
-            (c) =>
-              storedCraft.includes(c.name.toLowerCase().split(' ')[0]) ||
-              storedCraft.includes(c.id.toLowerCase())
-          )?.id || 'pottery';
 
         setFullName(artisanName);
-        setEmail(artisanEmail);
+        setEmail(targetEmail);
         setMobile(artisanMobile);
-        setSelectedState(artisanState);
-        setSelectedCity(artisanCity);
-        setSelectedCraft(craftId);
 
-        const artisanProfile = {
-          name: artisanName,
-          email: artisanEmail,
-          mobile: artisanMobile,
-          craft: getLocalizedCraftName(craftId, language),
-          location: `${artisanCity}, ${artisanState}`,
-          state: artisanState,
-          city: artisanCity,
-          desiredWorkshop: craftId,
-          preferredLanguage: language,
-          avatarUrl: supabaseProfile?.avatar_url || undefined,
-          bio: supabaseProfile?.bio || undefined,
-        };
-        localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
-
-        // Directly complete sign-in and open dashboard!
-        onComplete({
-          fullName: artisanName,
-          gender: gender || 'other',
-          state: artisanState,
-          city: artisanCity,
-          mobile: artisanMobile,
-          email: artisanEmail || undefined,
-          selectedCraft: craftId,
-          selectedLanguage: language,
-        });
+        sound.playSuccess();
+        setIsSendingOtp(false);
+        setResendCooldown(30);
+        setResendNotice('A 6-digit verification code was sent to your email.');
+        setOtpDigits(['', '', '', '', '', '']);
+        setOtpError('');
+        setCurrentStep(2);
+        return;
       } catch (error: any) {
         sound.playError();
         setSignInError(error.message || 'Unable to sign in. Please try again.');
@@ -402,24 +418,22 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
     setResendCooldown(30);
-    setResendNotice(`New ${otpLength}-digit verification code sent.`);
-    setOtpDigits(Array(otpLength).fill(''));
+    setResendNotice('New 6-digit verification code sent.');
+    setOtpDigits(['', '', '', '', '', '']);
   };
 
-  // Handle OTP digit changes with support for 6 to 9 digits
+  // Handle OTP digit changes for strictly 6 digits
   const handleOtpChange = (index: number, value: string) => {
     if (value.length > 1) {
-      // Handle paste of numeric OTP (automatically adapts to 6, 8, or 9 digits)
-      const cleaned = value.replace(/\D/g, '').slice(0, 9);
+      // Handle paste of strictly 6-digit numeric OTP
+      const cleaned = value.replace(/\D/g, '').slice(0, 6);
       if (!cleaned) return;
-      const targetLength = cleaned.length >= 7 ? Math.min(9, cleaned.length) : 6;
-      setOtpLength(targetLength);
-      const newOtp = Array(targetLength).fill('');
+      const newOtp = Array(6).fill('');
       cleaned.split('').forEach((char, i) => {
-        if (i < targetLength) newOtp[i] = char;
+        if (i < 6) newOtp[i] = char;
       });
       setOtpDigits(newOtp);
-      const nextIndex = Math.min(cleaned.length, targetLength - 1);
+      const nextIndex = Math.min(cleaned.length, 5);
       otpInputRefs.current[nextIndex]?.focus();
       return;
     }
@@ -432,7 +446,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setResendNotice('');
 
     // Auto advance to next box if digit typed
-    if (digit && index < otpLength - 1) {
+    if (digit && index < 5) {
       otpInputRefs.current[index + 1]?.focus();
     }
   };
@@ -476,6 +490,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
       const adminMockToken = `admin_bypass_session_${Date.now()}_mock`;
       localStorage.setItem('shilpsetu_token', adminMockToken);
+      localStorage.setItem('shilpsetu_auth_done', 'true');
+
+      if (authFlowMode === 'sign_in') {
+        const artisanProfile = {
+          name: fullName.trim() || 'Admin Artisan',
+          email: cleanEmail || 'admin@shilpsetu.in',
+          mobile: cleanMobile || '9999999999',
+          craft: getLocalizedCraftName(selectedCraft || 'pottery', language),
+          location: `${selectedCity || 'Varanasi'}, ${selectedState || 'Uttar Pradesh'}`,
+          state: selectedState || 'Uttar Pradesh',
+          city: selectedCity || 'Varanasi',
+          desiredWorkshop: selectedCraft || 'pottery',
+          preferredLanguage: language,
+        };
+        localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
+        setCurrentStep(3);
+        return;
+      }
 
       // Keep admin onboarding in the shared flow so language and workshop selection
       // are completed before the app marks authentication as finished.
@@ -494,9 +526,86 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setIsVerifyingOtp(false);
       return;
     }
-    if (supabaseVerification.session?.access_token) {
-      localStorage.setItem('shilpsetu_token', supabaseVerification.session.access_token);
+    const activeToken =
+      supabaseVerification.session?.access_token ||
+      pendingSignInData?.session?.access_token ||
+      supabaseVerification.user?.id ||
+      'shilpsetu_session';
+    localStorage.setItem('shilpsetu_token', activeToken);
+    localStorage.setItem('shilpsetu_auth_done', 'true');
+
+    if (authFlowMode === 'sign_in') {
+      sound.playSuccess();
+      const profile = pendingSignInData?.profile;
+      const user = supabaseVerification.user || pendingSignInData?.user;
+
+      const artisanName =
+        profile?.full_name ||
+        user?.user_metadata?.full_name ||
+        fullName.trim() ||
+        'Master Artisan';
+      const artisanEmail =
+        profile?.email ||
+        cleanEmail ||
+        '';
+      const artisanMobile =
+        profile?.mobile_number ||
+        mobile.trim() ||
+        cleanMobile ||
+        '';
+      const rawLocation = profile?.location || '';
+      const artisanState =
+        (rawLocation.includes(',') ? rawLocation.split(',')[1].trim() : '') ||
+        selectedState ||
+        'Uttar Pradesh';
+      const artisanCity =
+        (rawLocation.includes(',') ? rawLocation.split(',')[0].trim() : rawLocation) ||
+        selectedCity ||
+        'Varanasi';
+      const storedCraft = String(
+        profile?.desired_workshop ||
+        profile?.craft_specialty ||
+        selectedCraft ||
+        'pottery'
+      ).toLowerCase();
+      const craftId =
+        CRAFT_OPTIONS.find(
+          (c) =>
+            storedCraft.includes(c.name.toLowerCase().split(' ')[0]) ||
+            storedCraft.includes(c.id.toLowerCase())
+        )?.id || 'pottery';
+
+      setFullName(artisanName);
+      setEmail(artisanEmail);
+      setMobile(artisanMobile);
+      setSelectedState(artisanState);
+      setSelectedCity(artisanCity);
+      setSelectedCraft(craftId);
+
+      const artisanProfile = {
+        name: artisanName,
+        email: artisanEmail,
+        mobile: artisanMobile,
+        craft: getLocalizedCraftName(craftId, language),
+        location: `${artisanCity}, ${artisanState}`,
+        state: artisanState,
+        city: artisanCity,
+        desiredWorkshop: craftId,
+        preferredLanguage: profile?.preferred_language || language,
+        avatarUrl: profile?.avatar_url || undefined,
+        bio: profile?.bio || undefined,
+      };
+      localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
+
+      setIsVerifyingOtp(false);
+      setOtpError('');
+      setResendNotice('');
+
+      // Navigate to Step 3: Language Selection screen
+      setCurrentStep(3);
+      return;
     }
+
     if (authFlowMode === 'sign_up') {
       const passwordResult = await updateSupabasePassword(password);
       if (!passwordResult.updated) {
@@ -827,10 +936,27 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       Forgot Password?
                     </button>
                   </div>
-                  <input type="password" required value={signInPassword}
-                    onChange={(e) => { setSignInPassword(e.target.value); setSignInError(''); }}
-                    placeholder="Enter your password"
-                    className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B] focus:outline-hidden focus:ring-2 focus:ring-[#B5451B]/30" />
+                  <div className="relative">
+                    <input
+                      type={showSignInPassword ? 'text' : 'password'}
+                      required
+                      value={signInPassword}
+                      onChange={(e) => { setSignInPassword(e.target.value); setSignInError(''); }}
+                      placeholder="Enter your password"
+                      className="w-full pl-4 pr-11 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B] focus:outline-hidden focus:ring-2 focus:ring-[#B5451B]/30"
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowSignInPassword((prev) => !prev)}
+                      className="absolute right-3.5 top-3 text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
+                      aria-label={showSignInPassword ? 'Hide password' : 'Show password'}
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        {showSignInPassword ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
                 {signInError && <p className="text-xs text-red-500 font-medium">{signInError}</p>}
               </form>
@@ -841,7 +967,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 {isSendingOtp ? (
                   <>
                     <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
-                    <span>Signing In...</span>
+                    <span>Sending 6-Digit OTP...</span>
                   </>
                 ) : (
                   <>
@@ -1265,7 +1391,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       />
                     </div>
                   </div>
-                  {mobileError ? (
+                  {mobileError && (
                     <div className="mt-1 space-y-1">
                       <p className="text-[11px] text-red-500 font-medium">{mobileError}</p>
                       {(mobileError.includes('already registered') || mobileError.includes('sign in')) && (
@@ -1284,10 +1410,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         </button>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-[10px] text-black/60 dark:text-white/60 mt-1">
-                      {t('we_will_send_otp', 'We will send a 6-digit OTP to this number.')}
-                    </p>
                   )}
                 </div>
 
@@ -1376,7 +1498,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     </div>
                   ) : (
                     <p className="text-[10px] text-black/60 dark:text-white/60 mt-1">
-                      {t('email_verification_notice', 'A 6-digit Clerk email verification code will be sent to this email.')}
+                      {t('we_will_send_email_otp', 'we will send a 6 digit OTP to this email address')}
                     </p>
                   )}
                 </div>
@@ -1627,74 +1749,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   </div>
                 )}
 
-                {!isAdminMode && (
-                  <div className="max-w-sm mx-auto mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowSupabaseOtpTip((prev) => !prev)}
-                      className="text-[11px] font-semibold text-[#B5451B] dark:text-[#E8B84B] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-xs">help_outline</span>
-                      <span>{showSupabaseOtpTip ? 'Hide OTP setup instructions' : 'Still receiving a login link instead of numeric OTP? Click here'}</span>
-                    </button>
-                    {showSupabaseOtpTip && (
-                      <div className="mt-2 p-3.5 text-left rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] space-y-2 text-black/85 dark:text-white/85 shadow-xs">
-                        <p className="font-bold text-[#B5451B] dark:text-[#E8B84B] text-xs">
-                          How to make Supabase send strictly OTP (No Link):
-                        </p>
-                        <p className="leading-snug text-[11px]">
-                          This app uses Supabase's <strong>Magic Link</strong> template only as an OTP delivery template:
-                        </p>
-                        <ol className="list-decimal list-inside space-y-1.5 pl-1 text-[10.5px]">
-                          <li>
-                            Open <strong>Supabase Dashboard</strong> &rarr; <strong>Authentication</strong> &rarr; <strong>Email Templates</strong>.
-                          </li>
-                          <li>
-                            Click <strong>Magic Link</strong>. Remove any <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-[10px]">&lt;a href="&#123;&#123; .ConfirmationURL &#125;&#125;"&gt;</code> link and display only:
-                            <div className="mt-1 p-1.5 bg-black/10 dark:bg-black/40 rounded font-mono text-[10px] font-bold text-[#B5451B] dark:text-[#E8B84B]">
-                              &#123;&#123; .Token &#125;&#125;
-                            </div>
-                          </li>
-                          <li>
-                            To set 6 digits: Under <strong>Authentication</strong> &rarr; <strong>Providers</strong> &rarr; <strong>Email</strong>, set <strong>OTP length</strong> to <strong>6</strong>.
-                          </li>
-                          <li>Click <strong>Save</strong>. Supabase will strictly send the numeric OTP code!</li>
-                        </ol>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Verification Code Format & Length Switcher */}
-              <div className="flex flex-col items-center justify-center gap-1.5 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#B5451B]/10 text-[#B5451B] dark:bg-[#B5451B]/20 dark:text-[#E8B84B]">
-                    <span className="material-symbols-outlined text-xs">pin</span>
-                    {otpLength}-Digit Verification Code
-                  </span>
-                  {!isAdminMode && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        sound.playTap();
-                        const nextLen = otpLength === 6 ? 9 : 6;
-                        setOtpLength(nextLen);
-                        setOtpDigits(Array(nextLen).fill(''));
-                        setOtpError('');
-                      }}
-                      className="text-[11px] font-semibold text-[#B5451B] dark:text-[#E8B84B] hover:underline flex items-center gap-1 cursor-pointer bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded-full"
-                    >
-                      <span className="material-symbols-outlined text-xs">tune</span>
-                      <span>{otpLength === 6 ? 'Received 9 digits? Switch' : 'Switch to 6 digits'}</span>
-                    </button>
-                  )}
-                </div>
               </div>
 
               {/* Digit Input Boxes */}
               <div className="space-y-4 mb-6">
-                <div className={`flex justify-center flex-wrap ${otpLength > 6 ? 'gap-1.5 sm:gap-2 max-w-md' : 'gap-2 max-w-sm'} mx-auto`}>
+                <div className="flex justify-center gap-2 max-w-sm mx-auto">
                   {otpDigits.map((digit, idx) => (
                     <input
                       key={idx}
@@ -1712,11 +1771,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           handleOtpKeyDown(idx, e);
                         }
                       }}
-                      className={`${
-                        otpLength > 6
-                          ? 'w-9 h-12 text-lg sm:w-10 sm:h-13 sm:text-xl'
-                          : 'w-12 h-14 text-xl'
-                      } text-center font-mono font-black rounded-2xl border-2 transition-all focus:outline-hidden focus:scale-105 ${
+                      className={`w-12 h-14 text-xl text-center font-mono font-black rounded-2xl border-2 transition-all focus:outline-hidden focus:scale-105 ${
                         digit
                           ? isAdminMode
                             ? 'border-[#059669] bg-white dark:bg-[#1C221A] text-[#059669] shadow-sm'
@@ -1819,10 +1874,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         {/* STEP 3: LANGUAGE SELECTION (NEW STEP) */}
         {currentStep === 3 && (
           <LanguageSelectionScreen
-            initialLanguage="en"
+            initialLanguage={language || 'en'}
+            isSignIn={authFlowMode === 'sign_in'}
+            continueButtonText={authFlowMode === 'sign_in' ? 'Continue' : undefined}
             onSelectLanguage={(newLang) => {
               setLanguage(newLang);
               if (authFlowMode === 'sign_in') {
+                const storedArtisan = localStorage.getItem('shilpsetu_artisan');
+                if (storedArtisan) {
+                  try {
+                    const parsed = JSON.parse(storedArtisan);
+                    parsed.preferredLanguage = newLang;
+                    parsed.craft = getLocalizedCraftName(selectedCraft || parsed.desiredWorkshop || 'pottery', newLang);
+                    localStorage.setItem('shilpsetu_artisan', JSON.stringify(parsed));
+                  } catch (e) {
+                    console.warn(e);
+                  }
+                }
+                localStorage.setItem('shilpsetu_auth_done', 'true');
                 onComplete({
                   fullName: fullName.trim(),
                   gender,
@@ -1830,7 +1899,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   city: selectedCity === 'Other' ? customCity.trim() : selectedCity,
                   mobile: mobile.trim(),
                   email: email.trim() || undefined,
-                  selectedCraft,
+                  selectedCraft: selectedCraft || 'pottery',
                   selectedLanguage: newLang,
                 });
               } else {
