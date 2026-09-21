@@ -14,7 +14,6 @@ import {
   upsertSupabaseProfile,
   getSupabase,
   signInSupabaseWithEmailOrMobile,
-  signUpWithSupabase,
   updateSupabasePassword,
 } from '../../services/supabase';
 import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
@@ -333,19 +332,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setIsSendingOtp(true);
     setOtpError('');
     setEmailError('');
-    const supabaseSignup = await signUpWithSupabase({
-      email: cleanEmail,
-      password,
-      fullName,
-      mobile: cleanMobile,
-      craft: selectedCraft,
-      state: selectedState,
-      city: effectiveCity,
-      language,
-    });
-    if (!supabaseSignup.success) {
+    // Do not call auth.signUp here: Supabase sends its confirmation template
+    // (a link) for password signups. OTP-first registration guarantees that
+    // normal users receive only the six-digit code.
+    const otpResult = await sendSupabaseOtp(cleanEmail, true);
+    if (!otpResult.sent) {
       setIsSendingOtp(false);
-      setEmailError(supabaseSignup.error || 'Unable to create your account.');
+      setEmailError(otpResult.error || 'Unable to send your verification code.');
       return;
     }
     setIsSendingOtp(false);
@@ -448,11 +441,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
 
-    const supabaseVerification = await verifySupabaseOtp(
-      cleanEmail,
-      fullOtp,
-      authFlowMode === 'sign_up' ? 'signup' : 'email'
-    );
+    const supabaseVerification = await verifySupabaseOtp(cleanEmail, fullOtp, 'email');
     if (!supabaseVerification.verified) {
       setOtpError(supabaseVerification.error || 'Verification failed. Please request a new code.');
       setIsVerifyingOtp(false);
@@ -461,6 +450,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     if (supabaseVerification.session?.access_token) {
       localStorage.setItem('shilpsetu_token', supabaseVerification.session.access_token);
       localStorage.setItem('shilpsetu_auth_done', 'true');
+    }
+    if (authFlowMode === 'sign_up') {
+      const passwordResult = await updateSupabasePassword(password);
+      if (!passwordResult.updated) {
+        setOtpError(passwordResult.error || 'Unable to save your password.');
+        setIsVerifyingOtp(false);
+        return;
+      }
     }
     const profileResult = await upsertSupabaseProfile({
       userId: supabaseVerification.session?.user?.id || supabaseVerification.user?.id,
@@ -1524,20 +1521,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           How to make Supabase send strictly OTP (No Link):
                         </p>
                         <p className="leading-snug text-[11px]">
-                          Supabase has <strong>two separate templates</strong>. New registrations trigger <strong>Confirm signup</strong> (not Magic Link):
+                          This app uses Supabase's <strong>Magic Link</strong> template only as an OTP delivery template:
                         </p>
                         <ol className="list-decimal list-inside space-y-1.5 pl-1 text-[10.5px]">
                           <li>
                             Open <strong>Supabase Dashboard</strong> &rarr; <strong>Authentication</strong> &rarr; <strong>Email Templates</strong>.
                           </li>
                           <li>
-                            Click <strong>Confirm signup</strong>. Completely remove <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-[10px]">&lt;a href="&#123;&#123; .ConfirmationURL &#125;&#125;"&gt;Confirm your mail&lt;/a&gt;</code> and replace with:
+                            Click <strong>Magic Link</strong>. Remove any <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-[10px]">&lt;a href="&#123;&#123; .ConfirmationURL &#125;&#125;"&gt;</code> link and display only:
                             <div className="mt-1 p-1.5 bg-black/10 dark:bg-black/40 rounded font-mono text-[10px] font-bold text-[#B5451B] dark:text-[#E8B84B]">
                               &#123;&#123; .Token &#125;&#125;
                             </div>
-                          </li>
-                          <li>
-                            Click <strong>Magic Link</strong> and also ensure it uses <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-[10px] font-bold">&#123;&#123; .Token &#125;&#125;</code> instead of ConfirmationURL.
                           </li>
                           <li>
                             To set 6 digits: Under <strong>Authentication</strong> &rarr; <strong>Providers</strong> &rarr; <strong>Email</strong>, set <strong>OTP length</strong> to <strong>6</strong>.
