@@ -128,6 +128,8 @@ alter table alerts enable row level security;
 
 drop policy if exists "own profile" on profiles;
 create policy "own profile" on profiles for all to authenticated using (id = auth.uid()) with check (id = auth.uid());
+drop policy if exists "profiles_select_public" on profiles;
+create policy "profiles_select_public" on profiles for select to anon, authenticated using (true);
 drop policy if exists "studio crafts own rows" on studio_crafts;
 create policy "studio crafts own rows" on studio_crafts for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 drop policy if exists "sell listings own rows" on sell_listings;

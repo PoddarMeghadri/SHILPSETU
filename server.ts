@@ -91,6 +91,41 @@ app.post('/api/auth/check-email', (req, res) => {
   }
 });
 
+// Dual-layer verification: check email or mobile against backend records
+app.post('/api/auth/check-identity', (req, res) => {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const mobile = typeof req.body.mobile === 'string' ? req.body.mobile.trim() : '';
+    const cleanDigits = mobile.replace(/\D/g, '');
+
+    if (email) {
+      const existingEmail = db.getArtisanByEmail(email);
+      if (existingEmail) {
+        return res.json({
+          unique: false,
+          error: 'An account is already registered with this email address. Please sign in instead.',
+          field: 'email',
+        });
+      }
+    }
+
+    if (cleanDigits) {
+      const existingPhone = db.getArtisanByPhone(cleanDigits) || db.getArtisanByPhone(mobile);
+      if (existingPhone) {
+        return res.json({
+          unique: false,
+          error: 'An account is already registered with this mobile number. Please sign in instead.',
+          field: 'mobile',
+        });
+      }
+    }
+
+    res.json({ unique: true });
+  } catch (err: any) {
+    res.status(500).json({ unique: true });
+  }
+});
+
 // Normal-user sign in: direct password authentication without OTP challenge.
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -397,6 +432,22 @@ app.get('/api/auth/me', authenticateJwt, (req: AuthenticatedRequest, res) => {
    ========================================================================= */
 
 app.get('/api/artisan', authenticateJwt, (req: AuthenticatedRequest, res) => {
+  if (req.artisan && req.artisan.fullName && req.artisan.fullName !== 'Artisan') {
+    const existing = db.getArtisanById(req.artisan.id) || (req.artisan.email ? db.getArtisanByEmail(req.artisan.email) : null);
+    if (existing) {
+      return res.json(existing);
+    }
+    return res.json({
+      id: req.artisan.id,
+      fullName: req.artisan.fullName,
+      name: req.artisan.fullName,
+      email: req.artisan.email,
+      mobile: req.artisan.mobile,
+      craft: 'Traditional Handicrafts',
+      location: 'India',
+      title: 'Master Artisan',
+    });
+  }
   const artisanId = req.artisan?.id || (req.query.id as string) || 'artisan_demo';
   const profile = db.getArtisanById(artisanId) || db.getArtisanById('artisan_demo');
   res.json(profile);

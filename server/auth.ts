@@ -205,19 +205,25 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: ExpressRes
     // Continue to check Clerk token
   }
 
-  // 2. Decode Clerk JWT or session token if available
+  // 2. Decode Clerk or Supabase JWT / session token if available
   try {
     const decoded = jwt.decode(token) as any;
     if (decoded && (decoded.sub || decoded.email)) {
       // Look up artisan by email or sub
       const email = decoded.email || decoded.email_addresses?.[0]?.email_address;
       const artisan = email ? db.getArtisanByEmail(email) : null;
+      const registeredName =
+        artisan?.fullName ||
+        decoded.user_metadata?.full_name ||
+        decoded.user_metadata?.name ||
+        decoded.name ||
+        '';
 
       req.artisan = {
-        id: artisan?.id || decoded.sub || 'artisan_clerk',
+        id: artisan?.id || decoded.sub || 'artisan_session',
         email: email || artisan?.email,
-        mobile: artisan?.mobile || '',
-        fullName: artisan?.fullName || decoded.name || 'Artisan',
+        mobile: artisan?.mobile || decoded.user_metadata?.mobile_number || decoded.phone || '',
+        fullName: registeredName || 'Master Artisan',
       };
       return next();
     }

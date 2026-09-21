@@ -25,6 +25,21 @@ export const api = {
     return res.json();
   },
 
+  // Dual-layer verification: Check if email or mobile number is already registered
+  async checkIdentity(email: string, mobile: string): Promise<{ unique: boolean; error?: string; field?: 'email' | 'mobile' }> {
+    try {
+      const res = await fetch(`${API_BASE}/auth/check-identity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), mobile: mobile.trim() }),
+      });
+      if (!res.ok) return { unique: true };
+      return res.json();
+    } catch {
+      return { unique: true };
+    }
+  },
+
   // Direct login with email or phone + password
   async login(identifier: string, password: string): Promise<{ success: boolean; token: string; artisan: any }> {
     const res = await fetch(`${API_BASE}/auth/login`, {

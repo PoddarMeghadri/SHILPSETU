@@ -137,6 +137,22 @@ export function App() {
     api.getArtisanProfile().then((serverProfile) => {
       if (serverProfile) {
         setArtisan((prev) => {
+          const isMockServer =
+            serverProfile.id === 'artisan_demo' ||
+            serverProfile.name === 'Ramesh Kumar' ||
+            serverProfile.name === 'Radha Devi' ||
+            serverProfile.name === 'Ranjit Prajapati';
+          const hasCustomPrevName =
+            prev.name &&
+            prev.name !== 'Ramesh Kumar' &&
+            prev.name !== 'Radha Devi' &&
+            prev.name !== 'Ranjit Prajapati' &&
+            prev.name !== 'Master Artisan';
+
+          if (hasCustomPrevName && isMockServer) {
+            return prev;
+          }
+
           const merged = { ...prev, ...serverProfile };
           localStorage.setItem('shilpsetu_artisan', JSON.stringify(merged));
           return merged;
@@ -148,53 +164,59 @@ export function App() {
   // Check active Supabase session for seamless cross-environment auth recovery
   useEffect(() => {
     if (isSupabaseConfigured()) {
+      const syncProfileFromSession = async (session: any) => {
+        if (!session?.user) return;
+        if (session.access_token) {
+          localStorage.setItem('shilpsetu_token', session.access_token);
+        }
+        // Only mark onboarding as completed if the user has already finalized onboarding
+        if (localStorage.getItem('shilpsetu_auth_done') === 'true') {
+          setHasCompletedOnboarding(true);
+        }
+
+        try {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          const registeredName =
+            prof?.full_name?.trim() ||
+            session.user.user_metadata?.full_name?.trim() ||
+            session.user.user_metadata?.name?.trim();
+
+          if (registeredName || prof) {
+            setArtisan((prev) => {
+              const rawLoc = prof?.location || '';
+              const state = rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : prev.state;
+              const city = rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : prev.city;
+              const merged = {
+                ...prev,
+                name: registeredName || prev.name,
+                email: prof?.email || session.user.email || prev.email,
+                mobile: prof?.mobile_number || session.user.user_metadata?.mobile_number || prev.mobile,
+                craft: prof?.craft_specialty || prev.craft,
+                location: prof?.location || prev.location,
+                state: state || prev.state,
+                city: city || prev.city,
+              };
+              localStorage.setItem('shilpsetu_artisan', JSON.stringify(merged));
+              return merged;
+            });
+          }
+        } catch (_) {}
+      };
+
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
-          setHasCompletedOnboarding(true);
-          localStorage.setItem('shilpsetu_auth_done', 'true');
-          if (session.access_token) {
-            localStorage.setItem('shilpsetu_token', session.access_token);
-          }
-          // Also fetch profile from Supabase profiles table
-          Promise.resolve(
-            supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle()
-          )
-            .then(({ data: prof }) => {
-              if (prof) {
-                setArtisan((prev) => {
-                  const rawLoc = prof.location || '';
-                  const state = rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : prev.state;
-                  const city = rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : prev.city;
-                  const merged = {
-                    ...prev,
-                    name: prof.full_name || prev.name,
-                    email: prof.email || prev.email,
-                    mobile: prof.mobile_number || prev.mobile,
-                    craft: prof.craft_specialty || prev.craft,
-                    location: prof.location || prev.location,
-                    state: state || prev.state,
-                    city: city || prev.city,
-                  };
-                  localStorage.setItem('shilpsetu_artisan', JSON.stringify(merged));
-                  return merged;
-                });
-              }
-            })
-            .catch(() => {});
+          syncProfileFromSession(session);
         }
       }).catch(console.warn);
 
       const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          setHasCompletedOnboarding(true);
-          localStorage.setItem('shilpsetu_auth_done', 'true');
-          if (session.access_token) {
-            localStorage.setItem('shilpsetu_token', session.access_token);
-          }
+        if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+          syncProfileFromSession(session);
         }
       });
 
@@ -357,9 +379,20 @@ export function App() {
     const userLocation =
       data.city && data.state ? `${data.city.trim()}, ${data.state.trim()}` : artisan.location;
 
+    const registeredName =
+      data.fullName?.trim() ||
+      (isAdminMode
+        ? 'Admin Artisan'
+        : artisan.name &&
+          artisan.name !== 'Ranjit Prajapati' &&
+          artisan.name !== 'Radha Devi' &&
+          artisan.name !== 'Ramesh Kumar'
+        ? artisan.name
+        : 'Master Artisan');
+
     const updatedArtisan: ArtisanProfile = {
       ...artisan,
-      name: data.fullName?.trim() || (isAdminMode ? 'Admin Artisan' : artisan.name),
+      name: registeredName,
       gender: data.gender || 'male',
       avatarUrl: DEFAULT_ARTISAN_AVATAR,
       location: userLocation || (isAdminMode ? 'New Delhi, Delhi' : artisan.location),
@@ -370,6 +403,14 @@ export function App() {
     };
 
     handleUpdateArtisan(updatedArtisan);
+    if (isSupabaseConfigured()) {
+      supabase.auth.updateUser({
+        data: {
+          full_name: updatedArtisan.name,
+          mobile_number: updatedArtisan.mobile,
+        },
+      }).catch(() => {});
+    }
     upsertSupabaseProfile({
       fullName: updatedArtisan.name,
       email: updatedArtisan.email,

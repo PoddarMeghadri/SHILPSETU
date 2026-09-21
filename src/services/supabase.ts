@@ -155,62 +155,87 @@ export async function verifySupabaseOtp(
 export async function checkAccountUniqueness(
   email?: string,
   mobile?: string
-): Promise<{ unique: boolean; error?: string }> {
-  if (!isSupabaseConfigured() || isProfilesTableMissing) {
+): Promise<{ unique: boolean; error?: string; field?: 'email' | 'mobile' }> {
+  const cleanEmail = email?.trim().toLowerCase() || '';
+  const cleanMobile = mobile?.trim() || '';
+  const cleanDigits = cleanMobile.replace(/\D/g, '');
+
+  if (!cleanEmail && !cleanMobile) {
     return { unique: true };
   }
 
-  const cleanEmail = email?.trim().toLowerCase();
-  const cleanMobile = mobile?.replace(/\D/g, '');
+  // 1. Query Supabase public.profiles table
+  if (isSupabaseConfigured() && !isProfilesTableMissing) {
+    try {
+      const filters: string[] = [];
+      if (cleanEmail) filters.push(`email.eq.${cleanEmail}`);
+      if (cleanMobile) filters.push(`mobile_number.eq.${cleanMobile}`);
+      if (cleanDigits && cleanDigits !== cleanMobile) {
+        filters.push(`mobile_number.eq.${cleanDigits}`);
+      }
 
-  const filters: string[] = [];
-  if (cleanEmail) filters.push(`email.eq.${cleanEmail}`);
-  if (cleanMobile) filters.push(`mobile_number.eq.${cleanMobile}`);
+      const { data: existingUser, error: checkError } = await supabase
+        .from('profiles')
+        .select('id, email, mobile_number')
+        .or(filters.join(','))
+        .maybeSingle();
 
-  if (filters.length === 0) return { unique: true };
+      if (checkError) {
+        if (isTableMissingError(checkError)) {
+          isProfilesTableMissing = true;
+        } else {
+          console.warn('[Uniqueness Check]:', checkError.message);
+        }
+      }
 
-  try {
-    const { data: existingUser, error } = await supabase
-      .from('profiles')
-      .select('id, email, mobile_number')
-      .or(filters.join(','))
-      .maybeSingle();
-
-    if (error) {
-      if (isTableMissingError(error)) {
+      if (existingUser) {
+        if (existingUser.email && cleanEmail && existingUser.email.trim().toLowerCase() === cleanEmail) {
+          return {
+            unique: false,
+            error: 'An account is already registered with this email address. Please sign in instead.',
+            field: 'email',
+          };
+        }
+        if (
+          existingUser.mobile_number &&
+          (existingUser.mobile_number.trim() === cleanMobile ||
+            existingUser.mobile_number.replace(/\D/g, '') === cleanDigits)
+        ) {
+          return {
+            unique: false,
+            error: 'An account is already registered with this mobile number. Please sign in instead.',
+            field: 'mobile',
+          };
+        }
+      }
+    } catch (err: any) {
+      if (isTableMissingError(err)) {
         isProfilesTableMissing = true;
-        return { unique: true };
       }
-      return { unique: true };
+      console.warn('[Uniqueness Check Exception]:', err);
     }
-
-    if (existingUser) {
-      if (existingUser.email && cleanEmail && existingUser.email.toLowerCase() === cleanEmail) {
-        return {
-          unique: false,
-          error: 'An account is already registered with this email address. Please sign in.',
-        };
-      }
-      if (
-        existingUser.mobile_number &&
-        cleanMobile &&
-        existingUser.mobile_number.replace(/\D/g, '') === cleanMobile
-      ) {
-        return {
-          unique: false,
-          error: 'An account is already registered with this mobile number. Please sign in.',
-        };
-      }
-    }
-
-    return { unique: true };
-  } catch (err: any) {
-    if (isTableMissingError(err)) {
-      isProfilesTableMissing = true;
-      return { unique: true };
-    }
-    return { unique: true };
   }
+
+  // 2. Dual-layer cross-browser backend verification
+  try {
+    const res = await fetch('/api/auth/check-identity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile }),
+    });
+    if (res.ok) {
+      const backendCheck = await res.json();
+      if (backendCheck && !backendCheck.unique) {
+        return {
+          unique: false,
+          error: backendCheck.error,
+          field: backendCheck.field,
+        };
+      }
+    }
+  } catch (_) {}
+
+  return { unique: true };
 }
 
 export async function sendSupabasePasswordReset(email: string) {

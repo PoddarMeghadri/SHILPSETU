@@ -356,15 +356,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       if (!uniqueness.unique) {
         setIsSendingOtp(false);
         sound.playError();
-        if (uniqueness.error?.includes('mobile')) {
-          setMobileError(uniqueness.error);
+        if (uniqueness.field === 'mobile' || uniqueness.error?.includes('mobile')) {
+          setMobileError(uniqueness.error || 'An account is already registered with this mobile number. Please sign in instead.');
         } else {
-          setEmailError(uniqueness.error || 'An account is already registered with these details. Please sign in.');
+          setEmailError(uniqueness.error || 'An account is already registered with this email address. Please sign in instead.');
         }
         return;
       }
-    } catch (uniquenessErr) {
+    } catch (uniquenessErr: any) {
       console.warn('[Uniqueness Check]:', uniquenessErr);
+      setIsSendingOtp(false);
+      sound.playError();
+      setEmailError(uniquenessErr?.message || 'Verification failed. Please try again.');
+      return;
     }
 
     // Do not call auth.signUp here: Supabase sends its confirmation template
@@ -492,7 +496,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
     if (supabaseVerification.session?.access_token) {
       localStorage.setItem('shilpsetu_token', supabaseVerification.session.access_token);
-      localStorage.setItem('shilpsetu_auth_done', 'true');
     }
     if (authFlowMode === 'sign_up') {
       const passwordResult = await updateSupabasePassword(password);
@@ -500,6 +503,19 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         setOtpError(passwordResult.error || 'Unable to save your password.');
         setIsVerifyingOtp(false);
         return;
+      }
+      try {
+        const client = getSupabase();
+        if (client) {
+          await client.auth.updateUser({
+            data: {
+              full_name: fullName.trim(),
+              mobile_number: cleanMobile,
+            },
+          });
+        }
+      } catch (metaErr) {
+        console.warn('[User Metadata Update]:', metaErr);
       }
     }
     const profileResult = await upsertSupabaseProfile({
@@ -542,6 +558,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const handleFinish = () => {
     sound.playSuccess();
     const effectiveCity = selectedCity === 'Other' ? customCity.trim() : selectedCity;
+    localStorage.setItem('shilpsetu_auth_done', 'true');
     onComplete({
       fullName: fullName.trim(),
       gender,
