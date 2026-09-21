@@ -181,7 +181,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         setEmail(targetEmail);
         setOtpDigits(['', '', '', '', '', '']);
         setResendCooldown(30);
-        setResendNotice('Admin bypass mode active. Enter 000000 to authenticate.');
+        setResendNotice('Admin Mode: Network calls bypassed.');
         setCurrentStep(2);
         setIsSendingOtp(false);
         sound.playSuccess();
@@ -356,7 +356,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setOtpError('');
       setEmailError('');
       setOtpDigits(['', '', '', '', '', '']);
-      setResendNotice('Admin Mode: Network calls bypassed. Enter code 000000');
+      setResendNotice('Admin Mode: Network calls bypassed.');
       setCurrentStep(2);
       return;
     }
@@ -407,6 +407,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   // Resend verification code with cooldown protection
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || isSendingOtp) return;
+    if (isAdminMode) {
+      setResendCooldown(30);
+      setResendNotice('Admin Mode: Network calls bypassed.');
+      setOtpDigits(['', '', '', '', '', '']);
+      return;
+    }
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return;
     setIsSendingOtp(true);
@@ -1608,21 +1614,23 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   </>
                 )}
               </button>
-              <div className="text-center mt-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    sound.playTap();
-                    setAuthFlowMode('sign_in');
-                    setNameError('');
-                    setMobileError('');
-                    setEmailError('');
-                  }}
-                  className="text-xs text-[#B5451B] dark:text-[#E8B84B] font-semibold hover:underline cursor-pointer"
-                >
-                  Already have an account? Sign In directly
-                </button>
-              </div>
+              {!isAdminMode && (
+                <div className="text-center mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playTap();
+                      setAuthFlowMode('sign_in');
+                      setNameError('');
+                      setMobileError('');
+                      setEmailError('');
+                    }}
+                    className="text-xs text-[#B5451B] dark:text-[#E8B84B] font-semibold hover:underline cursor-pointer"
+                  >
+                    Already have an account? Sign In directly
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -1727,17 +1735,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 </div>
 
                 {/* Email Delivery Notice Banner */}
-                {isAdminMode ? (
-                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/50 rounded-2xl p-3.5 text-center space-y-1 max-w-sm mx-auto shadow-xs">
-                    <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200">
-                      <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
-                      <span>Admin Bypass Mode Active</span>
-                    </div>
-                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300 leading-snug">
-                      External network calls are bypassed. Enter hardcoded verification code <strong className="font-mono text-emerald-900 dark:text-emerald-100 font-black">000000</strong> to authenticate.
-                    </p>
-                  </div>
-                ) : (
+                {isAdminMode ? null : (
                   <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl p-3 text-center space-y-1.5 max-w-sm mx-auto shadow-xs">
                     <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
                       <span className="material-symbols-outlined text-sm">mark_email_read</span>
@@ -1783,9 +1781,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 </div>
 
                 {resendNotice && (
-                  <div className="flex items-center justify-center gap-1.5 text-center text-xs text-emerald-600 dark:text-emerald-400 font-medium px-4">
-                    <span className="material-symbols-outlined text-sm">check_circle</span>
-                    <span>{resendNotice}</span>
+                  <div className="flex items-center justify-center gap-1.5 text-center text-xs text-emerald-600 dark:text-emerald-400 font-medium px-4 max-w-sm mx-auto">
+                    <span className="material-symbols-outlined text-sm shrink-0">check_circle</span>
+                    <span className="leading-normal">{resendNotice}</span>
                   </div>
                 )}
 
@@ -2133,7 +2131,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       <span>Admin Mode is currently ACTIVE</span>
                     </div>
                     <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 leading-relaxed">
-                      Network authentication is bypassed. Theme accent is set to emerald green.
+                      Network authentication is bypassed.
                     </p>
                   </div>
 
@@ -2178,7 +2176,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   className="space-y-4"
                 >
                   <p className="text-xs text-black/70 dark:text-white/70 font-sans leading-relaxed">
-                    Enter the authorized access code to bypass external Supabase and Clerk calls for offline testing.
+                    Enter the authorized access code to bypass database calls for offline testing.
                   </p>
 
                   <div>

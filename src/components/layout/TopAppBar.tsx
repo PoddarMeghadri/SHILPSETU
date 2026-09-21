@@ -105,12 +105,6 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                   <h1 className="font-serif font-black text-lg tracking-tight leading-none text-[#B5451B]">
                     SHILPSETU
                   </h1>
-                  {isAdminMode && (
-                    <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-emerald-600 text-white rounded shadow-xs flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse" />
-                      Admin
-                    </span>
-                  )}
                 </div>
                 <p className="font-serif italic text-[11px] opacity-75 truncate mt-0.5">
                   {t('app_tagline', 'Har Haath Ki Kahani')}
