@@ -15,6 +15,7 @@ import {
   getSupabase,
   signInSupabaseWithEmailOrMobile,
   updateSupabasePassword,
+  checkAccountUniqueness,
 } from '../../services/supabase';
 import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
 import { ForgotPasswordFlow } from './ForgotPasswordFlow';
@@ -237,6 +238,21 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         setSelectedCity(artisanCity);
         setSelectedCraft(craftId);
 
+        const artisanProfile = {
+          name: artisanName,
+          email: artisanEmail,
+          mobile: artisanMobile,
+          craft: getLocalizedCraftName(craftId, language),
+          location: `${artisanCity}, ${artisanState}`,
+          state: artisanState,
+          city: artisanCity,
+          desiredWorkshop: craftId,
+          preferredLanguage: language,
+          avatarUrl: supabaseProfile?.avatar_url || undefined,
+          bio: supabaseProfile?.bio || undefined,
+        };
+        localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
+
         // Directly complete sign-in and open dashboard!
         onComplete({
           fullName: artisanName,
@@ -332,6 +348,25 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setIsSendingOtp(true);
     setOtpError('');
     setEmailError('');
+
+    // Pre-Registration Check: Before initiating Sign-Up or dispatching OTP,
+    // verify account uniqueness (1 email & 1 mobile per user)
+    try {
+      const uniqueness = await checkAccountUniqueness(cleanEmail, cleanMobile);
+      if (!uniqueness.unique) {
+        setIsSendingOtp(false);
+        sound.playError();
+        if (uniqueness.error?.includes('mobile')) {
+          setMobileError(uniqueness.error);
+        } else {
+          setEmailError(uniqueness.error || 'An account is already registered with these details. Please sign in.');
+        }
+        return;
+      }
+    } catch (uniquenessErr) {
+      console.warn('[Uniqueness Check]:', uniquenessErr);
+    }
+
     // Do not call auth.signUp here: Supabase sends its confirmation template
     // (a link) for password signups. OTP-first registration guarantees that
     // normal users receive only the six-digit code.
@@ -441,9 +476,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
 
-    const supabaseVerification = await verifySupabaseOtp(cleanEmail, fullOtp, 'email');
+    const supabaseVerification = await verifySupabaseOtp(
+      cleanEmail,
+      fullOtp,
+      authFlowMode === 'sign_up' ? 'signup' : 'email'
+    );
     if (!supabaseVerification.verified) {
-      setOtpError(supabaseVerification.error || 'Verification failed. Please request a new code.');
+      sound.playError();
+      setOtpError(supabaseVerification.error || 'Invalid or expired 6-digit verification code. Please try again.');
       setIsVerifyingOtp(false);
       return;
     }
@@ -474,6 +514,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setIsVerifyingOtp(false);
       return;
     }
+
+    const artisanProfile = {
+      name: fullName.trim() || 'Master Artisan',
+      email: cleanEmail,
+      mobile: cleanMobile,
+      craft: getLocalizedCraftName(selectedCraft, language),
+      location: `${effectiveCity}, ${selectedState}`,
+      state: selectedState,
+      city: effectiveCity,
+      desiredWorkshop: selectedCraft,
+      preferredLanguage: language,
+    };
+    localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
+
     sound.playSuccess();
     setIsVerifyingOtp(false);
     setOtpError('');

@@ -49,9 +49,7 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      // Normal-user auth is OTP-only. Never turn a confirmation/recovery URL
-      // into a browser session or silently accept a magic-link login.
-      detectSessionInUrl: false,
+      detectSessionInUrl: true,
       ...(typeof window !== 'undefined' ? { storage: window.localStorage } : {}),
     },
   }
@@ -105,23 +103,114 @@ export async function sendSupabaseOtp(email: string, shouldCreateUser = true) {
   }
 }
 
-export async function verifySupabaseOtp(email: string, token: string, type: 'email' | 'signup' | 'recovery' = 'email') {
+export async function verifySupabaseOtp(
+  email: string,
+  token: string,
+  type: 'email' | 'signup' | 'recovery' = 'email'
+) {
   if (!isSupabaseConfigured()) return { verified: false, error: SUPABASE_CONFIGURATION_ERROR };
   const cleanEmail = email.trim().toLowerCase();
   const cleanToken = token.trim();
   if (!/^\d{6}$/.test(cleanToken)) return { verified: false, error: 'Enter the 6-digit verification code.' };
 
-  const { data, error } = await withAuthTimeout(
+  // Primary verification attempt with provided type
+  let res = await withAuthTimeout(
     supabase.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type }),
     'Verifying your code'
   );
 
+  // If primary attempt failed, fallback to complementary type in case Supabase project
+  // treated signInWithOtp as 'email' or vice-versa
+  if (res.error && type !== 'email') {
+    const fallbackRes = await withAuthTimeout(
+      supabase.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: 'email' }),
+      'Verifying your code'
+    );
+    if (!fallbackRes.error && (fallbackRes.data?.session || fallbackRes.data?.user)) {
+      res = fallbackRes;
+    }
+  } else if (res.error && type === 'email') {
+    const fallbackRes = await withAuthTimeout(
+      supabase.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: 'signup' }),
+      'Verifying your code'
+    );
+    if (!fallbackRes.error && (fallbackRes.data?.session || fallbackRes.data?.user)) {
+      res = fallbackRes;
+    }
+  }
+
+  const isVerified = Boolean(res.data?.session || res.data?.user);
   return {
-    verified: Boolean(data?.session || data?.user),
-    session: data?.session,
-    user: data?.user,
-    error: error?.message,
+    verified: isVerified,
+    session: res.data?.session,
+    user: res.data?.user,
+    error: isVerified ? undefined : 'Invalid or expired 6-digit verification code. Please try again.',
   };
+}
+
+/**
+ * Checks if an email address or mobile number is already registered in the profiles table.
+ * Enforces strict account uniqueness (1 mobile number and 1 email per user).
+ */
+export async function checkAccountUniqueness(
+  email?: string,
+  mobile?: string
+): Promise<{ unique: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || isProfilesTableMissing) {
+    return { unique: true };
+  }
+
+  const cleanEmail = email?.trim().toLowerCase();
+  const cleanMobile = mobile?.replace(/\D/g, '');
+
+  const filters: string[] = [];
+  if (cleanEmail) filters.push(`email.eq.${cleanEmail}`);
+  if (cleanMobile) filters.push(`mobile_number.eq.${cleanMobile}`);
+
+  if (filters.length === 0) return { unique: true };
+
+  try {
+    const { data: existingUser, error } = await supabase
+      .from('profiles')
+      .select('id, email, mobile_number')
+      .or(filters.join(','))
+      .maybeSingle();
+
+    if (error) {
+      if (isTableMissingError(error)) {
+        isProfilesTableMissing = true;
+        return { unique: true };
+      }
+      return { unique: true };
+    }
+
+    if (existingUser) {
+      if (existingUser.email && cleanEmail && existingUser.email.toLowerCase() === cleanEmail) {
+        return {
+          unique: false,
+          error: 'An account is already registered with this email address. Please sign in.',
+        };
+      }
+      if (
+        existingUser.mobile_number &&
+        cleanMobile &&
+        existingUser.mobile_number.replace(/\D/g, '') === cleanMobile
+      ) {
+        return {
+          unique: false,
+          error: 'An account is already registered with this mobile number. Please sign in.',
+        };
+      }
+    }
+
+    return { unique: true };
+  } catch (err: any) {
+    if (isTableMissingError(err)) {
+      isProfilesTableMissing = true;
+      return { unique: true };
+    }
+    return { unique: true };
+  }
 }
 
 export async function sendSupabasePasswordReset(email: string) {
@@ -308,7 +397,7 @@ export async function signInSupabaseWithEmailOrMobile(identifier: string, passwo
     email = data?.email || '';
   }
 
-  if (!email) return { signedIn: false, error: 'No account is linked to that mobile number.' };
+  if (!email) return { signedIn: false, error: 'No registered account found with this mobile number.' };
 
   const { data, error } = await withAuthTimeout(
     supabase.auth.signInWithPassword({ email, password }),

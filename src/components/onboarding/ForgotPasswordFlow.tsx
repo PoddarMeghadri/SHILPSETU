@@ -153,16 +153,16 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
     setIsVerifyingOtp(true);
 
     try {
-      const supabaseResult = await verifySupabaseOtp(email.trim().toLowerCase(), fullOtp, 'email');
+      const supabaseResult = await verifySupabaseOtp(email.trim().toLowerCase(), fullOtp, 'recovery');
       if (supabaseResult.verified) {
         setCurrentStep('new_password');
         setResetToken('');
         return;
       }
-      throw new Error(supabaseResult.error || 'The verification code is invalid or expired.');
+      throw new Error(supabaseResult.error || 'Invalid or expired 6-digit verification code. Please try again.');
     } catch (err: any) {
       sound.playTap();
-      setOtpError(err.message || 'Incorrect verification code. Please check the code sent to your email.');
+      setOtpError(err.message || 'Invalid or expired 6-digit verification code. Please try again.');
     } finally {
       setIsVerifyingOtp(false);
     }

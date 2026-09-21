@@ -77,6 +77,19 @@ alter table profiles drop constraint if exists profiles_mobile_number_digits;
 alter table profiles add constraint profiles_mobile_number_digits
   check (mobile_number is null or mobile_number ~ '^[0-9]{10,15}$');
 
+-- Enforce explicit unique constraints on profiles table
+do $$ begin
+  alter table public.profiles drop constraint if exists unique_user_email;
+  alter table public.profiles add constraint unique_user_email unique (email);
+exception when others then null;
+end $$;
+
+do $$ begin
+  alter table public.profiles drop constraint if exists unique_user_mobile;
+  alter table public.profiles add constraint unique_user_mobile unique (mobile_number);
+exception when others then null;
+end $$;
+
 do $$ begin
   alter table orders drop constraint if exists orders_status_check;
   -- Preserve existing orders while narrowing the lifecycle vocabulary.
