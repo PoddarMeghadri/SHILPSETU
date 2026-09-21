@@ -98,8 +98,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const availableCities =
     INDIAN_STATES_AND_CITIES.find((s) => s.state === selectedState)?.cities || [];
 
-  // Strict 6-digit numeric OTP code policy for all authentication flows
-  const otpLength = 6;
+  // Flexible 6-digit (or 9-digit) numeric OTP code support
+  const [otpLength, setOtpLength] = useState<number>(6);
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [otpError, setOtpError] = useState<string>('');
   const [resendNotice, setResendNotice] = useState<string>('');
@@ -398,21 +398,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
     setResendCooldown(30);
-    setResendNotice('New 6-digit verification code sent.');
-    setOtpDigits(['', '', '', '', '', '']);
+    setResendNotice(`New ${otpLength}-digit verification code sent.`);
+    setOtpDigits(Array(otpLength).fill(''));
   };
 
-  // Handle OTP digit changes strictly for 6-digit numeric OTP verification
+  // Handle OTP digit changes with support for 6 to 9 digits
   const handleOtpChange = (index: number, value: string) => {
     if (value.length > 1) {
-      // Handle paste of 6-digit numeric OTP
-      const cleaned = value.replace(/\D/g, '').slice(0, 6);
-      const newOtp = Array(6).fill('');
+      // Handle paste of numeric OTP (automatically adapts to 6, 8, or 9 digits)
+      const cleaned = value.replace(/\D/g, '').slice(0, 9);
+      if (!cleaned) return;
+      const targetLength = cleaned.length >= 7 ? Math.min(9, cleaned.length) : 6;
+      setOtpLength(targetLength);
+      const newOtp = Array(targetLength).fill('');
       cleaned.split('').forEach((char, i) => {
-        newOtp[i] = char;
+        if (i < targetLength) newOtp[i] = char;
       });
       setOtpDigits(newOtp);
-      const nextIndex = Math.min(cleaned.length, 5);
+      const nextIndex = Math.min(cleaned.length, targetLength - 1);
       otpInputRefs.current[nextIndex]?.focus();
       return;
     }
@@ -425,7 +428,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setResendNotice('');
 
     // Auto advance to next box if digit typed
-    if (digit && index < 5) {
+    if (digit && index < otpLength - 1) {
       otpInputRefs.current[index + 1]?.focus();
     }
   };
@@ -1598,17 +1601,35 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 )}
               </div>
 
-              {/* Strict 6-Digit Verification Code Format */}
-              <div className="flex items-center justify-center mb-3">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#B5451B]/10 text-[#B5451B] dark:bg-[#B5451B]/20 dark:text-[#E8B84B]">
-                  <span className="material-symbols-outlined text-xs">pin</span>
-                  Strict 6-Digit Verification Code
-                </span>
+              {/* Verification Code Format & Length Switcher */}
+              <div className="flex flex-col items-center justify-center gap-1.5 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#B5451B]/10 text-[#B5451B] dark:bg-[#B5451B]/20 dark:text-[#E8B84B]">
+                    <span className="material-symbols-outlined text-xs">pin</span>
+                    {otpLength}-Digit Verification Code
+                  </span>
+                  {!isAdminMode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sound.playTap();
+                        const nextLen = otpLength === 6 ? 9 : 6;
+                        setOtpLength(nextLen);
+                        setOtpDigits(Array(nextLen).fill(''));
+                        setOtpError('');
+                      }}
+                      className="text-[11px] font-semibold text-[#B5451B] dark:text-[#E8B84B] hover:underline flex items-center gap-1 cursor-pointer bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded-full"
+                    >
+                      <span className="material-symbols-outlined text-xs">tune</span>
+                      <span>{otpLength === 6 ? 'Received 9 digits? Switch' : 'Switch to 6 digits'}</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Digit Input Boxes */}
               <div className="space-y-4 mb-6">
-                <div className="flex justify-center flex-wrap gap-2 max-w-sm mx-auto">
+                <div className={`flex justify-center flex-wrap ${otpLength > 6 ? 'gap-1.5 sm:gap-2 max-w-md' : 'gap-2 max-w-sm'} mx-auto`}>
                   {otpDigits.map((digit, idx) => (
                     <input
                       key={idx}
@@ -1626,7 +1647,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           handleOtpKeyDown(idx, e);
                         }
                       }}
-                      className={`w-12 h-14 text-center font-mono font-black text-xl rounded-2xl border-2 transition-all focus:outline-hidden focus:scale-105 ${
+                      className={`${
+                        otpLength > 6
+                          ? 'w-9 h-12 text-lg sm:w-10 sm:h-13 sm:text-xl'
+                          : 'w-12 h-14 text-xl'
+                      } text-center font-mono font-black rounded-2xl border-2 transition-all focus:outline-hidden focus:scale-105 ${
                         digit
                           ? isAdminMode
                             ? 'border-[#059669] bg-white dark:bg-[#1C221A] text-[#059669] shadow-sm'
