@@ -49,7 +49,9 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      // Normal-user auth is OTP-only. Never turn a confirmation/recovery URL
+      // into a browser session or silently accept a magic-link login.
+      detectSessionInUrl: false,
       ...(typeof window !== 'undefined' ? { storage: window.localStorage } : {}),
     },
   }
@@ -204,23 +206,10 @@ export async function verifySupabaseOtp(email: string, token: string, type: 'ema
   const cleanToken = token.trim();
   if (!/^\d{6}$/.test(cleanToken)) return { verified: false, error: 'Enter the 6-digit verification code.' };
 
-  // Try 'signup' OTP type first (used when user registers / signs up)
-  let { data, error } = await withAuthTimeout(
+  const { data, error } = await withAuthTimeout(
     supabase.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type }),
     'Verifying your code'
   );
-
-  // Fallback to standard 'email' OTP type (used for signInWithOtp)
-  if (error || (!data?.session && !data?.user)) {
-    const emailAttempt = await withAuthTimeout(
-      supabase.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: 'email' }),
-      'Verifying your code'
-    );
-    if (!emailAttempt.error && (emailAttempt.data?.session || emailAttempt.data?.user)) {
-      data = emailAttempt.data;
-      error = null;
-    }
-  }
 
   return {
     verified: Boolean(data?.session || data?.user),
@@ -234,15 +223,19 @@ export async function sendSupabasePasswordReset(email: string) {
   if (!isSupabaseConfigured()) return { sent: false, error: SUPABASE_CONFIGURATION_ERROR };
   try {
     const { error } = await withAuthTimeout(
-      supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined,
-      }),
+      // Supabase must use a recovery template containing {{ .Token }}. URL
+      // redirects are deliberately omitted so recovery remains OTP-only.
+      supabase.auth.resetPasswordForEmail(email.trim().toLowerCase()),
       'Sending your recovery code'
     );
     return error ? { sent: false, error: error.message } : { sent: true };
   } catch (error) {
     return { sent: false, error: error instanceof Error ? error.message : 'Unable to send recovery code.' };
   }
+}
+
+export async function sendSupabaseRecoveryOtp(email: string) {
+  return sendSupabasePasswordReset(email);
 }
 
 let isProfilesTableMissing = false;
