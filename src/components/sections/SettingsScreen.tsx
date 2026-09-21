@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { LanguageCode, ScreenId } from '../../types';
 import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
-import { useAdminMode } from '../../context/AdminModeContext';
+import { useAdminMode, ADMIN_COLOR_PRESETS } from '../../context/AdminModeContext';
 import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
 import { updateSupabasePassword } from '../../services/supabase';
 
@@ -26,7 +26,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onLogout,
 }) => {
   const { t } = useTranslation(language);
-  const { isAdminMode } = useAdminMode();
+  const {
+    isAdminMode,
+    adminAccentColor,
+    setAdminAccentColor,
+    resetAdminAccentColor,
+  } = useAdminMode();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -46,37 +51,196 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     isDark ? 'bg-[#121411] border-[#2D3A2B]' : 'bg-white border-[#22331E]/10'
   }`;
 
+  const isPresetActive = ADMIN_COLOR_PRESETS.some(
+    (preset) => preset.hex.toLowerCase() === adminAccentColor.toLowerCase()
+  );
+
   return (
     <div className="w-full max-w-4xl mx-auto pb-28 md:pb-12 pt-2 px-3 sm:px-6 lg:px-8 space-y-6">
       <div className={panelClass}>
         <h4 className="font-serif font-bold text-base">{t('workshop_settings', 'Workshop Settings')}</h4>
-        <div className="space-y-2">
+        <div className="space-y-2.5">
+          {/* Option 1: "App Interface" (Replaces "Theme Appearance") */}
           {onToggleTheme && (
             <div className={`${rowClass} p-3.5 flex items-center justify-between`}>
               <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                  isDark ? 'bg-[#E8B84B] text-[#1A1815]' : 'bg-[#22331E] text-white'
-                }`}>
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    isDark ? 'bg-[#E8B84B] text-[#1A1815]' : 'bg-[#22331E] text-white'
+                  }`}
+                  style={isAdminMode ? { backgroundColor: 'var(--admin-accent)', color: '#FFFFFF' } : undefined}
+                >
                   <span className="material-symbols-outlined text-lg">{isDark ? 'dark_mode' : 'light_mode'}</span>
                 </div>
                 <div>
-                  <p className="font-serif font-bold text-xs">{t('theme_mode', 'Theme Appearance')}</p>
+                  <p className="font-serif font-bold text-xs">
+                    {isAdminMode ? 'App Interface' : t('theme_mode', 'Theme Appearance')}
+                  </p>
                   <p className="text-[10px] opacity-70">
-                    {isDark ? t('dark_mode_active_label', 'Heritage Dark Mode Active') : t('light_mode_active_label', 'Warm Sandalwood Light Active')}
+                    {isAdminMode
+                      ? 'Switch between Heritage Dark and Light Mode'
+                      : isDark
+                      ? t('dark_mode_active_label', 'Heritage Dark Mode Active')
+                      : t('light_mode_active_label', 'Warm Sandalwood Light Active')}
                   </p>
                 </div>
               </div>
               <div className="flex items-center p-0.5 rounded-full border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
-                <button type="button" onClick={() => isDark && (sound.playTap(), onToggleTheme())}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${!isDark ? 'bg-white text-[#B5451B] shadow-xs' : 'text-neutral-400'}`}
+                <button
+                  type="button"
+                  onClick={() => isDark && (sound.playTap(), onToggleTheme())}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                    !isDark ? 'bg-white text-[#B5451B] shadow-xs' : 'text-neutral-400'
+                  }`}
+                  style={!isDark && isAdminMode ? { color: 'var(--admin-accent)' } : undefined}
                 >
                   {t('light_mode_btn', 'Light')}
                 </button>
-                <button type="button" onClick={() => !isDark && (sound.playTap(), onToggleTheme())}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${isDark ? 'bg-[#B5451B] text-white shadow-xs' : 'text-neutral-500'}`}
+                <button
+                  type="button"
+                  onClick={() => !isDark && (sound.playTap(), onToggleTheme())}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                    isDark ? 'bg-[#B5451B] text-white shadow-xs' : 'text-neutral-500'
+                  }`}
+                  style={isDark && isAdminMode ? { backgroundColor: 'var(--admin-accent)' } : undefined}
                 >
                   {t('dark_mode_btn', 'Dark')}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Option 2: "Themes" (New Admin Feature) */}
+          {isAdminMode && (
+            <div className={`${rowClass} p-4 space-y-3.5`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs"
+                    style={{ backgroundColor: 'var(--admin-accent, #10b981)' }}
+                  >
+                    <span className="material-symbols-outlined text-lg">palette</span>
+                  </div>
+                  <div>
+                    <h5 className="font-serif font-bold text-xs">Themes</h5>
+                    <p className="text-[10px] opacity-70">
+                      Customize the primary accent theme color for Admin Mode (Default: Emerald)
+                    </p>
+                  </div>
+                </div>
+                {adminAccentColor.toLowerCase() !== '#10b981' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playTap();
+                      resetAdminAccentColor();
+                    }}
+                    className="text-[10px] font-sans font-bold px-2.5 py-1 rounded-full border border-black/15 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/5 transition-all text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer shrink-0"
+                    title="Reset to default Emerald Green"
+                  >
+                    <span className="material-symbols-outlined text-xs">refresh</span>
+                    <span>Reset to Default</span>
+                  </button>
+                )}
+              </div>
+
+              {/* 10 Preset Color Swatches + Interactive Custom Color Picker */}
+              <div className="pt-1">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {ADMIN_COLOR_PRESETS.map((preset) => {
+                    const isActive = adminAccentColor.toLowerCase() === preset.hex.toLowerCase();
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          sound.playTap();
+                          setAdminAccentColor(preset.hex);
+                        }}
+                        className={`group relative w-8 h-8 rounded-full transition-transform active:scale-90 flex items-center justify-center cursor-pointer shadow-xs ${
+                          isActive
+                            ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-900 scale-110 shadow-md'
+                            : 'hover:scale-105 opacity-90 hover:opacity-100'
+                        }`}
+                        style={{ backgroundColor: preset.hex }}
+                        title={preset.name}
+                        aria-label={preset.name}
+                      >
+                        {isActive && (
+                          <span className="material-symbols-outlined text-white text-sm font-bold drop-shadow-xs">
+                            check
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  {/* Interactive Custom Color Palette Picker */}
+                  <div className="relative flex items-center">
+                    <label
+                      htmlFor="admin-custom-color-picker"
+                      className={`relative w-8 h-8 rounded-full border border-black/15 dark:border-white/20 flex items-center justify-center cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-xs overflow-hidden ${
+                        !isPresetActive
+                          ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-900 scale-110'
+                          : 'bg-black/5 dark:bg-white/10 hover:bg-black/10'
+                      }`}
+                      style={!isPresetActive ? { backgroundColor: adminAccentColor } : undefined}
+                      title="Pick custom hex color with palette"
+                    >
+                      {!isPresetActive ? (
+                        <span className="material-symbols-outlined text-white text-sm font-bold drop-shadow-xs pointer-events-none">
+                          check
+                        </span>
+                      ) : (
+                        <span className="material-symbols-outlined text-neutral-600 dark:text-neutral-300 text-base pointer-events-none">
+                          palette
+                        </span>
+                      )}
+                      <input
+                        id="admin-custom-color-picker"
+                        type="color"
+                        value={adminAccentColor}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAdminAccentColor(val);
+                        }}
+                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                        aria-label="Interactive custom color picker"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* State Feedback Footer with Active Name & Reset Option */}
+                <div className="mt-3 flex items-center justify-between text-[11px] pt-2 border-t border-black/5 dark:border-white/5">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white/20"
+                      style={{ backgroundColor: adminAccentColor }}
+                    />
+                    <span className="font-mono font-semibold uppercase tracking-wider text-[10px] opacity-80">
+                      {ADMIN_COLOR_PRESETS.find(
+                        (p) => p.hex.toLowerCase() === adminAccentColor.toLowerCase()
+                      )?.name || `Custom (${adminAccentColor})`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playTap();
+                      resetAdminAccentColor();
+                    }}
+                    className={`text-[10px] font-bold flex items-center gap-1 transition-opacity ${
+                      adminAccentColor.toLowerCase() === '#10b981'
+                        ? 'opacity-40 cursor-default'
+                        : 'opacity-80 hover:opacity-100 hover:underline cursor-pointer'
+                    }`}
+                    disabled={adminAccentColor.toLowerCase() === '#10b981'}
+                  >
+                    <span className="material-symbols-outlined text-xs">restart_alt</span>
+                    <span>Reset to Default</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}

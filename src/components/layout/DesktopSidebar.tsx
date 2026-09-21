@@ -112,6 +112,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     className={`font-serif font-black text-base lg:text-lg tracking-tight leading-none truncate ${
                       isAdminMode ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#B5451B]'
                     }`}
+                    style={isAdminMode ? { color: isDark ? 'var(--admin-accent-dark-text)' : 'var(--admin-accent)' } : undefined}
                   >
                     SHILPSETU
                   </h1>
@@ -265,6 +266,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     ? 'text-[#F4ECDE]/80 hover:bg-[#252E22] hover:text-white'
                     : 'text-[#22331E]/80 hover:bg-[#DFD3BE] hover:text-[#1A1815]'
                 }`}
+                style={isAdminMode && isActive ? { backgroundColor: 'var(--admin-accent)' } : undefined}
               >
                 <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} min-w-0`}>
                   <span
@@ -275,6 +277,11 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                         ? 'text-emerald-500 dark:text-emerald-400'
                         : 'text-[#B5451B]'
                     }`}
+                    style={
+                      isAdminMode && !isActive
+                        ? { color: isDark ? 'var(--admin-accent-dark-text)' : 'var(--admin-accent)' }
+                        : undefined
+                    }
                   >
                     {item.icon}
                   </span>
@@ -285,15 +292,21 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 {effectiveBadge && (
                   <>
                     {!isCollapsed ? (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 shadow-2xs ${
-                        isAdminMode ? 'bg-emerald-600 text-white' : 'bg-[#E8B84B] text-[#1A1815]'
-                      }`}>
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 shadow-2xs ${
+                          isAdminMode ? 'bg-emerald-600 text-white' : 'bg-[#E8B84B] text-[#1A1815]'
+                        }`}
+                        style={isAdminMode ? { backgroundColor: 'var(--admin-accent)' } : undefined}
+                      >
                         {effectiveBadge}
                       </span>
                     ) : (
-                      <span className={`absolute top-1.5 right-2 w-2 h-2 rounded-full ring-2 ring-[#ECE0CC] dark:ring-[#161B14] ${
-                        isAdminMode ? 'bg-emerald-500' : 'bg-[#E8B84B]'
-                      }`} />
+                      <span
+                        className={`absolute top-1.5 right-2 w-2 h-2 rounded-full ring-2 ring-[#ECE0CC] dark:ring-[#161B14] ${
+                          isAdminMode ? 'bg-emerald-500' : 'bg-[#E8B84B]'
+                        }`}
+                        style={isAdminMode ? { backgroundColor: 'var(--admin-accent)' } : undefined}
+                      />
                     )}
                   </>
                 )}
@@ -373,6 +386,14 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 border border-emerald-400/40'
                     : 'bg-gradient-to-br from-[#B5451B] to-[#8C2C09] border border-[#E8B84B]/40'
                 }`}
+                style={
+                  isAdminMode
+                    ? {
+                        background: 'linear-gradient(135deg, var(--admin-accent), var(--admin-accent-hover))',
+                        borderColor: 'var(--admin-accent-glow)',
+                      }
+                    : undefined
+                }
                 id="btn-desktop-shilpi-ai"
               >
                 <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
@@ -400,6 +421,14 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 border border-emerald-400/50'
                     : 'bg-gradient-to-br from-[#B5451B] to-[#8C2C09] border border-[#E8B84B]/50'
                 }`}
+                style={
+                  isAdminMode
+                    ? {
+                        background: 'linear-gradient(135deg, var(--admin-accent), var(--admin-accent-hover))',
+                        borderColor: 'var(--admin-accent-glow)',
+                      }
+                    : undefined
+                }
                 title={t('shilpi_ai_assistant_title', 'SHILPI AI — Chat & Voice Assistant')}
                 id="btn-desktop-shilpi-ai-collapsed"
               >
@@ -433,6 +462,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               className={`${isCollapsed ? 'w-9 h-9' : 'w-10 h-10'} rounded-full object-cover border-2 ${
                 isAdminMode ? 'border-emerald-500' : 'border-[#E8B84B]'
               }`}
+              style={isAdminMode ? { borderColor: 'var(--admin-accent)' } : undefined}
             />
             <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center drop-shadow-xs">
               <BlueVerifiedBadge size={14} />
@@ -449,9 +479,12 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   {artisan.craft.split('&')[0]}
                 </p>
               </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 shadow-xs ${
-                isAdminMode ? 'bg-emerald-600 text-white' : 'bg-[#E8B84B] text-[#1A1815]'
-              }`}>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 shadow-xs ${
+                  isAdminMode ? 'bg-emerald-600 text-white' : 'bg-[#E8B84B] text-[#1A1815]'
+                }`}
+                style={isAdminMode ? { backgroundColor: 'var(--admin-accent)' } : undefined}
+              >
                 {artisan.trustScore ?? 98}★
               </span>
             </>

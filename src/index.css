@@ -395,166 +395,164 @@ a span.material-symbols-outlined {
 }
 
 /* ==========================================================================
-   Admin Mode Dynamic Emerald/Green Theme Overrides
+   Admin Mode Dynamic Accent Theme Engine
    ========================================================================== */
-html.admin-mode,
-.admin-mode {
-  --color-primary: #059669;
-  --color-primary-hover: #047857;
-  --color-primary-light: rgba(16, 185, 129, 0.15);
-  --color-accent: #34D399;
+:root[data-theme='admin'] {
+  --admin-accent: #10b981;
+  --admin-accent-hover: #047857;
+  --admin-accent-light: rgba(16, 185, 129, 0.15);
+  --admin-accent-glow: rgba(16, 185, 129, 0.25);
+  --admin-accent-subtle: rgba(16, 185, 129, 0.08);
+  --admin-accent-dark-text: #6ee7b7;
+
+  --color-primary: var(--admin-accent);
+  --color-primary-hover: var(--admin-accent-hover);
+  --color-primary-light: var(--admin-accent-light);
+  --color-accent: var(--admin-accent);
 }
 
-/*
- * Admin mode is an emerald theme.  The first version of this override matched
- * every `bg-[#B5451B]/…` class as if it were an opaque background. That made
- * text that also used `text-[#B5451B]` emerald-on-emerald and therefore
- * unreadable. Keep the translucent semantic styles translucent, then map the
- * remaining terracotta utilities and gradients to one emerald palette.
- */
-html.admin-mode [class*="bg-[#B5451B]/"],
-.admin-mode [class*="bg-[#B5451B]/"],
-html.admin-mode [class*="bg-[#9C3A14]/"],
-.admin-mode [class*="bg-[#9C3A14]/"],
-html.admin-mode [class*="bg-[#9E3913]/"],
-.admin-mode [class*="bg-[#9E3913]/"],
-html.admin-mode [class*="bg-[#7F2A0B]/"],
-.admin-mode [class*="bg-[#7F2A0B]/"],
-html.admin-mode [class*="bg-[#8C2C09]/"],
-.admin-mode [class*="bg-[#8C2C09]/"] {
-  background-color: rgb(5 150 105 / 0.16) !important;
+/* Translucent surfaces and indicator badges */
+:root[data-theme='admin'] [class*="bg-[#B5451B]/"],
+:root[data-theme='admin'] [class*="bg-[#9C3A14]/"],
+:root[data-theme='admin'] [class*="bg-[#9E3913]/"],
+:root[data-theme='admin'] [class*="bg-[#7F2A0B]/"],
+:root[data-theme='admin'] [class*="bg-[#8C2C09]/"] {
+  background-color: var(--admin-accent-light, rgba(16, 185, 129, 0.16)) !important;
 }
 
-html.admin-mode [class~="bg-[#B5451B]"],
-.admin-mode [class~="bg-[#B5451B]"],
-html.admin-mode [class~="bg-[#9C3A14]"],
-.admin-mode [class~="bg-[#9C3A14]"],
-html.admin-mode [class~="bg-[#9E3913]"],
-.admin-mode [class~="bg-[#9E3913]"],
-html.admin-mode [class~="bg-[#872E0E]"],
-.admin-mode [class~="bg-[#872E0E]"],
-html.admin-mode [class~="bg-[#7F2A0B]"],
-.admin-mode [class~="bg-[#7F2A0B]"],
-html.admin-mode [class~="bg-[#8C2C09]"],
-.admin-mode [class~="bg-[#8C2C09]"],
-html.admin-mode [class~="bg-[#D45B2E]"],
-.admin-mode [class~="bg-[#D45B2E]"],
-html.admin-mode .bg-artisan-primary,
-.admin-mode .bg-artisan-primary {
-  background-color: #059669 !important;
+/* Solid accent buttons, badges, and headers */
+:root[data-theme='admin'] [class~="bg-[#B5451B]"],
+:root[data-theme='admin'] [class~="bg-[#9C3A14]"],
+:root[data-theme='admin'] [class~="bg-[#9E3913]"],
+:root[data-theme='admin'] [class~="bg-[#872E0E]"],
+:root[data-theme='admin'] [class~="bg-[#7F2A0B]"],
+:root[data-theme='admin'] [class~="bg-[#8C2C09]"],
+:root[data-theme='admin'] [class~="bg-[#D45B2E]"],
+:root[data-theme='admin'] .bg-artisan-primary {
+  background-color: var(--admin-accent, #10b981) !important;
 }
 
-html.admin-mode [class*="hover:bg-[#B5451B]"]:hover,
-.admin-mode [class*="hover:bg-[#B5451B]"]:hover,
-html.admin-mode [class*="hover:bg-[#9C3A14]"]:hover,
-.admin-mode [class*="hover:bg-[#9C3A14]"]:hover,
-html.admin-mode [class*="hover:bg-[#9E3913]"]:hover,
-.admin-mode [class*="hover:bg-[#9E3913]"]:hover,
-html.admin-mode [class*="hover:bg-[#872E0E]"]:hover,
-.admin-mode [class*="hover:bg-[#872E0E]"]:hover,
-html.admin-mode [class*="hover:bg-[#7F2A0B]"]:hover,
-.admin-mode [class*="hover:bg-[#7F2A0B]"]:hover,
-html.admin-mode [class*="hover:bg-[#8C2C09]"]:hover,
-.admin-mode [class*="hover:bg-[#8C2C09]"]:hover {
-  background-color: #047857 !important;
+/* Interactive hover states */
+:root[data-theme='admin'] [class*="hover:bg-[#B5451B]"]:hover,
+:root[data-theme='admin'] [class*="hover:bg-[#9C3A14]"]:hover,
+:root[data-theme='admin'] [class*="hover:bg-[#9E3913]"]:hover,
+:root[data-theme='admin'] [class*="hover:bg-[#872E0E]"]:hover,
+:root[data-theme='admin'] [class*="hover:bg-[#7F2A0B]"]:hover,
+:root[data-theme='admin'] [class*="hover:bg-[#8C2C09]"]:hover {
+  background-color: var(--admin-accent-hover, #047857) !important;
 }
 
-html.admin-mode [class*="text-[#B5451B]"],
-.admin-mode [class*="text-[#B5451B]"],
-html.admin-mode [class*="text-[#9C3A14]"],
-.admin-mode [class*="text-[#9C3A14]"],
-html.admin-mode [class*="text-[#9E3913]"],
-.admin-mode [class*="text-[#9E3913]"],
-html.admin-mode [class*="text-[#872E0E]"],
-.admin-mode [class*="text-[#872E0E]"],
-html.admin-mode [class*="text-[#7F2A0B]"],
-.admin-mode [class*="text-[#7F2A0B]"],
-html.admin-mode [class*="text-[#8C2C09]"],
-.admin-mode [class*="text-[#8C2C09]"],
-html.admin-mode .text-artisan-primary,
-.admin-mode .text-artisan-primary {
-  color: #047857 !important;
+/* Typography and icon accents */
+:root[data-theme='admin'] [class*="text-[#B5451B]"],
+:root[data-theme='admin'] [class*="text-[#9C3A14]"],
+:root[data-theme='admin'] [class*="text-[#9E3913]"],
+:root[data-theme='admin'] [class*="text-[#872E0E]"],
+:root[data-theme='admin'] [class*="text-[#7F2A0B]"],
+:root[data-theme='admin'] [class*="text-[#8C2C09]"],
+:root[data-theme='admin'] .text-artisan-primary {
+  color: var(--admin-accent-hover, #047857) !important;
 }
 
-html.dark.admin-mode [class*="text-[#B5451B]"],
-.dark.admin-mode [class*="text-[#B5451B]"],
-html.dark.admin-mode [class*="text-[#9C3A14]"],
-.dark.admin-mode [class*="text-[#9C3A14]"],
-html.dark.admin-mode [class*="text-[#9E3913]"],
-.dark.admin-mode [class*="text-[#9E3913]"],
-html.dark.admin-mode [class*="text-[#872E0E]"],
-.dark.admin-mode [class*="text-[#872E0E]"],
-html.dark.admin-mode [class*="text-[#7F2A0B]"],
-.dark.admin-mode [class*="text-[#7F2A0B]"],
-html.dark.admin-mode [class*="text-[#8C2C09]"],
-.dark.admin-mode [class*="text-[#8C2C09]"] {
-  color: #6ee7b7 !important;
+/* High-contrast legibility for dark mode */
+:root[data-theme='admin'] html.dark [class*="text-[#B5451B]"],
+html.dark:root[data-theme='admin'] [class*="text-[#B5451B]"],
+:root[data-theme='admin'] .dark [class*="text-[#B5451B]"],
+:root[data-theme='admin'] html.dark [class*="text-[#9C3A14]"],
+:root[data-theme='admin'] .dark [class*="text-[#9C3A14]"],
+:root[data-theme='admin'] html.dark [class*="text-[#9E3913]"],
+:root[data-theme='admin'] .dark [class*="text-[#9E3913]"],
+:root[data-theme='admin'] html.dark [class*="text-[#872E0E]"],
+:root[data-theme='admin'] .dark [class*="text-[#872E0E]"],
+:root[data-theme='admin'] html.dark [class*="text-[#7F2A0B]"],
+:root[data-theme='admin'] .dark [class*="text-[#7F2A0B]"],
+:root[data-theme='admin'] html.dark [class*="text-[#8C2C09]"],
+:root[data-theme='admin'] .dark [class*="text-[#8C2C09]"] {
+  color: var(--admin-accent-dark-text, #6ee7b7) !important;
 }
 
-html.admin-mode [class*="border-[#B5451B]"],
-.admin-mode [class*="border-[#B5451B]"],
-html.admin-mode [class*="border-[#9C3A14]"],
-.admin-mode [class*="border-[#9C3A14]"],
-html.admin-mode [class*="border-[#9E3913]"],
-.admin-mode [class*="border-[#9E3913]"],
-html.admin-mode [class*="border-[#7F2A0B]"],
-.admin-mode [class*="border-[#7F2A0B]"],
-html.admin-mode [class*="border-[#8C2C09]"],
-.admin-mode [class*="border-[#8C2C09]"] {
-  border-color: #059669 !important;
+/* Borders and dividers */
+:root[data-theme='admin'] [class*="border-[#B5451B]"],
+:root[data-theme='admin'] [class*="border-[#9C3A14]"],
+:root[data-theme='admin'] [class*="border-[#9E3913]"],
+:root[data-theme='admin'] [class*="border-[#7F2A0B]"],
+:root[data-theme='admin'] [class*="border-[#8C2C09]"] {
+  border-color: var(--admin-accent, #10b981) !important;
 }
 
-html.admin-mode [class*="from-[#B5451B]"],
-.admin-mode [class*="from-[#B5451B]"],
-html.admin-mode [class*="from-[#D45B2E]"],
-.admin-mode [class*="from-[#D45B2E]"] {
-  --tw-gradient-from: #059669 !important;
-  --tw-gradient-to: rgb(5 150 105 / 0) !important;
+/* Dynamic theme banner gradients */
+:root[data-theme='admin'] [class*="from-[#B5451B]"],
+:root[data-theme='admin'] [class*="from-[#D45B2E]"] {
+  --tw-gradient-from: var(--admin-accent, #10b981) !important;
+  --tw-gradient-to: rgb(0 0 0 / 0) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
 }
 
-html.admin-mode [class*="via-[#9E3913]"],
-.admin-mode [class*="via-[#9E3913]"] {
-  --tw-gradient-via: #047857 !important;
-  --tw-gradient-to: rgb(4 120 87 / 0) !important;
+:root[data-theme='admin'] [class*="via-[#9E3913]"] {
+  --tw-gradient-via: var(--admin-accent-hover, #047857) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important;
 }
 
-html.admin-mode [class*="to-[#7F2A0B]"],
-.admin-mode [class*="to-[#7F2A0B]"],
-html.admin-mode [class*="to-[#8C2C09]"],
-.admin-mode [class*="to-[#8C2C09]"] {
-  --tw-gradient-to: #065f46 !important;
+:root[data-theme='admin'] [class*="to-[#7F2A0B]"],
+:root[data-theme='admin'] [class*="to-[#8C2C09]"] {
+  --tw-gradient-to: var(--admin-accent-hover, #047857) !important;
 }
 
-html.admin-mode [class*="selection:bg-[#B5451B]"],
-.admin-mode [class*="selection:bg-[#B5451B]"] {
-  background-color: rgba(5, 150, 105, 0.25) !important;
+/* Selection and focus rings */
+:root[data-theme='admin'] [class*="selection:bg-[#B5451B]"] {
+  background-color: var(--admin-accent-glow, rgba(16, 185, 129, 0.25)) !important;
 }
 
-html.admin-mode [class*="focus:border-[#B5451B]"]:focus,
-.admin-mode [class*="focus:border-[#B5451B]"]:focus {
-  border-color: #059669 !important;
+:root[data-theme='admin'] [class*="focus:border-[#B5451B]"]:focus {
+  border-color: var(--admin-accent, #10b981) !important;
 }
 
-html.admin-mode [class*="focus:ring-[#B5451B]"]:focus,
-.admin-mode [class*="focus:ring-[#B5451B]"]:focus {
-  --tw-ring-color: #059669 !important;
+:root[data-theme='admin'] [class*="focus:ring-[#B5451B]"]:focus {
+  --tw-ring-color: var(--admin-accent, #10b981) !important;
 }
 
-html.admin-mode .terracotta-card,
-.admin-mode .terracotta-card {
-  background-color: #059669 !important;
+:root[data-theme='admin'] .terracotta-card {
+  background-color: var(--admin-accent, #10b981) !important;
 }
 
-html.admin-mode .artisan-alert-card,
-.admin-mode .artisan-alert-card {
-  background-color: #123a2d !important;
-  border-color: #059669 !important;
+:root[data-theme='admin'] .artisan-alert-card {
+  border-color: var(--admin-accent, #10b981) !important;
 }
 
-html.admin-mode .wax-seal,
-.admin-mode .wax-seal {
-  background: linear-gradient(135deg, #10B981, #047857) !important;
+:root[data-theme='admin'] .wax-seal {
+  background: linear-gradient(135deg, var(--admin-accent, #10B981), var(--admin-accent-hover, #047857)) !important;
 }
+
+/* Emerald utility adapters in admin mode */
+:root[data-theme='admin'] [class*="bg-emerald-600"],
+:root[data-theme='admin'] [class*="bg-emerald-500"] {
+  background-color: var(--admin-accent, #10b981) !important;
+}
+
+:root[data-theme='admin'] [class*="text-emerald-600"],
+:root[data-theme='admin'] [class*="text-emerald-700"],
+:root[data-theme='admin'] [class*="text-emerald-500"] {
+  color: var(--admin-accent, #10b981) !important;
+}
+
+:root[data-theme='admin'] html.dark [class*="text-emerald-400"],
+html.dark:root[data-theme='admin'] [class*="text-emerald-400"],
+:root[data-theme='admin'] .dark [class*="text-emerald-400"],
+:root[data-theme='admin'] .dark [class*="text-emerald-300"] {
+  color: var(--admin-accent-dark-text, #6ee7b7) !important;
+}
+
+:root[data-theme='admin'] [class*="border-emerald-"] {
+  border-color: var(--admin-accent, #10b981) !important;
+}
+
+:root[data-theme='admin'] [class*="from-emerald-"] {
+  --tw-gradient-from: var(--admin-accent, #10b981) !important;
+}
+
+:root[data-theme='admin'] [class*="to-emerald-"] {
+  --tw-gradient-to: var(--admin-accent-hover, #047857) !important;
+}
+
 
 
 

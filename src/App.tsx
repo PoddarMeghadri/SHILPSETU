@@ -34,10 +34,14 @@ import {
 
 export function App() {
   const { language, setLanguage } = useLanguage();
-  const { isAdminMode, exitAdminMode } = useAdminMode();
+  const { isAdminMode, exitAdminMode, setIsAdminSessionActive } = useAdminMode();
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(() => {
     return localStorage.getItem('shilpsetu_auth_done') === 'true';
   });
+
+  useEffect(() => {
+    setIsAdminSessionActive(hasCompletedOnboarding);
+  }, [hasCompletedOnboarding, setIsAdminSessionActive]);
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('home');
   const [isDark, setIsDark] = useState<boolean>(() => {
     return localStorage.getItem('shilpsetu_theme') === 'dark';
@@ -415,11 +419,13 @@ export function App() {
     if (isAdminMode) {
       exitAdminMode();
     }
+    setIsAdminSessionActive(false);
     setHasCompletedOnboarding(false);
     setCurrentScreen('home');
   };
 
   const handleOnboardingComplete = (data: OnboardingUserData) => {
+    setIsAdminSessionActive(true);
     setHasCompletedOnboarding(true);
     localStorage.setItem('shilpsetu_auth_done', 'true');
 
@@ -515,6 +521,7 @@ export function App() {
 
   return (
     <div
+      data-theme={isAdminMode && hasCompletedOnboarding ? 'admin' : undefined}
       className={`min-h-screen w-full flex font-sans relative transition-colors duration-300 ${
         isAdminMode ? 'selection:bg-emerald-600/20' : 'selection:bg-[#B5451B]/20'
       } ${

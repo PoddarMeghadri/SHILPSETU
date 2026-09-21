@@ -97,6 +97,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                         ? isDark ? 'bg-emerald-500/30' : 'bg-emerald-500/20'
                         : isDark ? 'bg-[#B5451B]/30' : 'bg-[#B5451B]/15'
                     }`}
+                    style={isAdminMode ? { backgroundColor: 'var(--admin-accent-glow)' } : undefined}
                   />
                 )}
 
@@ -111,6 +112,11 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                       ? 'text-[#F4ECDE]/60 group-hover:text-[#F4ECDE]'
                       : 'text-[#22331E]/60 group-hover:text-[#22331E]'
                   }`}
+                  style={
+                    isActive && isAdminMode
+                      ? { color: isDark ? 'var(--admin-accent-dark-text)' : 'var(--admin-accent)' }
+                      : undefined
+                  }
                 >
                   <div className="relative">
                     <span
@@ -123,9 +129,12 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                     </span>
                     {/* Badge for Notifications Tab */}
                     {item.id === 'notifications' && unreadCount > 0 && (
-                      <span className={`absolute -top-0.5 -right-1 w-2 h-2 rounded-full ring-2 ring-[#F4ECDE] dark:ring-[#1C221A] animate-pulse ${
-                        isAdminMode ? 'bg-emerald-500' : 'bg-[#B5451B]'
-                      }`} />
+                      <span
+                        className={`absolute -top-0.5 -right-1 w-2 h-2 rounded-full ring-2 ring-[#F4ECDE] dark:ring-[#1C221A] animate-pulse ${
+                          isAdminMode ? 'bg-emerald-500' : 'bg-[#B5451B]'
+                        }`}
+                        style={isAdminMode ? { backgroundColor: 'var(--admin-accent)' } : undefined}
+                      />
                     )}
                   </div>
                   <span
@@ -136,6 +145,11 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                           : 'font-bold text-[#B5451B]'
                         : 'font-medium'
                     }`}
+                    style={
+                      isActive && isAdminMode
+                        ? { color: isDark ? 'var(--admin-accent-dark-text)' : 'var(--admin-accent)' }
+                        : undefined
+                    }
                   >
                     {label}
                   </span>
