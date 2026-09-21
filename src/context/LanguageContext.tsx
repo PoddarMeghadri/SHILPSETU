@@ -46,10 +46,18 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
 
   const [language, setLanguageState] = useState<LanguageCode>(() => {
     if (initialLanguage) return initialLanguage;
-    const authDone = typeof window !== 'undefined' && localStorage.getItem('shilpsetu_auth_done') === 'true';
-    if (!authDone) return 'en';
-    const stored = typeof window !== 'undefined' ? (localStorage.getItem('shilpsetu_lang') as LanguageCode) : null;
-    return stored || 'en';
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('shilpsetu_lang') as LanguageCode;
+      if (stored) return stored;
+      try {
+        const artisanRaw = localStorage.getItem('shilpsetu_artisan');
+        if (artisanRaw) {
+          const parsed = JSON.parse(artisanRaw);
+          if (parsed.preferredLanguage) return parsed.preferredLanguage as LanguageCode;
+        }
+      } catch (_) {}
+    }
+    return 'en';
   });
 
   const isRtl = useMemo(() => isRtlLanguage(language), [language]);
@@ -74,6 +82,12 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
     setLanguageState(newLang);
     try {
       localStorage.setItem('shilpsetu_lang', newLang);
+      const storedArtisan = localStorage.getItem('shilpsetu_artisan');
+      if (storedArtisan) {
+        const parsed = JSON.parse(storedArtisan);
+        parsed.preferredLanguage = newLang;
+        localStorage.setItem('shilpsetu_artisan', JSON.stringify(parsed));
+      }
     } catch {
       // ignore storage errors
     }
@@ -86,8 +100,17 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
         setLanguageState(e.newValue as LanguageCode);
       }
     };
+    const handleCustomLang = (e: any) => {
+      if (e.detail?.language) {
+        setLanguageState(e.detail.language as LanguageCode);
+      }
+    };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener('shilpsetu:language-sync', handleCustomLang as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('shilpsetu:language-sync', handleCustomLang as EventListener);
+    };
   }, []);
 
   const t = useCallback(

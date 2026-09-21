@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ArtisanProfile, ScreenId, LanguageCode } from '../../types';
 import { sound } from '../../services/sound';
 import { EditProfileModal } from '../profile/EditProfileModal';
@@ -8,6 +8,7 @@ import { ShareWorkshopModal } from '../common/ShareWorkshopModal';
 import { useTranslation } from '../../services/translations';
 import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
 import { useAdminMode } from '../../context/AdminModeContext';
+import { uploadAvatarToSupabase, upsertSupabaseProfile } from '../../services/supabase';
 
 const DEFAULT_AVATAR = DEFAULT_ARTISAN_AVATAR;
 
@@ -30,6 +31,45 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [redirectPlatform, setRedirectPlatform] = useState<SocialPlatformType | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const directFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleDirectAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    sound.playTap();
+    setIsUploadingAvatar(true);
+    try {
+      const uploadRes = await uploadAvatarToSupabase(file, artisan.id);
+      if (uploadRes.publicUrl) {
+        const updated: ArtisanProfile = {
+          ...artisan,
+          avatarUrl: uploadRes.publicUrl,
+        };
+        onUpdateArtisan(updated);
+        try {
+          localStorage.setItem('shilpsetu_artisan', JSON.stringify(updated));
+        } catch (_) {}
+        try {
+          await upsertSupabaseProfile({
+            userId: artisan.id,
+            fullName: artisan.name,
+            avatarUrl: uploadRes.publicUrl,
+            craftSpecialty: artisan.craft,
+            location: artisan.location,
+            mobileNumber: artisan.mobile,
+            email: artisan.email,
+          });
+        } catch (_) {}
+        sound.playSuccess();
+      }
+    } catch (err) {
+      console.warn('[Avatar upload error]:', err);
+      sound.playError();
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   const artisanSlug = artisan.name.toLowerCase().replace(/\s+/g, '-');
   const storeUrl = `https://shilpsetu.org/${artisanSlug}`;
@@ -57,24 +97,49 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#B5451B]/15 rounded-full blur-xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col items-center">
-          {/* Avatar with gold ring, Blue Verified Badge & edit badge */}
+          {/* Avatar with gold ring, Blue Verified Badge & quick photo upload button */}
           <div className="relative mb-3">
-            <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-[#B5451B] via-[#E8B84B] to-[#2E4638] shadow-md">
+            <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-[#B5451B] via-[#E8B84B] to-[#2E4638] shadow-md relative overflow-hidden">
               <img
                 src={artisan.avatarUrl || DEFAULT_AVATAR}
                 alt={artisan.name}
                 className="w-full h-full rounded-full object-cover border-2 border-[#F5EFE3]"
               />
+              {isUploadingAvatar && (
+                <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center z-20">
+                  <span className="material-symbols-outlined text-white text-xl animate-spin">
+                    progress_activity
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Official Blue Verified Badge */}
             <div
-              className="absolute bottom-0 right-0 flex items-center justify-center drop-shadow-md"
+              className="absolute bottom-0 right-0 flex items-center justify-center drop-shadow-md z-10"
               title="Official Blue Verified Master Artisan"
             >
               <BlueVerifiedBadge size={26} />
             </div>
 
+            {/* Quick DP Upload Button */}
+            <button
+              type="button"
+              disabled={isUploadingAvatar}
+              onClick={() => directFileInputRef.current?.click()}
+              className="absolute top-0 right-0 w-7 h-7 rounded-full bg-[#B5451B] text-white flex items-center justify-center shadow-md border-2 border-white cursor-pointer hover:bg-[#9C3A14] transition-transform active:scale-95 disabled:opacity-50 z-10"
+              title={t('upload_photo', 'Upload Profile Picture (DP)')}
+            >
+              <span className="material-symbols-outlined text-sm">photo_camera</span>
+            </button>
+
+            <input
+              ref={directFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleDirectAvatarChange}
+            />
           </div>
 
           <div className="flex items-center justify-center gap-1.5 flex-wrap">

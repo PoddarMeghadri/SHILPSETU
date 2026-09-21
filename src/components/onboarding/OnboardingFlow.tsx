@@ -1240,6 +1240,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           setMobile(val);
                           if (mobileError) setMobileError('');
                         }}
+                        onBlur={async () => {
+                          const clean = mobile.replace(/\D/g, '');
+                          if (clean.length === 10 && !isAdminMode) {
+                            try {
+                              const check = await checkAccountUniqueness(undefined, clean);
+                              if (!check.unique) {
+                                setMobileError(
+                                  check.error ||
+                                    'An account is already registered with this mobile number. Please sign in instead.'
+                                );
+                              }
+                            } catch (_) {}
+                          }
+                        }}
                         placeholder={t('enter_10_digit_mobile', 'Enter 10-digit mobile number')}
                         className={`w-full pl-10 pr-4 py-3 rounded-2xl border text-sm font-mono tracking-wider focus:outline-hidden focus:ring-2 transition-all ${
                           isAdminMode ? 'focus:ring-[#059669]' : 'focus:ring-[#B5451B]'
@@ -1252,7 +1266,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     </div>
                   </div>
                   {mobileError ? (
-                    <p className="text-[11px] text-red-500 mt-1 font-medium">{mobileError}</p>
+                    <div className="mt-1 space-y-1">
+                      <p className="text-[11px] text-red-500 font-medium">{mobileError}</p>
+                      {(mobileError.includes('already registered') || mobileError.includes('sign in')) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playTap();
+                            setAuthFlowMode('sign_in');
+                            setSignInIdentifier(mobile.trim());
+                            setMobileError('');
+                          }}
+                          className="text-left text-xs font-semibold text-[#B5451B] dark:text-[#E8B84B] hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>Sign in with this mobile number instead</span>
+                          <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-[10px] text-black/60 dark:text-white/60 mt-1">
                       {t('we_will_send_otp', 'We will send a 6-digit OTP to this number.')}
@@ -1297,6 +1328,21 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         setEmail(e.target.value);
                         if (emailError) setEmailError('');
                       }}
+                      onBlur={async () => {
+                        const clean = email.trim().toLowerCase();
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (clean && emailRegex.test(clean) && !isAdminMode) {
+                          try {
+                            const check = await checkAccountUniqueness(clean, undefined);
+                            if (!check.unique) {
+                              setEmailError(
+                                check.error ||
+                                  'An account is already registered with this email address. Please sign in instead.'
+                              );
+                            }
+                          } catch (_) {}
+                        }
+                      }}
                       placeholder={t('enter_email_mandatory', 'Enter email address (e.g. artisan@craft.in)')}
                       className={`w-full pl-10 pr-4 py-3 rounded-2xl border text-sm font-sans focus:outline-hidden focus:ring-2 transition-all ${
                         isAdminMode ? 'focus:ring-[#059669]' : 'focus:ring-[#B5451B]'
@@ -1310,7 +1356,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   {emailError ? (
                     <div className="mt-1 space-y-1">
                       <p className="text-[11px] text-red-500 font-medium">{emailError}</p>
-                      {emailError.includes('already exists') && (
+                      {(emailError.includes('already registered') ||
+                        emailError.includes('already exists') ||
+                        emailError.includes('sign in')) && (
                         <button
                           type="button"
                           onClick={() => {

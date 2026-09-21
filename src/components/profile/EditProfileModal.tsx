@@ -5,6 +5,7 @@ import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
 import { INDIAN_STATES_AND_CITIES, parseLocationString } from '../../data/indianLocations';
 import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
+import { uploadAvatarToSupabase, upsertSupabaseProfile } from '../../services/supabase';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -134,6 +135,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     return list.filter((p) => p !== currentAvatar);
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   // Sync state & city when modal opens
   useEffect(() => {
@@ -178,30 +180,44 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     setFormData((prev) => ({ ...prev, location: combinedLocation }));
   };
 
-  // Handle avatar upload with automatic compression
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle avatar upload to Supabase Storage 'avatars' bucket
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       sound.playTap();
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const rawUrl = event.target?.result as string;
-        if (rawUrl) {
-          try {
-            const compressed = await compressImage(rawUrl, 400, 400, 0.82);
-            setFormData((prev) => ({ ...prev, avatarUrl: compressed }));
-            setSelectedPortraitForDelete(compressed);
-            const updatedPortraits = [compressed, ...uploadedPortraits.filter((p) => p !== compressed)].slice(0, 8);
-            setUploadedPortraits(updatedPortraits);
-            safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(updatedPortraits));
-            sound.playSuccess();
-          } catch (err) {
-            console.warn('[Avatar upload error]:', err);
-            setFormData((prev) => ({ ...prev, avatarUrl: rawUrl }));
-          }
+      setIsUploadingAvatar(true);
+      try {
+        const uploadResult = await uploadAvatarToSupabase(file, artisan.id);
+        const finalUrl = uploadResult.publicUrl;
+
+        if (finalUrl) {
+          setFormData((prev) => ({ ...prev, avatarUrl: finalUrl }));
+          setSelectedPortraitForDelete(finalUrl);
+          const updatedPortraits = [finalUrl, ...uploadedPortraits.filter((p) => p !== finalUrl)].slice(0, 8);
+          setUploadedPortraits(updatedPortraits);
+          safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(updatedPortraits));
+          sound.playSuccess();
+        } else {
+          // Fallback to client compression
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            const rawUrl = event.target?.result as string;
+            if (rawUrl) {
+              const compressed = await compressImage(rawUrl, 400, 400, 0.82);
+              setFormData((prev) => ({ ...prev, avatarUrl: compressed }));
+              setSelectedPortraitForDelete(compressed);
+              const updated = [compressed, ...uploadedPortraits.filter((p) => p !== compressed)].slice(0, 8);
+              setUploadedPortraits(updated);
+              safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(updated));
+            }
+          };
+          reader.readAsDataURL(file);
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.warn('[Avatar upload error]:', err);
+      } finally {
+        setIsUploadingAvatar(false);
+      }
     }
   };
 
@@ -310,6 +326,22 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         console.warn('[EditProfileModal] onSave warning:', saveErr);
       }
 
+      // Sync to Supabase profiles table
+      try {
+        await upsertSupabaseProfile({
+          userId: artisan.id,
+          fullName: safeName,
+          email: safeEmail,
+          mobileNumber: safeMobile,
+          avatarUrl: safeAvatar,
+          location: combinedLocation,
+          bio: safeBio,
+          craftSpecialty: artisan.craft,
+        });
+      } catch (sbErr) {
+        console.warn('[Supabase profile sync warning]:', sbErr);
+      }
+
       // Safe local storage persistence
       safeLocalStorageSet('shilpsetu_artisan', JSON.stringify(updatedProfile));
       safeLocalStorageSet('shilpsetu_recent_photos', JSON.stringify(cleanedRecentPhotos));
@@ -380,18 +412,22 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
+                    disabled={isUploadingAvatar}
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1 text-[11px] font-bold text-[#B5451B] bg-[#B5451B]/10 hover:bg-[#B5451B]/20 px-2.5 py-1 rounded-full transition-colors cursor-pointer active:scale-95"
+                    className="flex items-center gap-1 text-[11px] font-bold text-[#B5451B] bg-[#B5451B]/10 hover:bg-[#B5451B]/20 px-2.5 py-1 rounded-full transition-colors cursor-pointer active:scale-95 disabled:opacity-50"
                   >
-                    <span className="material-symbols-outlined text-sm">photo_camera</span>
-                    <span>{t('upload_photo', 'Upload')}</span>
+                    <span className={`material-symbols-outlined text-sm ${isUploadingAvatar ? 'animate-spin' : ''}`}>
+                      {isUploadingAvatar ? 'progress_activity' : 'photo_camera'}
+                    </span>
+                    <span>{isUploadingAvatar ? 'Uploading...' : t('upload_photo', 'Upload')}</span>
                   </button>
 
                   {/* Remove Profile Picture button */}
                   <button
                     type="button"
+                    disabled={isUploadingAvatar}
                     onClick={handleRemoveProfilePicture}
-                    className="flex items-center gap-1 text-[11px] font-bold text-red-500 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                    className="flex items-center gap-1 text-[11px] font-bold text-red-500 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded-full transition-colors cursor-pointer disabled:opacity-50"
                     title={t('reset_default_portrait', 'Reset to default portrait')}
                   >
                     <span className="material-symbols-outlined text-sm">restart_alt</span>
@@ -418,10 +454,18 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                     alt={formData.name}
                     className="w-16 h-16 rounded-full object-cover border-2 border-[#E8B84B] shadow-md shrink-0"
                   />
+                  {isUploadingAvatar && (
+                    <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-white text-lg animate-spin">
+                        progress_activity
+                      </span>
+                    </div>
+                  )}
                   <button
                     type="button"
+                    disabled={isUploadingAvatar}
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#B5451B] text-white flex items-center justify-center shadow-xs border border-white cursor-pointer"
+                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#B5451B] text-white flex items-center justify-center shadow-xs border border-white cursor-pointer disabled:opacity-50"
                     title={t('upload_custom_photo', 'Upload Custom Photo')}
                   >
                     <span className="material-symbols-outlined text-[13px]">add_a_photo</span>

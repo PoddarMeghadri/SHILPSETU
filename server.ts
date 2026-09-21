@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { db } from './server/db.js';
@@ -25,6 +26,7 @@ import {
   generateSocialCaption,
 } from './server/ai.js';
 import { uploadMiddleware, saveBase64Image } from './server/storage.js';
+import { getSupabaseAdmin } from './server/supabase.js';
 
 dotenv.config();
 
@@ -91,13 +93,104 @@ app.post('/api/auth/check-email', (req, res) => {
   }
 });
 
-// Dual-layer verification: check email or mobile against backend records
-app.post('/api/auth/check-identity', (req, res) => {
+// Dual-layer verification: check email or mobile against backend records & Supabase auth
+app.post('/api/auth/check-identity', async (req, res) => {
   try {
     const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const mobile = typeof req.body.mobile === 'string' ? req.body.mobile.trim() : '';
     const cleanDigits = mobile.replace(/\D/g, '');
 
+    // 1. Supabase Admin Verification (Checks auth.users AND public.profiles with Service Role bypass)
+    const sbAdmin = getSupabaseAdmin();
+    if (sbAdmin) {
+      try {
+        const { data: usersData } = await sbAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (usersData?.users && usersData.users.length > 0) {
+          for (const u of usersData.users) {
+            // Check email match
+            if (email && u.email && u.email.trim().toLowerCase() === email) {
+              return res.json({
+                unique: false,
+                error: 'An account is already registered with this email address. Please sign in instead.',
+                field: 'email',
+              });
+            }
+
+            // Check mobile match
+            const phone = u.phone || '';
+            const metaPhone =
+              (u.user_metadata?.mobile_number as string) ||
+              (u.user_metadata?.phone as string) ||
+              (u.user_metadata?.mobile as string) ||
+              '';
+            const phoneDigits = phone.replace(/\D/g, '');
+            const metaPhoneDigits = metaPhone.replace(/\D/g, '');
+
+            if (cleanDigits && cleanDigits.length >= 8) {
+              if (
+                phone === mobile ||
+                metaPhone === mobile ||
+                (phoneDigits && (phoneDigits === cleanDigits || phoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(phoneDigits))) ||
+                (metaPhoneDigits && (metaPhoneDigits === cleanDigits || metaPhoneDigits.endsWith(cleanDigits) || cleanDigits.endsWith(metaPhoneDigits)))
+              ) {
+                return res.json({
+                  unique: false,
+                  error: 'An account is already registered with this mobile number. Please sign in instead.',
+                  field: 'mobile',
+                });
+              }
+            }
+          }
+        }
+      } catch (authErr) {
+        console.warn('[Check Identity Supabase Auth Users Error]:', authErr);
+      }
+
+      // Check Supabase profiles table
+      try {
+        const filters: string[] = [];
+        if (email) filters.push(`email.ilike.${email}`);
+        if (cleanDigits) filters.push(`mobile_number.ilike.%${cleanDigits}%`);
+        if (mobile && mobile !== cleanDigits) filters.push(`mobile_number.eq.${mobile}`);
+
+        if (filters.length > 0) {
+          const { data: profs } = await sbAdmin
+            .from('profiles')
+            .select('id, email, mobile_number')
+            .or(filters.join(','));
+
+          if (profs && profs.length > 0) {
+            for (const p of profs) {
+              if (email && p.email && p.email.trim().toLowerCase() === email) {
+                return res.json({
+                  unique: false,
+                  error: 'An account is already registered with this email address. Please sign in instead.',
+                  field: 'email',
+                });
+              }
+              if (cleanDigits && p.mobile_number) {
+                const pDigits = p.mobile_number.replace(/\D/g, '');
+                if (
+                  p.mobile_number.trim() === mobile ||
+                  pDigits === cleanDigits ||
+                  (pDigits.length >= 8 && cleanDigits.length >= 8 && (pDigits.endsWith(cleanDigits) || cleanDigits.endsWith(pDigits)))
+                ) {
+                  return res.json({
+                    unique: false,
+                    error: 'An account is already registered with this mobile number. Please sign in instead.',
+                    field: 'mobile',
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (profErr) {
+        console.warn('[Check Identity Supabase Profiles Error]:', profErr);
+      }
+    }
+
+    // 2. Check local backend storage/database
     if (email) {
       const existingEmail = db.getArtisanByEmail(email);
       if (existingEmail) {
@@ -120,9 +213,10 @@ app.post('/api/auth/check-identity', (req, res) => {
       }
     }
 
-    res.json({ unique: true });
+    return res.json({ unique: true });
   } catch (err: any) {
-    res.status(500).json({ unique: true });
+    console.error('[Check Identity Error]:', err);
+    return res.status(500).json({ unique: true });
   }
 });
 
@@ -743,6 +837,225 @@ app.post('/api/upload-base64', async (req, res) => {
     res.json({ url });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Base64 image upload failed' });
+  }
+});
+
+// Cloud Storage for Profile Pictures / Avatars
+app.post('/api/storage/avatar', uploadMiddleware.single('image'), async (req, res) => {
+  try {
+    let fileBuffer: Buffer | null = null;
+    let mimeType = 'image/jpeg';
+    let fileExt = 'jpg';
+    const userId = (req.body.userId as string) || 'artisan_demo';
+
+    if (req.file) {
+      fileBuffer = fs.readFileSync(req.file.path);
+      mimeType = req.file.mimetype;
+      fileExt = path.extname(req.file.originalname).replace('.', '').toLowerCase() || 'jpg';
+    } else if (req.body.imageBase64) {
+      const b64 = req.body.imageBase64;
+      const matches = b64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = matches[1];
+        fileBuffer = Buffer.from(matches[2], 'base64');
+        if (mimeType === 'image/png') fileExt = 'png';
+        if (mimeType === 'image/webp') fileExt = 'webp';
+      }
+    }
+
+    if (!fileBuffer) {
+      return res.status(400).json({ error: 'No image provided for avatar upload' });
+    }
+
+    const sbAdmin = getSupabaseAdmin();
+    let publicUrl = '';
+    const filePath = `${userId}/avatar_${Date.now()}.${fileExt}`;
+
+    if (sbAdmin) {
+      try {
+        await sbAdmin.storage.createBucket('avatars', { public: true });
+      } catch (_) {}
+
+      const { error: uploadError } = await sbAdmin.storage
+        .from('avatars')
+        .upload(filePath, fileBuffer, {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (!uploadError) {
+        const { data } = sbAdmin.storage.from('avatars').getPublicUrl(filePath);
+        publicUrl = data?.publicUrl || '';
+      } else {
+        console.warn('[Supabase Avatar Upload Warning]:', uploadError);
+      }
+
+      if (publicUrl && userId && userId !== 'artisan_demo') {
+        try {
+          await sbAdmin.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+        } catch (_) {}
+      }
+    }
+
+    if (!publicUrl) {
+      if (req.file) {
+        publicUrl = `/uploads/${req.file.filename}`;
+      } else if (req.body.imageBase64) {
+        publicUrl = await saveBase64Image(req.body.imageBase64, 'avatar');
+      }
+    }
+
+    res.json({ publicUrl, filePath });
+  } catch (err: any) {
+    console.error('[Avatar Upload Error]:', err);
+    res.status(500).json({ error: err.message || 'Avatar upload failed' });
+  }
+});
+
+// Cloud Storage for Craft Photos
+app.post('/api/storage/craft', uploadMiddleware.single('image'), async (req, res) => {
+  try {
+    let fileBuffer: Buffer | null = null;
+    let mimeType = 'image/jpeg';
+    let fileExt = 'jpg';
+    const userId = (req.body.userId as string) || 'artisan_demo';
+
+    if (req.file) {
+      fileBuffer = fs.readFileSync(req.file.path);
+      mimeType = req.file.mimetype;
+      fileExt = path.extname(req.file.originalname).replace('.', '').toLowerCase() || 'jpg';
+    } else if (req.body.imageBase64) {
+      const b64 = req.body.imageBase64;
+      const matches = b64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = matches[1];
+        fileBuffer = Buffer.from(matches[2], 'base64');
+        if (mimeType === 'image/png') fileExt = 'png';
+        if (mimeType === 'image/webp') fileExt = 'webp';
+      }
+    }
+
+    if (!fileBuffer) {
+      return res.status(400).json({ error: 'No image provided for craft upload' });
+    }
+
+    const sbAdmin = getSupabaseAdmin();
+    let publicUrl = '';
+    const filePath = `${userId}/craft_${Date.now()}.${fileExt}`;
+
+    if (sbAdmin) {
+      try {
+        await sbAdmin.storage.createBucket('crafts', { public: true });
+      } catch (_) {}
+
+      const { error: uploadError } = await sbAdmin.storage
+        .from('crafts')
+        .upload(filePath, fileBuffer, {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (!uploadError) {
+        const { data } = sbAdmin.storage.from('crafts').getPublicUrl(filePath);
+        publicUrl = data?.publicUrl || '';
+      } else {
+        console.warn('[Supabase Craft Upload Warning]:', uploadError);
+      }
+    }
+
+    if (!publicUrl) {
+      if (req.file) {
+        publicUrl = `/uploads/${req.file.filename}`;
+      } else if (req.body.imageBase64) {
+        publicUrl = await saveBase64Image(req.body.imageBase64, 'craft');
+      }
+    }
+
+    res.json({ publicUrl, filePath });
+  } catch (err: any) {
+    console.error('[Craft Upload Error]:', err);
+    res.status(500).json({ error: err.message || 'Craft upload failed' });
+  }
+});
+
+// Artisan Crafts Catalog Endpoints
+app.get('/api/crafts', async (req, res) => {
+  try {
+    const userId = req.query.userId as string;
+    const sbAdmin = getSupabaseAdmin();
+    if (sbAdmin && userId && userId !== 'artisan_demo') {
+      try {
+        const { data, error } = await sbAdmin
+          .from('crafts')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          return res.json({ crafts: data });
+        }
+      } catch (_) {}
+    }
+    const localProducts = db.getProducts();
+    res.json({ crafts: localProducts });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch crafts' });
+  }
+});
+
+app.post('/api/crafts', async (req, res) => {
+  try {
+    const { id, userId, title, description, story, price, materials, imageUrl } = req.body;
+    if (!title || !price || !imageUrl) {
+      return res.status(400).json({ error: 'Title, price, and imageUrl are required' });
+    }
+
+    const sbAdmin = getSupabaseAdmin();
+    let savedInSupabase = false;
+    let record: any = null;
+
+    if (sbAdmin && userId && userId !== 'artisan_demo') {
+      try {
+        const { data, error } = await sbAdmin
+          .from('crafts')
+          .insert({
+            user_id: userId,
+            title,
+            description: description || '',
+            story: story || '',
+            price: Number(price) || 0,
+            materials: Array.isArray(materials) ? materials.join(', ') : (materials || ''),
+            image_url: imageUrl,
+          })
+          .select()
+          .single();
+        if (!error && data) {
+          savedInSupabase = true;
+          record = data;
+        }
+      } catch (err) {
+        console.warn('[Supabase Craft Insert Exception]:', err);
+      }
+    }
+
+    const localProduct = db.createProduct({
+      title,
+      craft: 'Handicrafts',
+      price: Number(price) || 0,
+      stock: 1,
+      imageUrl,
+      story: description || story || '',
+      artisanId: userId || 'artisan_demo',
+      isActive: true,
+    });
+
+    res.json({
+      success: true,
+      savedInSupabase,
+      craft: record || localProduct,
+    });
+  } catch (err: any) {
+    console.error('[Craft Save Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to save craft' });
   }
 });
 

@@ -8,6 +8,7 @@ import { PrintableCraftQRCodeModal } from '../common/PrintableCraftQRCodeModal';
 import { useTranslation } from '../../services/translations';
 import { generateLocalizedListing } from '../../services/aiTranslationService';
 import { isRtlLanguage } from '../../i18n/types';
+import { uploadCraftToSupabase } from '../../services/supabase';
 
 interface AutoCatalogerProps {
   products: ProductItem[];
@@ -175,6 +176,30 @@ export const AutoCatalogerScreen: React.FC<AutoCatalogerProps> = ({
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
   const [showQRModal, setShowQRModal] = useState<boolean>(false);
 
+  const [craftImageUrl, setCraftImageUrl] = useState<string>(
+    'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?w=800&auto=format&fit=crop&q=80'
+  );
+  const [isUploadingCraftImage, setIsUploadingCraftImage] = useState<boolean>(false);
+  const craftFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleCraftImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    sound.playTap();
+    setIsUploadingCraftImage(true);
+    try {
+      const uploadRes = await uploadCraftToSupabase(file);
+      if (uploadRes.publicUrl) {
+        setCraftImageUrl(uploadRes.publicUrl);
+        sound.playSuccess();
+      }
+    } catch (err) {
+      console.warn('[Craft upload error]:', err);
+    } finally {
+      setIsUploadingCraftImage(false);
+    }
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const capturedTextRef = useRef<string>('');
@@ -322,13 +347,13 @@ export const AutoCatalogerScreen: React.FC<AutoCatalogerProps> = ({
       id: `prod-${Date.now()}`,
       title: activeTab === 'native' ? title : englishTitle,
       description: activeTab === 'native' ? description : englishDescription,
-      category,
+      category: category || 'Handcrafted Heritage',
       price,
       materialCost,
       hoursWorked,
       stock: 12,
-      rawImageUrl: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800&auto=format&fit=crop&q=80',
-      polishedImageUrl: 'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?w=800&auto=format&fit=crop&q=80',
+      rawImageUrl: craftImageUrl,
+      polishedImageUrl: craftImageUrl,
       materials: materials.split(',').map((m) => m.trim()),
       status: 'live',
       dateAdded: 'Just now',
@@ -568,6 +593,47 @@ export const AutoCatalogerScreen: React.FC<AutoCatalogerProps> = ({
 
         {/* Form Fields */}
         <div className="space-y-3.5">
+          {/* Craft Photo Upload & Live Preview */}
+          <div className="rounded-2xl p-3 bg-black/5 dark:bg-white/5 border border-[#22331E]/10 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-[#B5451B] block">
+                {t('craft_photo', 'Craft Photo')} (Supabase Cloud Storage)
+              </label>
+              <button
+                type="button"
+                disabled={isUploadingCraftImage}
+                onClick={() => craftFileInputRef.current?.click()}
+                className="flex items-center gap-1 text-[11px] font-bold text-[#B5451B] bg-[#B5451B]/10 hover:bg-[#B5451B]/20 px-2.5 py-1 rounded-full transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <span className={`material-symbols-outlined text-sm ${isUploadingCraftImage ? 'animate-spin' : ''}`}>
+                  {isUploadingCraftImage ? 'progress_activity' : 'add_photo_alternate'}
+                </span>
+                <span>{isUploadingCraftImage ? 'Uploading...' : 'Upload Photo'}</span>
+              </button>
+              <input
+                ref={craftFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleCraftImageUpload}
+              />
+            </div>
+            <div className="relative h-36 sm:h-44 rounded-xl overflow-hidden border border-[#22331E]/15 bg-black/10 flex items-center justify-center">
+              <img
+                src={craftImageUrl}
+                alt={title || 'Craft'}
+                className="w-full h-full object-cover"
+              />
+              {isUploadingCraftImage && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-2xl animate-spin">
+                    progress_activity
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Title */}
           <div>
             <label className="text-[10px] font-bold uppercase tracking-wider text-[#B5451B] block mb-1">

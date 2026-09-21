@@ -27,6 +27,13 @@ CREATE POLICY "Users can view their own profile"
   TO authenticated 
   USING (id = auth.uid());
 
+-- Allow unauthenticated lookup of contact identities during registration checks
+DROP POLICY IF EXISTS "Allow unauthenticated contact identity check" ON public.profiles;
+CREATE POLICY "Allow unauthenticated contact identity check" 
+  ON public.profiles FOR SELECT 
+  TO anon, authenticated 
+  USING (true);
+
 DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 CREATE POLICY "Users can insert their own profile" 
   ON public.profiles FOR INSERT 

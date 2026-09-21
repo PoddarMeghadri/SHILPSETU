@@ -24,7 +24,13 @@ import { sound } from './services/sound';
 import { useLanguage } from './context/LanguageContext';
 import { useAdminMode } from './context/AdminModeContext';
 import { api } from './services/api';
-import { upsertSupabaseProfile, isSupabaseConfigured, supabase } from './services/supabase';
+import {
+  upsertSupabaseProfile,
+  isSupabaseConfigured,
+  supabase,
+  saveCraftToSupabase,
+  fetchUserCraftsFromSupabase,
+} from './services/supabase';
 
 export function App() {
   const { language, setLanguage } = useLanguage();
@@ -186,6 +192,11 @@ export function App() {
             session.user.user_metadata?.full_name?.trim() ||
             session.user.user_metadata?.name?.trim();
 
+          if (prof?.preferred_language) {
+            setLanguage(prof.preferred_language as LanguageCode);
+            localStorage.setItem('shilpsetu_lang', prof.preferred_language);
+          }
+
           if (registeredName || prof) {
             setArtisan((prev) => {
               const rawLoc = prof?.location || '';
@@ -198,6 +209,8 @@ export function App() {
                 mobile: prof?.mobile_number || session.user.user_metadata?.mobile_number || prev.mobile,
                 craft: prof?.craft_specialty || prev.craft,
                 location: prof?.location || prev.location,
+                avatarUrl: prof?.avatar_url || prev.avatarUrl,
+                bio: prof?.bio || prev.bio,
                 state: state || prev.state,
                 city: city || prev.city,
               };
@@ -311,6 +324,46 @@ export function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Fetch user crafts from Supabase and merge with showcase catalog
+  useEffect(() => {
+    fetchUserCraftsFromSupabase(artisan.id)
+      .then((crafts) => {
+        if (crafts && crafts.length > 0) {
+          const customProducts: ProductItem[] = crafts.map((c: any) => ({
+            id: c.id,
+            title: c.title,
+            category: 'Handcrafted Heritage',
+            rawImageUrl: c.image_url,
+            polishedImageUrl: c.image_url,
+            price: Number(c.price) || 1200,
+            description: c.description || c.story || '',
+            materials:
+              typeof c.materials === 'string'
+                ? c.materials.split(',').map((m: string) => m.trim())
+                : c.materials || [],
+            hoursWorked: 8,
+            materialCost: Math.round((Number(c.price) || 1200) * 0.25),
+            stock: 8,
+            status: 'live',
+            dateAdded: 'Recently',
+            gemSyncStatus: 'synced',
+          }));
+
+          setProducts((prev) => {
+            const existingIds = new Set(prev.map((p) => p.id));
+            const newOnes = customProducts.filter((p) => !existingIds.has(p.id));
+            if (newOnes.length > 0) {
+              const merged = [...newOnes, ...prev];
+              localStorage.setItem('shilpsetu_products', JSON.stringify(merged));
+              return merged;
+            }
+            return prev;
+          });
+        }
+      })
+      .catch(console.warn);
+  }, [artisan.id]);
+
   const handleAddProduct = (newProduct: ProductItem) => {
     setProducts((prev) => {
       const updated = [newProduct, ...prev];
@@ -318,6 +371,18 @@ export function App() {
       return updated;
     });
     api.createProduct(newProduct).catch(console.warn);
+
+    // Persist craft to Supabase public.crafts and backend storage
+    saveCraftToSupabase({
+      id: newProduct.id,
+      userId: artisan.id,
+      title: newProduct.title,
+      description: newProduct.description,
+      price: newProduct.price,
+      materials: newProduct.materials,
+      imageUrl: newProduct.polishedImageUrl || newProduct.rawImageUrl,
+    }).catch(console.warn);
+
     // Add new activity
     const newActivity: ActivityItem = {
       id: `act-${Date.now()}`,

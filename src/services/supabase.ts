@@ -168,17 +168,19 @@ export async function checkAccountUniqueness(
   if (isSupabaseConfigured() && !isProfilesTableMissing) {
     try {
       const filters: string[] = [];
-      if (cleanEmail) filters.push(`email.eq.${cleanEmail}`);
+      if (cleanEmail) filters.push(`email.ilike.${cleanEmail}`);
       if (cleanMobile) filters.push(`mobile_number.eq.${cleanMobile}`);
       if (cleanDigits && cleanDigits !== cleanMobile) {
         filters.push(`mobile_number.eq.${cleanDigits}`);
       }
+      if (cleanDigits) {
+        filters.push(`mobile_number.ilike.%${cleanDigits}%`);
+      }
 
-      const { data: existingUser, error: checkError } = await supabase
+      const { data: matchingUsers, error: checkError } = await supabase
         .from('profiles')
         .select('id, email, mobile_number')
-        .or(filters.join(','))
-        .maybeSingle();
+        .or(filters.join(','));
 
       if (checkError) {
         if (isTableMissingError(checkError)) {
@@ -188,24 +190,29 @@ export async function checkAccountUniqueness(
         }
       }
 
-      if (existingUser) {
-        if (existingUser.email && cleanEmail && existingUser.email.trim().toLowerCase() === cleanEmail) {
-          return {
-            unique: false,
-            error: 'An account is already registered with this email address. Please sign in instead.',
-            field: 'email',
-          };
-        }
-        if (
-          existingUser.mobile_number &&
-          (existingUser.mobile_number.trim() === cleanMobile ||
-            existingUser.mobile_number.replace(/\D/g, '') === cleanDigits)
-        ) {
-          return {
-            unique: false,
-            error: 'An account is already registered with this mobile number. Please sign in instead.',
-            field: 'mobile',
-          };
+      if (matchingUsers && matchingUsers.length > 0) {
+        for (const existingUser of matchingUsers) {
+          if (existingUser.email && cleanEmail && existingUser.email.trim().toLowerCase() === cleanEmail) {
+            return {
+              unique: false,
+              error: 'An account is already registered with this email address. Please sign in instead.',
+              field: 'email',
+            };
+          }
+          if (existingUser.mobile_number && cleanDigits) {
+            const storedDigits = existingUser.mobile_number.replace(/\D/g, '');
+            if (
+              existingUser.mobile_number.trim() === cleanMobile ||
+              storedDigits === cleanDigits ||
+              (storedDigits.length >= 8 && cleanDigits.length >= 8 && (storedDigits.endsWith(cleanDigits) || cleanDigits.endsWith(storedDigits)))
+            ) {
+              return {
+                unique: false,
+                error: 'An account is already registered with this mobile number. Please sign in instead.',
+                field: 'mobile',
+              };
+            }
+          }
         }
       }
     } catch (err: any) {
@@ -466,4 +473,253 @@ export async function updateSupabasePassword(newPassword: string) {
   if (!isSupabaseConfigured()) return { updated: false, error: SUPABASE_CONFIGURATION_ERROR };
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   return { updated: !error, error: error?.message };
+}
+
+/**
+ * Upload an artisan profile photo (DP) to Supabase Storage 'avatars' bucket.
+ * Falls back to server-side admin upload if client storage permission is restricted.
+ */
+export async function uploadAvatarToSupabase(
+  fileOrBase64: File | Blob | string,
+  customUserId?: string
+): Promise<{ publicUrl?: string; error?: string }> {
+  try {
+    let userId = customUserId;
+    if (!userId && isSupabaseConfigured()) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      userId = sessionData?.session?.user?.id;
+    }
+    if (!userId) {
+      try {
+        const stored = localStorage.getItem('shilpsetu_artisan');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          userId = parsed.id || parsed.email || 'artisan';
+        }
+      } catch (_) {}
+    }
+    const safeUserId = userId || 'artisan';
+
+    // If string is base64 or URL
+    if (typeof fileOrBase64 === 'string') {
+      const resp = await fetch('/api/storage/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: fileOrBase64, userId: safeUserId }),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.publicUrl) {
+        return { publicUrl: data.publicUrl };
+      }
+      return { error: data.error || 'Avatar upload failed' };
+    }
+
+    // Direct client upload attempt
+    if (isSupabaseConfigured() && typeof fileOrBase64 !== 'string') {
+      const fileExt = (fileOrBase64 as File).name?.split('.').pop() || 'jpg';
+      const filePath = `${safeUserId}/avatar_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, fileOrBase64, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (!uploadError) {
+        const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+        if (data?.publicUrl) {
+          // Update profile column if userId is UUID
+          if (safeUserId.includes('-')) {
+            try {
+              await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', safeUserId);
+            } catch (_) {}
+          }
+          return { publicUrl: data.publicUrl };
+        }
+      }
+    }
+
+    // Fallback: use server upload endpoint with multipart FormData
+    const formData = new FormData();
+    formData.append('image', fileOrBase64);
+    formData.append('userId', safeUserId);
+
+    const resp = await fetch('/api/storage/avatar', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await resp.json();
+    if (resp.ok && data.publicUrl) {
+      return { publicUrl: data.publicUrl };
+    }
+    return { error: data.error || 'Failed to upload avatar' };
+  } catch (err: any) {
+    console.error('[Avatar Upload Error]:', err);
+    return { error: err.message || 'Avatar upload failed' };
+  }
+}
+
+/**
+ * Upload a craft photo to Supabase Storage 'crafts' bucket.
+ */
+export async function uploadCraftToSupabase(
+  fileOrBase64: File | Blob | string,
+  customUserId?: string
+): Promise<{ publicUrl?: string; error?: string }> {
+  try {
+    let userId = customUserId;
+    if (!userId && isSupabaseConfigured()) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      userId = sessionData?.session?.user?.id;
+    }
+    const safeUserId = userId || 'artisan';
+
+    if (typeof fileOrBase64 === 'string') {
+      const resp = await fetch('/api/storage/craft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: fileOrBase64, userId: safeUserId }),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.publicUrl) {
+        return { publicUrl: data.publicUrl };
+      }
+      return { error: data.error || 'Craft image upload failed' };
+    }
+
+    if (isSupabaseConfigured() && typeof fileOrBase64 !== 'string') {
+      const fileExt = (fileOrBase64 as File).name?.split('.').pop() || 'jpg';
+      const filePath = `${safeUserId}/craft_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('crafts')
+        .upload(filePath, fileOrBase64, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (!uploadError) {
+        const { data } = supabase.storage.from('crafts').getPublicUrl(filePath);
+        if (data?.publicUrl) {
+          return { publicUrl: data.publicUrl };
+        }
+      }
+    }
+
+    const formData = new FormData();
+    formData.append('image', fileOrBase64);
+    formData.append('userId', safeUserId);
+
+    const resp = await fetch('/api/storage/craft', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await resp.json();
+    if (resp.ok && data.publicUrl) {
+      return { publicUrl: data.publicUrl };
+    }
+    return { error: data.error || 'Failed to upload craft image' };
+  } catch (err: any) {
+    console.error('[Craft Image Upload Error]:', err);
+    return { error: err.message || 'Craft upload failed' };
+  }
+}
+
+/**
+ * Save an artisan craft into public.crafts table.
+ */
+export async function saveCraftToSupabase(craft: {
+  id?: string;
+  userId?: string;
+  title: string;
+  description?: string;
+  story?: string;
+  price: number;
+  materials?: string[] | string;
+  imageUrl: string;
+}): Promise<{ saved: boolean; craft?: any; error?: string }> {
+  try {
+    let userId = craft.userId;
+    if (!userId && isSupabaseConfigured()) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      userId = sessionData?.session?.user?.id;
+    }
+    const safeUserId = userId || 'artisan_demo';
+
+    // Direct Supabase insert attempt
+    if (isSupabaseConfigured() && safeUserId.includes('-')) {
+      const payload = {
+        user_id: safeUserId,
+        title: craft.title,
+        description: craft.description || '',
+        story: craft.story || '',
+        price: Number(craft.price) || 0,
+        materials: Array.isArray(craft.materials) ? craft.materials.join(', ') : (craft.materials || ''),
+        image_url: craft.imageUrl,
+      };
+
+      const { data, error } = await supabase
+        .from('crafts')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (!error && data) {
+        return { saved: true, craft: data };
+      }
+    }
+
+    // Always mirror to backend API route as well
+    const resp = await fetch('/api/crafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...craft,
+        userId: safeUserId,
+      }),
+    });
+    const result = await resp.json();
+    return { saved: resp.ok, craft: result.craft };
+  } catch (err: any) {
+    console.warn('[Save Craft Warning]:', err);
+    return { saved: false, error: err.message };
+  }
+}
+
+/**
+ * Fetch crafts for the current user from public.crafts.
+ */
+export async function fetchUserCraftsFromSupabase(customUserId?: string): Promise<any[]> {
+  try {
+    let userId = customUserId;
+    if (!userId && isSupabaseConfigured()) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      userId = sessionData?.session?.user?.id;
+    }
+
+    if (isSupabaseConfigured() && userId && userId.includes('-')) {
+      const { data, error } = await supabase
+        .from('crafts')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data;
+      }
+    }
+
+    // Fallback to server endpoint
+    const url = userId ? `/api/crafts?userId=${encodeURIComponent(userId)}` : '/api/crafts';
+    const resp = await fetch(url);
+    if (resp.ok) {
+      const data = await resp.json();
+      return data.crafts || [];
+    }
+    return [];
+  } catch (err) {
+    console.warn('[Fetch Crafts Warning]:', err);
+    return [];
+  }
 }
