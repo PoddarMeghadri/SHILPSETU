@@ -17,8 +17,16 @@ export function normalizeSupabaseUrl(rawUrl?: string): string {
 }
 
 // 1. Audit & Enforce Supabase Client Initialization
-const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL || '';
-const rawSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY || '';
+const rawSupabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL ||
+  import.meta.env.SUPABASE_URL ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_URL ||
+  '';
+const rawSupabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env.SUPABASE_ANON_KEY ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  '';
 
 const supabaseUrl = normalizeSupabaseUrl(rawSupabaseUrl);
 const supabaseAnonKey = (rawSupabaseAnonKey || '').trim();
@@ -48,6 +56,8 @@ export const supabase = createClient(
 );
 
 const AUTH_TIMEOUT_MS = 10_000;
+const SUPABASE_CONFIGURATION_ERROR =
+  'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the Vercel Preview and Production environments, then redeploy.';
 
 async function withAuthTimeout<T>(operation: PromiseLike<T>, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -106,7 +116,7 @@ export async function signUpWithSupabase({
   isAlreadyRegistered?: boolean;
 }> {
   if (!isSupabaseConfigured()) {
-    return { success: false, error: 'Supabase is not configured' };
+    return { success: false, error: SUPABASE_CONFIGURATION_ERROR };
   }
 
   const cleanEmail = email.trim().toLowerCase();
@@ -174,7 +184,7 @@ export async function signUpWithSupabase({
 
 /** Send a numeric email OTP through Supabase Auth. */
 export async function sendSupabaseOtp(email: string, shouldCreateUser = true) {
-  if (!isSupabaseConfigured()) return { sent: false, error: 'Supabase is not configured' };
+  if (!isSupabaseConfigured()) return { sent: false, error: SUPABASE_CONFIGURATION_ERROR };
   const cleanEmail = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return { sent: false, error: 'A valid email address is required.' };
   try {
@@ -189,7 +199,7 @@ export async function sendSupabaseOtp(email: string, shouldCreateUser = true) {
 }
 
 export async function verifySupabaseOtp(email: string, token: string, type: 'email' | 'signup' | 'recovery' = 'email') {
-  if (!isSupabaseConfigured()) return { verified: false, error: 'Supabase is not configured' };
+  if (!isSupabaseConfigured()) return { verified: false, error: SUPABASE_CONFIGURATION_ERROR };
   const cleanEmail = email.trim().toLowerCase();
   const cleanToken = token.trim();
   if (!/^\d{6}$/.test(cleanToken)) return { verified: false, error: 'Enter the 6-digit verification code.' };
@@ -221,7 +231,7 @@ export async function verifySupabaseOtp(email: string, token: string, type: 'ema
 }
 
 export async function sendSupabasePasswordReset(email: string) {
-  if (!isSupabaseConfigured()) return { sent: false, error: 'Supabase is not configured' };
+  if (!isSupabaseConfigured()) return { sent: false, error: SUPABASE_CONFIGURATION_ERROR };
   try {
     const { error } = await withAuthTimeout(
       supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
@@ -375,7 +385,7 @@ export async function upsertSupabaseProfile(profile: {
 }
 
 export async function signInSupabaseWithEmailOrMobile(identifier: string, password: string) {
-  if (!isSupabaseConfigured()) return { signedIn: false, error: 'Supabase is not configured' };
+  if (!isSupabaseConfigured()) return { signedIn: false, error: SUPABASE_CONFIGURATION_ERROR };
   let email = identifier.trim().toLowerCase();
   if (!email.includes('@')) {
     if (isProfilesTableMissing) {
@@ -437,7 +447,7 @@ export async function signInSupabaseWithEmailOrMobile(identifier: string, passwo
 export async function updateSupabasePassword(newPassword: string) {
   const validationError = validatePassword(newPassword);
   if (validationError) return { updated: false, error: validationError };
-  if (!isSupabaseConfigured()) return { updated: false, error: 'Supabase is not configured' };
+  if (!isSupabaseConfigured()) return { updated: false, error: SUPABASE_CONFIGURATION_ERROR };
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   return { updated: !error, error: error?.message };
 }

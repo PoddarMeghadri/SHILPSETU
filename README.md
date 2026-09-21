@@ -65,6 +65,24 @@ Starts the development server using tsx for hot-reloading the backend and Vite f
 npm run dev
 ```
 
+### Supabase production configuration
+
+Normal-user authentication is provided by Supabase Auth. Configure these
+public client variables in Vercel for **Preview and Production**, then create a
+new deployment:
+
+```text
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<supabase-anon-key>
+```
+
+The app sends and verifies six-digit OTPs through `signInWithOtp` and
+`verifyOtp`; it does not use magic-link redirects. In Supabase Dashboard >
+Authentication > Email Templates, configure the confirmation, magic-link, and
+recovery templates to display `{{ .Token }}` and remove
+`{{ .ConfirmationURL }}`. Apply all migrations in `supabase/migrations` to the
+same project before testing signup or recovery.
+
 Build for Production:
 Builds the Vite frontend and bundles the Express backend (server.ts) into a CommonJS format (dist/server.cjs) using esbuild.
 
