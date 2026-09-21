@@ -9,11 +9,26 @@ export default defineConfig(() => {
     .replace(/^VITE_CLERK_PUBLISHABLE_KEY=/, '')
     .replace(/^["']|["']$/g, '')
     .trim() || 'pk_test_ZXRlcm5hbC1maXJlZmx5LTgyODYuY2xlcmsuYWNjb3VudHMuZGV2JA';
+  const supabaseUrl =
+    process.env.VITE_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    '';
+  const supabaseAnonKey =
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    '';
 
   return {
     plugins: [react(), tailwindcss()],
     define: {
       'import.meta.env.VITE_CLERK_PUBLISHABLE_KEY': JSON.stringify(sanitizedClerkKey),
+      // Vercel projects created from the original template may still use the
+      // unprefixed names. Resolve them at build time without exposing secrets
+      // other than the public Supabase anon key.
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(supabaseUrl),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(supabaseAnonKey),
     },
     resolve: {
       alias: {
