@@ -153,7 +153,7 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
     setIsVerifyingOtp(true);
 
     try {
-      const supabaseResult = await verifySupabaseOtp(email.trim().toLowerCase(), fullOtp, 'recovery');
+      const supabaseResult = await verifySupabaseOtp(email.trim().toLowerCase(), fullOtp, 'email');
       if (supabaseResult.verified) {
         setCurrentStep('new_password');
         setResetToken('');

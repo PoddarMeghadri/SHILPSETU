@@ -89,101 +89,6 @@ export function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-/**
- * Real Supabase Auth signUp with password and user metadata
- */
-export async function signUpWithSupabase({
-  email,
-  password,
-  fullName,
-  mobile,
-  craft,
-  state,
-  city,
-  language,
-}: {
-  email: string;
-  password?: string;
-  fullName: string;
-  mobile?: string;
-  craft?: string;
-  state?: string;
-  city?: string;
-  language?: string;
-}): Promise<{
-  success: boolean;
-  user?: any;
-  session?: any;
-  error?: string;
-  isAlreadyRegistered?: boolean;
-}> {
-  if (!isSupabaseConfigured()) {
-    return { success: false, error: SUPABASE_CONFIGURATION_ERROR };
-  }
-
-  const cleanEmail = email.trim().toLowerCase();
-  const cleanMobile = mobile?.replace(/\D/g, '') || '';
-
-  try {
-    const { data, error } = await withAuthTimeout(supabase.auth.signUp({
-      email: cleanEmail,
-      password: password || '',
-      options: {
-        data: {
-          full_name: fullName.trim(),
-          mobile_number: cleanMobile,
-          craft_specialty: craft || 'Terracotta Pottery',
-          state: state || 'Uttar Pradesh',
-          city: city || 'Varanasi',
-          preferred_language: language || 'hi',
-        },
-      },
-    }), 'Creating your account');
-
-    if (error) {
-      const errMsg = error.message.toLowerCase();
-      const isAlready =
-        errMsg.includes('already registered') ||
-        errMsg.includes('already exists') ||
-        errMsg.includes('user already exists');
-
-      return {
-        success: false,
-        error: error.message,
-        isAlreadyRegistered: isAlready,
-      };
-    }
-
-    // Auto-upsert profile if user id is returned immediately
-    if (data.user?.id) {
-      const profileResult = await upsertSupabaseProfile({
-        userId: data.user.id,
-        fullName: fullName.trim(),
-        email: cleanEmail,
-        mobileNumber: cleanMobile,
-        preferredLanguage: language || 'hi',
-        desiredWorkshop: craft || 'pottery',
-        location: `${city || 'Varanasi'}, ${state || 'Uttar Pradesh'}`,
-        craftSpecialty: craft || 'Terracotta Pottery',
-      });
-      if (!profileResult.saved) {
-        return { success: false, error: profileResult.error || 'Unable to save your profile.' };
-      }
-    }
-
-    return {
-      success: true,
-      user: data.user,
-      session: data.session,
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err.message || 'Supabase signup failed',
-    };
-  }
-}
-
 /** Send a numeric email OTP through Supabase Auth. */
 export async function sendSupabaseOtp(email: string, shouldCreateUser = true) {
   if (!isSupabaseConfigured()) return { sent: false, error: SUPABASE_CONFIGURATION_ERROR };
@@ -221,11 +126,15 @@ export async function verifySupabaseOtp(email: string, token: string, type: 'ema
 
 export async function sendSupabasePasswordReset(email: string) {
   if (!isSupabaseConfigured()) return { sent: false, error: SUPABASE_CONFIGURATION_ERROR };
+  const cleanEmail = email.trim().toLowerCase();
   try {
     const { error } = await withAuthTimeout(
-      // Supabase must use a recovery template containing {{ .Token }}. URL
-      // redirects are deliberately omitted so recovery remains OTP-only.
-      supabase.auth.resetPasswordForEmail(email.trim().toLowerCase()),
+      // Recovery uses the same OTP endpoint as sign-in. Do not call
+      // resetPasswordForEmail: Supabase implements that API as a link flow.
+      supabase.auth.signInWithOtp({
+        email: cleanEmail,
+        options: { shouldCreateUser: false },
+      }),
       'Sending your recovery code'
     );
     return error ? { sent: false, error: error.message } : { sent: true };
