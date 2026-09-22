@@ -23,7 +23,7 @@ export interface SupabaseDiagnostics {
     preview: string;
     isJwtFormat: boolean;
   };
-  status: 'configured_injected' | 'using_fallback' | 'missing_credentials';
+  status: 'configured_injected' | 'missing_credentials';
   actionableMessage?: string;
 }
 
@@ -41,7 +41,7 @@ export function getSupabaseDiagnostics(): SupabaseDiagnostics {
   const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4eXRqZXpuZmhjYmRud3ptZWFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NTI2MjIsImV4cCI6MjEwNTIyODYyMn0.c-bgiXJFfvBq4Q38ZNPgiO6-zn6uKZBZ70OrxsG7Wwc';
 
   const effectiveUrl = (rawUrl || fallbackUrl).trim();
-  const effectiveKey = (rawKey || fallbackKey).trim();
+  const effectiveKey = rawKey.trim();
 
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'node';
   const isVercel = hostname.includes('vercel.app');
@@ -69,10 +69,10 @@ export function getSupabaseDiagnostics(): SupabaseDiagnostics {
   if (isUrlInjected && isKeyInjected) {
     status = 'configured_injected';
   } else if (!isUrlInjected && !isKeyInjected) {
-    status = 'using_fallback';
+    status = 'missing_credentials';
     actionableMessage = isVercel
-      ? '⚠️ [Vercel Environment Warning]: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are NOT injected in this Vercel deployment. ShilpSetu is operating on the built-in fallback client. To inject custom credentials, navigate to your Vercel Project Settings -> Environment Variables, add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, and trigger a new deployment.'
-      : 'ℹ️ Operating using built-in fallback Supabase credentials.';
+      ? '⚠️ [Vercel Environment Error]: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing from this build. Add both variables for Preview and Production, then redeploy.'
+      : '⚠️ Supabase credentials are missing from this build.';
   } else {
     status = 'missing_credentials';
     actionableMessage = '⚠️ Partial Supabase configuration detected: one of VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing.';
@@ -92,7 +92,7 @@ export function getSupabaseDiagnostics(): SupabaseDiagnostics {
     },
     viteSupabaseAnonKey: {
       defined: isKeyInjected,
-      source: isKeyInjected ? 'injected' : (effectiveKey ? 'fallback' : 'missing'),
+      source: isKeyInjected ? 'injected' : 'missing',
       length: effectiveKey.length,
       preview: maskedKey,
       isJwtFormat: isJwt,

@@ -30,7 +30,10 @@ function fetchWithAuthProviderTimeout(input: RequestInfo | URL, init: RequestIni
 }
 
 function getSupabaseAuthClient() {
-  const rawUrl = process.env.SUPABASE_URL || 'https://gxytjeznfhcbdnwzmeaa.supabase.co';
+  const rawUrl = process.env.SUPABASE_URL || '';
+  if (!rawUrl) {
+    throw new Error('SUPABASE_URL is required for server-side authentication.');
+  }
   const cleanUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
   return createClient(cleanUrl, key, {
