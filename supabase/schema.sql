@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   mobile_number TEXT,
   preferred_language TEXT NOT NULL DEFAULT 'hi',
   desired_workshop TEXT,
+  state TEXT,
   city TEXT,
   location TEXT,
   craft_specialty TEXT,
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Ensure columns exist
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS city text,
+  ADD COLUMN IF NOT EXISTS state text,
   ADD COLUMN IF NOT EXISTS location text,
   ADD COLUMN IF NOT EXISTS avatar_url text,
   ADD COLUMN IF NOT EXISTS preferred_language text DEFAULT 'en',
