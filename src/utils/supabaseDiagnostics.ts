@@ -37,7 +37,7 @@ export function getSupabaseDiagnostics(): SupabaseDiagnostics {
   const isUrlInjected = Boolean(rawUrl && rawUrl.trim().length > 0);
   const isKeyInjected = Boolean(rawKey && rawKey.trim().length > 0);
 
-  const fallbackUrl = 'https://gxytjeznfhcbdnwzmeaa.supabase.co';
+  const fallbackUrl = '';
   const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4eXRqZXpuZmhjYmRud3ptZWFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NTI2MjIsImV4cCI6MjEwNTIyODYyMn0.c-bgiXJFfvBq4Q38ZNPgiO6-zn6uKZBZ70OrxsG7Wwc';
 
   const effectiveUrl = (rawUrl || fallbackUrl).trim();

@@ -76,6 +76,13 @@ VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<supabase-anon-key>
 ```
 
+These are Vite build-time variables: changing them in Vercel does not update an
+existing deployment until it is rebuilt. The Vercel SPA does not run the
+Express server from `server.ts`, so `/api/auth/check-identity` and
+`/api/storage/avatar` are development/server-host fallbacks; production
+authentication, profile/location persistence, uniqueness checks, and avatar
+storage require the Supabase variables and the Supabase migrations below.
+
 The app sends and verifies six-digit OTPs through `signInWithOtp` and
 `verifyOtp`; signup and recovery never call Supabase link-based APIs. In
 Supabase Dashboard > Authentication > Email Templates, configure the **Magic
