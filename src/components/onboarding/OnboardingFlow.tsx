@@ -174,6 +174,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       }
       setIsSendingOtp(true);
       setSignInError('');
+      localStorage.setItem('shilpsetu_pending_signin_otp', 'true');
 
       // Admin bypass mode
       if (isAdminMode) {
@@ -205,11 +206,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             sound.playError();
             setSignInError(sbResult.error || 'Your email is not yet confirmed. Please verify the code sent to your email.');
             setIsSendingOtp(false);
+            localStorage.removeItem('shilpsetu_pending_signin_otp');
             return;
           } else {
             sound.playError();
             setSignInError(sbResult.error || 'The email/mobile number or password is incorrect.');
             setIsSendingOtp(false);
+            localStorage.removeItem('shilpsetu_pending_signin_otp');
             return;
           }
         } catch (sbErr: any) {
@@ -217,6 +220,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           sound.playError();
           setSignInError(sbErr?.message || 'The email/mobile number or password is incorrect.');
           setIsSendingOtp(false);
+          localStorage.removeItem('shilpsetu_pending_signin_otp');
           return;
         }
 
@@ -224,6 +228,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           sound.playError();
           setSignInError('The email/mobile number or password is incorrect.');
           setIsSendingOtp(false);
+          localStorage.removeItem('shilpsetu_pending_signin_otp');
           return;
         }
 
@@ -238,6 +243,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           sound.playError();
           setSignInError('Could not find registered email address for this account.');
           setIsSendingOtp(false);
+          localStorage.removeItem('shilpsetu_pending_signin_otp');
           return;
         }
 
@@ -247,6 +253,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           sound.playError();
           setSignInError(otpResult.error || 'Unable to send 6-digit verification code to your registered email.');
           setIsSendingOtp(false);
+          localStorage.removeItem('shilpsetu_pending_signin_otp');
           return;
         }
 
@@ -496,7 +503,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
       const adminMockToken = `admin_bypass_session_${Date.now()}_mock`;
       localStorage.setItem('shilpsetu_token', adminMockToken);
-      localStorage.setItem('shilpsetu_auth_done', 'true');
+      if (authFlowMode !== 'sign_in') {
+        localStorage.setItem('shilpsetu_auth_done', 'true');
+      }
 
       if (authFlowMode === 'sign_in') {
         const artisanProfile = {
@@ -538,7 +547,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       supabaseVerification.user?.id ||
       'shilpsetu_session';
     localStorage.setItem('shilpsetu_token', activeToken);
-    localStorage.setItem('shilpsetu_auth_done', 'true');
+    if (authFlowMode !== 'sign_in') {
+      localStorage.setItem('shilpsetu_auth_done', 'true');
+    }
 
     if (authFlowMode === 'sign_in') {
       sound.playSuccess();
@@ -1893,7 +1904,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         {/* STEP 3: LANGUAGE SELECTION (NEW STEP) */}
         {currentStep === 3 && (
           <LanguageSelectionScreen
-            initialLanguage={language || 'en'}
+            initialLanguage={authFlowMode === 'sign_in' ? 'en' : language || 'en'}
             isSignIn={authFlowMode === 'sign_in'}
             continueButtonText={authFlowMode === 'sign_in' ? 'Continue' : undefined}
             onSelectLanguage={(newLang) => {
@@ -1911,6 +1922,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   }
                 }
                 localStorage.setItem('shilpsetu_auth_done', 'true');
+                localStorage.removeItem('shilpsetu_pending_signin_otp');
                 onComplete({
                   fullName: fullName.trim(),
                   gender,
