@@ -33,6 +33,7 @@ const rawSupabaseAnonKey =
 
 const supabaseUrl = normalizeSupabaseUrl(rawSupabaseUrl);
 const supabaseAnonKey = (rawSupabaseAnonKey || '').trim();
+const hasInjectedSupabaseCredentials = Boolean(supabaseUrl && supabaseAnonKey);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.info('[Supabase Info] Supabase credentials are not present in the client environment.');
@@ -40,7 +41,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 /**
  * Singleton Supabase client configured with cross-origin persistent localStorage session storage.
- * Uses a safe fallback URL and anon key when not configured so external browsers and hosts never crash.
+ * The placeholder key only keeps module initialization safe; all network operations are
+ * gated by hasInjectedSupabaseCredentials so a static deployment cannot silently use it.
  */
 const fallbackSupabaseUrl = 'https://gxytjeznfhcbdnwzmeaa.supabase.co';
 const fallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4eXRqZXpuZmhjYmRud3ptZWFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NTI2MjIsImV4cCI6MjEwNTIyODYyMn0.c-bgiXJFfvBq4Q38ZNPgiO6-zn6uKZBZ70OrxsG7Wwc';
@@ -77,7 +79,7 @@ async function withAuthTimeout<T>(operation: PromiseLike<T>, label: string): Pro
 }
 
 export function isSupabaseConfigured(): boolean {
-  return Boolean((supabaseUrl || fallbackSupabaseUrl) && (supabaseAnonKey || fallbackSupabaseAnonKey));
+  return hasInjectedSupabaseCredentials;
 }
 
 /**
