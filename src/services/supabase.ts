@@ -169,6 +169,30 @@ export async function checkAccountUniqueness(
     return { unique: true };
   }
 
+  if (isSupabaseConfigured()) {
+    const { data: identity, error: identityError } = await supabase.rpc('check_identity_uniqueness', {
+      p_email: cleanEmail || null,
+      p_mobile: cleanDigits || null,
+    });
+    if (!identityError && identity) {
+      const result = Array.isArray(identity) ? identity[0] : identity;
+      if (result?.email_exists) {
+        return {
+          unique: false,
+          error: 'An account is already registered with this email address. Please sign in.',
+          field: 'email',
+        };
+      }
+      if (result?.mobile_exists) {
+        return {
+          unique: false,
+          error: 'An account is already registered with this mobile number. Please sign in.',
+          field: 'mobile',
+        };
+      }
+    }
+  }
+
   // 1. Query Supabase public.profiles table
   if (isSupabaseConfigured() && !isProfilesTableMissing) {
     try {
