@@ -617,8 +617,13 @@ export function App() {
     localStorage.removeItem('shilpsetu_auth_done');
     localStorage.removeItem('shilpsetu_token');
     localStorage.removeItem('shilpsetu_pending_signin_otp');
+    localStorage.removeItem('shilpsetu_artisan');
+    localStorage.removeItem('shilpsetu_user_profile');
+    localStorage.removeItem('shilpsetu_uploaded_portraits');
+    localStorage.removeItem('shilpsetu_recent_photos');
     localStorage.setItem('shilpsetu_lang', 'en');
     setLanguage('en');
+    setArtisan(INITIAL_ARTISAN);
     if (isSupabaseConfigured()) {
       supabase.auth.signOut().catch(() => {});
     }
