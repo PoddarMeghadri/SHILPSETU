@@ -14,11 +14,16 @@ import {
   upsertSupabaseProfile,
   getSupabase,
   signInSupabaseWithEmailOrMobile,
+  findProfileByIdentifier,
   updateSupabasePassword,
   checkAccountUniqueness,
 } from '../../services/supabase';
 import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
 import { ForgotPasswordFlow } from './ForgotPasswordFlow';
+import {
+  clearPhoneRecaptcha,
+  sendFirebasePhoneOtp,
+} from '../../services/firebase';
 
 export interface OnboardingUserData {
   fullName: string;
@@ -78,6 +83,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [signInPassword, setSignInPassword] = useState('');
   const [signInError, setSignInError] = useState('');
   const [signInEmail, setSignInEmail] = useState('');
+  const [signInOtpOnly, setSignInOtpOnly] = useState(false);
 
   // Clerk Auth Hooks
 
@@ -105,6 +111,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [resendNotice, setResendNotice] = useState<string>('');
   const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
   const [showSignInPassword, setShowSignInPassword] = useState<boolean>(false);
+  const [otpChannel, setOtpChannel] = useState<'sms' | 'email'>('email');
+  const [phoneConfirmation, setPhoneConfirmation] = useState<{
+    confirm: (code: string) => Promise<unknown>;
+  } | null>(null);
   const [pendingSignInData, setPendingSignInData] = useState<{
     user?: any;
     session?: any;
@@ -154,6 +164,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
   }, [currentStep]);
 
+  useEffect(() => () => clearPhoneRecaptcha(), []);
+
   // Resend code countdown timer
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -168,13 +180,58 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     e.preventDefault();
     if (authFlowMode === 'sign_in') {
       const identifier = signInIdentifier.trim();
-      if (!identifier || !signInPassword) {
-        setSignInError('Enter your registered email or mobile number and password.');
+      if (!identifier || (!signInOtpOnly && !signInPassword)) {
+        setSignInError(signInOtpOnly
+          ? 'Enter your registered email or mobile number.'
+          : 'Enter your registered email or mobile number and password.');
         return;
       }
       setIsSendingOtp(true);
       setSignInError('');
       localStorage.setItem('shilpsetu_pending_signin_otp', 'true');
+
+      if (signInOtpOnly) {
+        const lookup = await findProfileByIdentifier(identifier);
+        if (!lookup.profile) {
+          setSignInError(lookup.error || 'No registered account was found with those details.');
+          setIsSendingOtp(false);
+          localStorage.removeItem('shilpsetu_pending_signin_otp');
+          return;
+        }
+        const profile = lookup.profile;
+        const targetEmail = String(profile.email || (identifier.includes('@') ? identifier : '')).toLowerCase();
+        const registeredMobile = profile.mobile_number || (!identifier.includes('@') ? identifier : '');
+        let sent = false;
+        if (registeredMobile) {
+          const smsResult = await sendFirebasePhoneOtp(registeredMobile);
+          if (smsResult.sent && smsResult.confirmation) {
+            setOtpChannel('sms');
+            setPhoneConfirmation(smsResult.confirmation);
+            sent = true;
+          }
+        }
+        if (!sent) {
+          const emailResult = await sendSupabaseOtp(targetEmail, false);
+          if (!emailResult.sent) {
+            setSignInError(emailResult.error || 'Unable to send a verification code.');
+            setIsSendingOtp(false);
+            localStorage.removeItem('shilpsetu_pending_signin_otp');
+            return;
+          }
+          setOtpChannel('email');
+          setPhoneConfirmation(null);
+        }
+        setPendingSignInData({ profile, identifier, targetEmail });
+        setEmail(targetEmail);
+        setMobile(String(registeredMobile || ''));
+        setFullName(profile.full_name || 'Master Artisan');
+        setOtpDigits(['', '', '', '', '', '']);
+        setResendCooldown(30);
+        setResendNotice('A 6-digit verification code was sent.');
+        setCurrentStep(2);
+        setIsSendingOtp(false);
+        return;
+      }
 
       // Admin bypass mode
       if (isAdminMode) {
@@ -247,14 +304,38 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           return;
         }
 
-        // 3. Send strictly 6-digit OTP to the registered email address (shouldCreateUser: false)
-        const otpResult = await sendSupabaseOtp(targetEmail, false);
-        if (!otpResult.sent) {
-          sound.playError();
-          setSignInError(otpResult.error || 'Unable to send 6-digit verification code to your registered email.');
-          setIsSendingOtp(false);
-          localStorage.removeItem('shilpsetu_pending_signin_otp');
-          return;
+        // 3. Prefer a six-digit SMS code when the account has a registered mobile.
+        const registeredMobile = supabaseProfile?.mobile_number || (!identifier.includes('@') ? identifier : '');
+        let sentBySms = false;
+        if (registeredMobile) {
+          const smsResult = await sendFirebasePhoneOtp(registeredMobile);
+          if (smsResult.sent && smsResult.confirmation) {
+            sentBySms = true;
+            setOtpChannel('sms');
+            setPhoneConfirmation(smsResult.confirmation);
+          } else {
+            const emailResult = await sendSupabaseOtp(targetEmail, false);
+            if (!emailResult.sent) {
+              sound.playError();
+              setSignInError(emailResult.error || smsResult.error || 'Unable to send a verification code.');
+              setIsSendingOtp(false);
+              localStorage.removeItem('shilpsetu_pending_signin_otp');
+              return;
+            }
+            setOtpChannel('email');
+            setPhoneConfirmation(null);
+          }
+        } else {
+          const emailResult = await sendSupabaseOtp(targetEmail, false);
+          if (!emailResult.sent) {
+            sound.playError();
+            setSignInError(emailResult.error || 'Unable to send a verification code.');
+            setIsSendingOtp(false);
+            localStorage.removeItem('shilpsetu_pending_signin_otp');
+            return;
+          }
+          setOtpChannel('email');
+          setPhoneConfirmation(null);
         }
 
         // 4. Stash sign-in metadata and transition to 6-digit OTP verification screen
@@ -282,7 +363,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         sound.playSuccess();
         setIsSendingOtp(false);
         setResendCooldown(30);
-        setResendNotice('A 6-digit verification code was sent to your email.');
+        setResendNotice(sentBySms
+          ? 'A 6-digit verification code was sent by SMS.'
+          : 'A 6-digit verification code was sent to your email.');
         setOtpDigits(['', '', '', '', '', '']);
         setOtpError('');
         setCurrentStep(2);
@@ -394,21 +477,54 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
 
-    // Do not call auth.signUp here: Supabase sends its confirmation template
-    // (a link) for password signups. OTP-first registration guarantees that
-    // normal users receive only the six-digit code.
-    const otpResult = await sendSupabaseOtp(cleanEmail, true);
-    if (!otpResult.sent) {
-      setIsSendingOtp(false);
-      setEmailError(otpResult.error || 'Unable to send your verification code.');
-      return;
+    const smsResult = await sendFirebasePhoneOtp(cleanMobile);
+    if (!smsResult.sent || !smsResult.confirmation) {
+      const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
+      if (!emailResult.sent) {
+        setIsSendingOtp(false);
+        setEmailError(emailResult.error || smsResult.error || 'Unable to send your verification code.');
+        return;
+      }
+      setOtpChannel('email');
+      setPhoneConfirmation(null);
+    } else {
+      setOtpChannel('sms');
+      setPhoneConfirmation(smsResult.confirmation);
     }
     setIsSendingOtp(false);
     setResendCooldown(30);
-    setResendNotice('A 6-digit verification code was sent to your email.');
+    setResendNotice(smsResult.sent && smsResult.confirmation
+      ? 'A 6-digit verification code was sent by SMS.'
+      : 'A 6-digit verification code was sent to your email.');
     setOtpDigits(['', '', '', '', '', '']);
     setCurrentStep(2);
     return;
+  };
+
+  const switchOtpChannel = async () => {
+    if (isSendingOtp) return;
+    setIsSendingOtp(true);
+    setOtpError('');
+    const nextChannel = otpChannel === 'sms' ? 'email' : 'sms';
+    let result: { sent: boolean; error?: string } = { sent: false };
+    if (nextChannel === 'sms') {
+      clearPhoneRecaptcha();
+      const smsResult = await sendFirebasePhoneOtp(mobile);
+      result = smsResult;
+      if (smsResult.sent && smsResult.confirmation) setPhoneConfirmation(smsResult.confirmation);
+    } else {
+      result = await sendSupabaseOtp(email.trim().toLowerCase(), authFlowMode === 'sign_up');
+      setPhoneConfirmation(null);
+    }
+    setIsSendingOtp(false);
+    if (!result.sent) {
+      setOtpError(result.error || 'Unable to send a verification code.');
+      return;
+    }
+    setOtpChannel(nextChannel);
+    setOtpDigits(['', '', '', '', '', '']);
+    setResendCooldown(30);
+    setResendNotice(nextChannel === 'sms' ? 'A 6-digit code was sent by SMS.' : 'A 6-digit code was sent to your email.');
   };
 
   // Resend verification code with cooldown protection
@@ -420,11 +536,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setOtpDigits(['', '', '', '', '', '']);
       return;
     }
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) return;
     setIsSendingOtp(true);
     setOtpError('');
-    const result = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
+    const cleanEmail = email.trim().toLowerCase();
+    let result: { sent: boolean; error?: string } = { sent: false };
+    if (otpChannel === 'sms') {
+      clearPhoneRecaptcha();
+      const smsResult = await sendFirebasePhoneOtp(mobile);
+      result = smsResult;
+      if (smsResult.sent && smsResult.confirmation) {
+        setPhoneConfirmation(smsResult.confirmation);
+      }
+    } else if (cleanEmail) {
+      result = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
+    }
     setIsSendingOtp(false);
     if (!result.sent) {
       setOtpError(result.error || 'Unable to resend your verification code.');
@@ -530,14 +655,50 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
 
-    const supabaseVerification = await verifySupabaseOtp(
-      cleanEmail,
-      fullOtp,
-      authFlowMode === 'sign_up' ? 'signup' : 'email'
-    );
+    if (otpChannel === 'sms') {
+      if (!phoneConfirmation) {
+        setOtpError('Please request a new mobile verification code.');
+        setIsVerifyingOtp(false);
+        return;
+      }
+      try {
+        await phoneConfirmation.confirm(fullOtp);
+        setPhoneConfirmation(null);
+        if (authFlowMode === 'sign_up' || signInOtpOnly) {
+          const emailResult = await sendSupabaseOtp(cleanEmail, true);
+          if (!emailResult.sent) throw new Error(emailResult.error || 'Unable to send the email verification code.');
+          setOtpChannel('email');
+          setOtpDigits(['', '', '', '', '', '']);
+          setResendCooldown(30);
+          setResendNotice('Mobile verified. A 6-digit code was sent to your email.');
+          setIsVerifyingOtp(false);
+          return;
+        }
+      } catch (error) {
+        sound.playError();
+        setOtpError(error instanceof Error ? error.message : 'Invalid or expired mobile verification code.');
+        setIsVerifyingOtp(false);
+        return;
+      }
+    }
+
+    const supabaseVerification = otpChannel === 'sms'
+      ? {
+          verified: true,
+          session: pendingSignInData?.session,
+          user: pendingSignInData?.user,
+        }
+      : await verifySupabaseOtp(
+          cleanEmail,
+          fullOtp,
+          authFlowMode === 'sign_up' ? 'signup' : 'email'
+        );
     if (!supabaseVerification.verified) {
       sound.playError();
-      setOtpError(supabaseVerification.error || 'Invalid or expired 6-digit verification code. Please try again.');
+      setOtpError(
+        ('error' in supabaseVerification && supabaseVerification.error) ||
+        'Invalid or expired 6-digit verification code. Please try again.'
+      );
       setIsVerifyingOtp(false);
       return;
     }
@@ -954,7 +1115,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               </div>
               <div className="mb-8">
                 <h2 className="font-serif font-bold text-2xl mb-1">Sign In</h2>
-                <p className="text-xs text-black/70 dark:text-white/70">Enter your registered email or mobile number and password to sign in directly.</p>
+                <p className="text-xs text-black/70 dark:text-white/70">
+                  {signInOtpOnly
+                    ? 'Enter your registered email or mobile number to receive a 6-digit code.'
+                    : 'Enter your registered email or mobile number and password to sign in directly.'}
+                </p>
               </div>
               <form onSubmit={handleProceedToOtp} className="space-y-5">
                 <div>
@@ -966,7 +1131,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     placeholder="Enter email or 10-digit mobile number"
                     className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B] focus:outline-hidden focus:ring-2 focus:ring-[#B5451B]/30" />
                 </div>
-                <div>
+                {!signInOtpOnly && <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
                       Password
@@ -1005,7 +1170,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       </span>
                     </button>
                   </div>
-                </div>
+                </div>}
                 {signInError && <p className="text-xs text-red-500 font-medium">{signInError}</p>}
               </form>
             </div>
@@ -1023,6 +1188,16 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     <span className="material-symbols-outlined text-lg">login</span>
                   </>
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSignInOtpOnly((value) => !value);
+                  setSignInError('');
+                }}
+                className="w-full mt-3 text-xs text-[#B5451B] dark:text-[#E8B84B] font-semibold hover:underline"
+              >
+                {signInOtpOnly ? 'Sign in with password instead' : 'Sign in with OTP instead'}
               </button>
               <div className="text-center mt-4">
                 <button
@@ -1728,26 +1903,33 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               </div>
 
               <div className="text-center mb-6">
+                <div id="recaptcha-container" aria-hidden="true" />
                 <div
                   className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner ${
                     isAdminMode ? 'bg-[#059669]/15 text-[#059669]' : 'bg-[#B5451B]/15 text-[#B5451B]'
                   }`}
                 >
                   <span className="material-symbols-outlined text-3xl">
-                    {isAdminMode ? 'admin_panel_settings' : 'mark_email_read'}
+                    {isAdminMode ? 'admin_panel_settings' : otpChannel === 'sms' ? 'sms' : 'mark_email_read'}
                   </span>
                 </div>
                 <h2 className="font-serif font-bold text-2xl mb-1">
-                  {isAdminMode ? 'Admin Verification' : t('email_otp_verification', 'Email OTP Verification')}
+                  {isAdminMode
+                    ? 'Admin Verification'
+                    : otpChannel === 'sms'
+                    ? t('mobile_otp_verification', 'Verify Your Mobile Number')
+                    : t('email_otp_verification', 'Verify Your Email Address')}
                 </h2>
                 <p className="text-xs text-black/70 dark:text-white/70 font-sans max-w-xs mx-auto mb-1">
-                  {t('enter_6_digit_otp_sent_to', 'Enter the 6-digit verification code sent to')}{' '}
+                  {t('enter_6_digit_otp_sent_to', 'A 6-digit verification code was sent to')}{' '}
                   <span
                     className={`font-mono font-bold break-all ${
                       isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
                     }`}
                   >
-                    {email || 'your email'}
+                    {otpChannel === 'sms'
+                      ? `+91 ******${mobile.replace(/\D/g, '').slice(-4)}`
+                      : email || 'your email'}
                   </span>
                 </p>
                 <div className="mb-3">
@@ -1762,7 +1944,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     }`}
                   >
                     <span className="material-symbols-outlined text-xs">edit</span>
-                    <span>Wrong email? Click to change</span>
+                    <span>{otpChannel === 'sms' ? 'Wrong mobile number? Click to change' : 'Wrong email? Click to change'}</span>
                   </button>
                 </div>
 
@@ -1771,10 +1953,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl p-3 text-center space-y-1.5 max-w-sm mx-auto shadow-xs">
                     <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
                       <span className="material-symbols-outlined text-sm">mark_email_read</span>
-                      <span>Verification email dispatched</span>
+                      <span>{otpChannel === 'sms' ? 'Verification SMS dispatched' : 'Verification email dispatched'}</span>
                     </div>
                     <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-snug">
-                      Please check your <strong>Inbox</strong> and <strong>Spam/Junk</strong> folder for the 6-digit verification code.
+                      {otpChannel === 'sms'
+                        ? 'Enter the six-digit code received on your mobile number.'
+                        : <>Please check your <strong>Inbox</strong> and <strong>Spam/Junk</strong> folder for the 6-digit verification code.</>}
                     </p>
                   </div>
                 )}
@@ -1868,6 +2052,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     )}
                   </button>
                 </div>
+                {!isAdminMode && (
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      disabled={isSendingOtp || resendCooldown > 0}
+                      onClick={switchOtpChannel}
+                      className="text-xs font-semibold text-[#B5451B] hover:underline disabled:opacity-50"
+                    >
+                      {otpChannel === 'sms'
+                        ? "Didn't receive SMS? Verify via Email instead"
+                        : 'Verify via Mobile SMS instead'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
