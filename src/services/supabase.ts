@@ -225,25 +225,6 @@ export async function checkAccountUniqueness(
     }
   }
 
-  // 2. Dual-layer cross-browser backend verification
-  try {
-    const res = await fetch('/api/auth/check-identity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: cleanEmail, mobile: cleanMobile }),
-    });
-    if (res.ok) {
-      const backendCheck = await res.json();
-      if (backendCheck && !backendCheck.unique) {
-        return {
-          unique: false,
-          error: backendCheck.error || (backendCheck.field === 'mobile' ? 'An account is already registered with this mobile number. Please sign in.' : 'An account is already registered with this email address. Please sign in.'),
-          field: backendCheck.field,
-        };
-      }
-    }
-  } catch (_) {}
-
   return { unique: true };
 }
 
@@ -667,8 +648,8 @@ export async function uploadAvatarToSupabase(
       }
     }
 
-    // 3. Fallback: check if server endpoint exists (e.g. in Express dev/production server)
-    if (!resolvedUrl) {
+    // 3. Server fallback is only available when an Express host is explicitly used.
+    if (!resolvedUrl && typeof window !== 'undefined' && !window.location.hostname.endsWith('vercel.app')) {
       try {
         const resp = await fetch('/api/storage/avatar', {
           method: 'POST',
@@ -851,17 +832,9 @@ export async function saveCraftToSupabase(craft: {
       }
     }
 
-    // Always mirror to backend API route as well
-    const resp = await fetch('/api/crafts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...craft,
-        userId: safeUserId,
-      }),
-    });
-    const result = await resp.json();
-    return { saved: resp.ok, craft: result.craft };
+    // Static Vercel deployments do not run the Express API. Do not post to a
+    // rewritten SPA route and parse its HTML as JSON.
+    return { saved: false, error: 'Craft storage is unavailable until Supabase is configured.' };
   } catch (err: any) {
     console.warn('[Save Craft Warning]:', err);
     return { saved: false, error: err.message };
@@ -891,13 +864,6 @@ export async function fetchUserCraftsFromSupabase(customUserId?: string): Promis
       }
     }
 
-    // Fallback to server endpoint
-    const url = userId ? `/api/crafts?userId=${encodeURIComponent(userId)}` : '/api/crafts';
-    const resp = await fetch(url);
-    if (resp.ok) {
-      const data = await resp.json();
-      return data.crafts || [];
-    }
     return [];
   } catch (err) {
     console.warn('[Fetch Crafts Warning]:', err);
