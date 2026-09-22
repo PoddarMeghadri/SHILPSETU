@@ -83,7 +83,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [signInPassword, setSignInPassword] = useState('');
   const [signInError, setSignInError] = useState('');
   const [signInEmail, setSignInEmail] = useState('');
-  const [signInOtpOnly, setSignInOtpOnly] = useState(false);
+  // Sign-in accepts either a registered email or mobile number, then requires
+  // the account password before sending the verification OTP.
+  const signInOtpOnly = false;
 
   // Clerk Auth Hooks
 
@@ -111,7 +113,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [resendNotice, setResendNotice] = useState<string>('');
   const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
   const [showSignInPassword, setShowSignInPassword] = useState<boolean>(false);
-  const [otpChannel, setOtpChannel] = useState<'sms' | 'email'>('email');
+  const [otpChannel, setOtpChannel] = useState<'sms' | 'email'>('sms');
   const [phoneConfirmation, setPhoneConfirmation] = useState<{
     confirm: (code: string) => Promise<unknown>;
   } | null>(null);
@@ -1092,7 +1094,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           </motion.div>
         )}
 
-        {/* STEP 1: SIGN IN (IDENTIFIER + PASSWORD ONLY) */}
+        {/* STEP 1: SIGN IN (IDENTIFIER + PASSWORD) */}
         {currentStep === 1 && authFlowMode === 'sign_in' && (
           <motion.div
             key="sign-in-screen"
@@ -1116,9 +1118,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               <div className="mb-8">
                 <h2 className="font-serif font-bold text-2xl mb-1">Sign In</h2>
                 <p className="text-xs text-black/70 dark:text-white/70">
-                  {signInOtpOnly
-                    ? 'Enter your registered email or mobile number to receive a 6-digit code.'
-                    : 'Enter your registered email or mobile number and password to sign in directly.'}
+                  Enter your registered email or mobile number and password to continue.
                 </p>
               </div>
               <form onSubmit={handleProceedToOtp} className="space-y-5">
@@ -1188,16 +1188,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     <span className="material-symbols-outlined text-lg">login</span>
                   </>
                 )}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSignInOtpOnly((value) => !value);
-                  setSignInError('');
-                }}
-                className="w-full mt-3 text-xs text-[#B5451B] dark:text-[#E8B84B] font-semibold hover:underline"
-              >
-                {signInOtpOnly ? 'Sign in with password instead' : 'Sign in with OTP instead'}
               </button>
               <div className="text-center mt-4">
                 <button
