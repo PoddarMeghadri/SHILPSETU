@@ -244,6 +244,7 @@ export function App() {
     if (isSupabaseConfigured()) {
       const syncProfileFromSession = async (session: any) => {
         if (!session?.user) return;
+        if (localStorage.getItem('shilpsetu_pending_signin_otp') === 'true') return;
         if (session.access_token) {
           localStorage.setItem('shilpsetu_token', session.access_token);
         }
@@ -615,6 +616,9 @@ export function App() {
     sound.playTap();
     localStorage.removeItem('shilpsetu_auth_done');
     localStorage.removeItem('shilpsetu_token');
+    localStorage.removeItem('shilpsetu_pending_signin_otp');
+    localStorage.setItem('shilpsetu_lang', 'en');
+    setLanguage('en');
     if (isSupabaseConfigured()) {
       supabase.auth.signOut().catch(() => {});
     }
