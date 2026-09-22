@@ -221,11 +221,35 @@ export function App() {
           }
 
           setArtisan((prev) => {
-            const rawLoc = (prof?.location || meta.location || '').trim();
-            const city = (prof?.city || meta.city || (rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : rawLoc) || prev.city || 'Varanasi').trim();
-            const state = (prof?.state || meta.state || (rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : '') || prev.state || 'Uttar Pradesh').trim();
-            const resolvedLoc = (prof?.location || meta.location || (city ? `${city}${state ? `, ${state}` : ''}` : '') || prev.location || 'Varanasi, Uttar Pradesh').trim();
-            const avatarUrl = prof?.avatar_url || meta.avatar_url || prev.avatarUrl;
+            // Also inspect localStorage to preserve any user-saved city, location, and avatar
+            let localCity = prev.city;
+            let localState = prev.state;
+            let localLoc = prev.location;
+            let localAvatar = prev.avatarUrl;
+            try {
+              const stored = localStorage.getItem('shilpsetu_artisan');
+              if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed.city && parsed.city !== 'Varanasi') localCity = parsed.city;
+                if (parsed.state && parsed.state !== 'Uttar Pradesh') localState = parsed.state;
+                if (parsed.location && parsed.location !== 'Varanasi, Uttar Pradesh') localLoc = parsed.location;
+                if (parsed.avatarUrl && parsed.avatarUrl !== DEFAULT_ARTISAN_AVATAR) localAvatar = parsed.avatarUrl;
+              }
+              const storedUserProf = localStorage.getItem('shilpsetu_user_profile');
+              if (storedUserProf) {
+                const parsedUser = JSON.parse(storedUserProf);
+                if (parsedUser.city && parsedUser.city !== 'Varanasi') localCity = parsedUser.city;
+                if (parsedUser.state && parsedUser.state !== 'Uttar Pradesh') localState = parsedUser.state;
+                if (parsedUser.location && parsedUser.location !== 'Varanasi, Uttar Pradesh') localLoc = parsedUser.location;
+                if (parsedUser.avatar_url && parsedUser.avatar_url !== DEFAULT_ARTISAN_AVATAR) localAvatar = parsedUser.avatar_url;
+              }
+            } catch (_) {}
+
+            const rawLoc = (prof?.location || meta.location || localLoc || '').trim();
+            const city = (prof?.city || meta.city || (rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : '') || localCity || prev.city || 'Varanasi').trim();
+            const state = (prof?.state || meta.state || (rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : '') || localState || prev.state || 'Uttar Pradesh').trim();
+            const resolvedLoc = (prof?.location || meta.location || localLoc || (city ? `${city}${state ? `, ${state}` : ''}` : '') || prev.location || 'Varanasi, Uttar Pradesh').trim();
+            const avatarUrl = prof?.avatar_url || meta.avatar_url || localAvatar || prev.avatarUrl;
 
             const merged: ArtisanProfile = {
               ...prev,
