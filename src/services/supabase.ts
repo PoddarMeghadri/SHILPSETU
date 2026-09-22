@@ -1,5 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { validatePassword } from './passwordValidation';
+import { logSupabaseDiagnostics, getSupabaseDiagnostics } from '../utils/supabaseDiagnostics';
+
+export { logSupabaseDiagnostics, getSupabaseDiagnostics };
 
 export function normalizeSupabaseUrl(rawUrl?: string): string {
   if (!rawUrl) return '';
@@ -346,6 +349,7 @@ export async function upsertSupabaseProfile(profile: {
   preferredLanguage?: string;
   desiredWorkshop?: string;
   city?: string;
+  state?: string;
   location?: string;
   craftSpecialty?: string;
   avatarUrl?: string;
@@ -357,8 +361,18 @@ export async function upsertSupabaseProfile(profile: {
 
   const cleanEmail = profile.email?.trim().toLowerCase();
   const cleanMobile = profile.mobileNumber?.replace(/\D/g, '');
-  const effectiveCity = (profile.city?.trim() || (profile.location?.includes(',') ? profile.location.split(',')[0].trim() : (profile.location?.trim() || ''))).trim();
-  const effectiveLocation = (profile.location?.trim() || (effectiveCity ? `${effectiveCity}, Uttar Pradesh` : 'Varanasi, Uttar Pradesh')).trim();
+  const effectiveCity = (
+    profile.city?.trim() ||
+    (profile.location?.includes(',') ? profile.location.split(',')[0].trim() : (profile.location?.trim() || ''))
+  ).trim();
+  const effectiveState = (
+    profile.state?.trim() ||
+    (profile.location?.includes(',') ? profile.location.split(',')[1].trim() : 'Uttar Pradesh')
+  ).trim();
+  const effectiveLocation = (
+    profile.location?.trim() ||
+    (effectiveCity ? `${effectiveCity}${effectiveState ? `, ${effectiveState}` : ''}` : 'Varanasi, Uttar Pradesh')
+  ).trim();
 
   // 1. ALWAYS mirror immediately to active Supabase Auth user metadata
   // This succeeds independently of whether the public.profiles database table exists in Supabase.
@@ -371,6 +385,7 @@ export async function upsertSupabaseProfile(profile: {
           name: profile.fullName?.trim() || 'Master Artisan',
           mobile_number: cleanMobile,
           city: effectiveCity,
+          state: effectiveState,
           location: effectiveLocation,
           avatar_url: profile.avatarUrl || null,
           preferred_language: profile.preferredLanguage || 'hi',
@@ -388,6 +403,7 @@ export async function upsertSupabaseProfile(profile: {
     if (stored) {
       const parsed = JSON.parse(stored);
       if (effectiveCity) parsed.city = effectiveCity;
+      if (effectiveState) parsed.state = effectiveState;
       if (effectiveLocation) parsed.location = effectiveLocation;
       if (profile.avatarUrl) parsed.avatarUrl = profile.avatarUrl;
       if (profile.fullName) parsed.name = profile.fullName;
@@ -399,6 +415,7 @@ export async function upsertSupabaseProfile(profile: {
     if (storedUserProf) {
       const parsedUser = JSON.parse(storedUserProf);
       if (effectiveCity) parsedUser.city = effectiveCity;
+      if (effectiveState) parsedUser.state = effectiveState;
       if (effectiveLocation) parsedUser.location = effectiveLocation;
       if (profile.avatarUrl) parsedUser.avatar_url = profile.avatarUrl;
       if (profile.fullName) parsedUser.full_name = profile.fullName;
@@ -415,68 +432,30 @@ export async function upsertSupabaseProfile(profile: {
   }
 
   try {
-    let userId = profile.userId;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const sessionUserId = sessionData?.session?.user?.id;
+    let userId = sessionUserId || profile.userId;
+
+    // Guard against non-UUID IDs (e.g. 'artisan_demo') when calling Postgres
+    const isValidUuid = typeof userId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    if (!isValidUuid) {
+      userId = sessionUserId || undefined;
+    }
+
+    // If no active authenticated Supabase session, do not attempt to write to profiles table
+    // because RLS policy (id = auth.uid()) will block it. Local & Auth metadata are already saved.
     if (!userId) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      userId = sessionData?.session?.user?.id;
+      return { saved: true, localOnly: true };
     }
 
-    // If no direct Supabase session, lookup existing profile by email or mobile to reuse its ID
-    if (!userId && !isProfilesTableMissing) {
-      try {
-        if (cleanEmail) {
-          const { data: existingByEmail, error: emailErr } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('email', cleanEmail)
-            .maybeSingle();
-          if (emailErr) {
-            if (isTableMissingError(emailErr)) {
-              isProfilesTableMissing = true;
-              return { saved: true, localOnly: true };
-            }
-          } else if (existingByEmail?.id) {
-            userId = existingByEmail.id;
-          }
-        }
-        if (!userId && cleanMobile && !isProfilesTableMissing) {
-          const { data: existingByMobile, error: mobileErr } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('mobile_number', cleanMobile)
-            .maybeSingle();
-          if (mobileErr) {
-            if (isTableMissingError(mobileErr)) {
-              isProfilesTableMissing = true;
-              return { saved: true, localOnly: true };
-            }
-          } else if (existingByMobile?.id) {
-            userId = existingByMobile.id;
-          }
-        }
-      } catch (lookupErr: any) {
-        if (isTableMissingError(lookupErr)) {
-          isProfilesTableMissing = true;
-          return { saved: true, localOnly: true };
-        }
-      }
-    }
-
-    // If still no ID, generate a unique ID
-    if (!userId) {
-      userId = typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `artisan_${Date.now()}`;
-    }
-
-    // Standardize: populate both city and location in the upsert object to eliminate schema mismatches
+    // Standardize: populate city, location, and state in the upsert object
     const payload: any = {
       id: userId,
       full_name: profile.fullName?.trim() || 'Master Artisan',
       email: cleanEmail || null,
       mobile_number: cleanMobile || null,
-      city: effectiveCity || effectiveLocation || null,
-      location: effectiveLocation || effectiveCity || null,
+      city: effectiveCity || null,
+      location: effectiveLocation || null,
       preferred_language: profile.preferredLanguage || 'hi',
       desired_workshop: profile.desiredWorkshop || 'pottery',
       craft_specialty: profile.craftSpecialty || 'Terracotta Pottery',

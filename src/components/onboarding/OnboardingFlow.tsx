@@ -559,13 +559,16 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         mobile.trim() ||
         cleanMobile ||
         '';
-      const rawLocation = profile?.location || '';
+      const rawLocation = profile?.location || user?.user_metadata?.location || '';
       const artisanState =
+        profile?.state ||
+        user?.user_metadata?.state ||
         (rawLocation.includes(',') ? rawLocation.split(',')[1].trim() : '') ||
         selectedState ||
         'Uttar Pradesh';
       const artisanCity =
         profile?.city ||
+        user?.user_metadata?.city ||
         (rawLocation.includes(',') ? rawLocation.split(',')[0].trim() : rawLocation) ||
         selectedCity ||
         'Varanasi';

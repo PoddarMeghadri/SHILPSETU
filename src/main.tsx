@@ -5,11 +5,21 @@ import { LanguageProvider } from './context/LanguageContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminModeProvider } from './context/AdminModeContext';
 import { initGlobalHaptics } from './services/sound';
+import { logSupabaseDiagnostics, getSupabaseDiagnostics } from './utils/supabaseDiagnostics';
 import App from './App.tsx';
 import './index.css';
 
 // Initialize subtle haptic feedback across buttons for tactile artisan interactions
 initGlobalHaptics();
+
+// Log Supabase environment injection status to browser console on startup
+const diagnostics = logSupabaseDiagnostics();
+
+// Expose diagnostic inspection helper globally on window for easy developer checking in console
+if (typeof window !== 'undefined') {
+  (window as any).__SUPABASE_DIAGNOSTICS__ = diagnostics;
+  (window as any).checkSupabaseConfig = logSupabaseDiagnostics;
+}
 
 // Error boundary to prevent any blank screen in standalone or external browsers
 interface ErrorBoundaryProps {

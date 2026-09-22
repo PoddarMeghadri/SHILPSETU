@@ -52,36 +52,72 @@ export function App() {
 
   // App State with localStorage persistence
   const [artisan, setArtisan] = useState<ArtisanProfile>(() => {
-    let savedProfile: any = null;
+    let p1Obj: any = null;
+    let p2Obj: any = null;
     try {
       const p1 = localStorage.getItem('shilpsetu_user_profile');
+      if (p1) p1Obj = JSON.parse(p1);
+    } catch (_) {}
+    try {
       const p2 = localStorage.getItem('shilpsetu_artisan');
-      if (p1) savedProfile = JSON.parse(p1);
-      else if (p2) savedProfile = JSON.parse(p2);
+      if (p2) p2Obj = JSON.parse(p2);
     } catch (_) {}
 
-    if (savedProfile) {
+    if (p1Obj || p2Obj) {
       try {
-        const isOldUnsplash = savedProfile.avatarUrl?.includes('photo-1544005313-94ddf0286df2') || savedProfile.avatar_url?.includes('photo-1544005313-94ddf0286df2');
-        const rawLoc = savedProfile.location || '';
-        const city = (savedProfile.city || (rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : rawLoc) || INITIAL_ARTISAN.city || '').trim();
-        const state = (savedProfile.state || (rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : '') || INITIAL_ARTISAN.state || '').trim();
-        const resolvedLoc = (savedProfile.location || (city ? `${city}${state ? `, ${state}` : ''}` : '') || INITIAL_ARTISAN.location).trim();
-        const rawAvatar = savedProfile.avatar_url || savedProfile.avatarUrl;
+        const savedProfile = { ...p1Obj, ...p2Obj };
+        const rawLoc = (p2Obj?.location || p1Obj?.location || '').trim();
+        const city = (
+          (p2Obj?.city && p2Obj.city !== 'Varanasi' ? p2Obj.city : null) ||
+          (p1Obj?.city && p1Obj.city !== 'Varanasi' ? p1Obj.city : null) ||
+          p2Obj?.city ||
+          p1Obj?.city ||
+          (rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : '') ||
+          INITIAL_ARTISAN.city ||
+          'Varanasi'
+        ).trim();
+
+        const state = (
+          (p2Obj?.state && p2Obj.state !== 'Uttar Pradesh' ? p2Obj.state : null) ||
+          (p1Obj?.state && p1Obj.state !== 'Uttar Pradesh' ? p1Obj.state : null) ||
+          p2Obj?.state ||
+          p1Obj?.state ||
+          (rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : '') ||
+          INITIAL_ARTISAN.state ||
+          'Uttar Pradesh'
+        ).trim();
+
+        const resolvedLoc = (
+          (rawLoc && rawLoc !== 'Varanasi, Uttar Pradesh' ? rawLoc : null) ||
+          (city ? `${city}${state ? `, ${state}` : ''}` : '') ||
+          INITIAL_ARTISAN.location ||
+          'Varanasi, Uttar Pradesh'
+        ).trim();
+
+        const rawAvatar = (
+          (p2Obj?.avatarUrl && p2Obj.avatarUrl !== DEFAULT_ARTISAN_AVATAR ? p2Obj.avatarUrl : null) ||
+          (p1Obj?.avatar_url && p1Obj.avatar_url !== DEFAULT_ARTISAN_AVATAR ? p1Obj.avatar_url : null) ||
+          p2Obj?.avatarUrl ||
+          p1Obj?.avatar_url ||
+          p1Obj?.avatarUrl ||
+          DEFAULT_ARTISAN_AVATAR
+        );
+        const isOldUnsplash = typeof rawAvatar === 'string' && rawAvatar.includes('photo-1544005313-94ddf0286df2');
+        const finalAvatar = isOldUnsplash || !rawAvatar ? DEFAULT_ARTISAN_AVATAR : rawAvatar;
 
         return {
           ...INITIAL_ARTISAN,
           ...savedProfile,
-          name: savedProfile.full_name || savedProfile.name || INITIAL_ARTISAN.name,
-          email: savedProfile.email || INITIAL_ARTISAN.email,
-          mobile: savedProfile.mobile_number || savedProfile.mobile || INITIAL_ARTISAN.mobile,
+          name: p2Obj?.name || p1Obj?.full_name || p1Obj?.name || INITIAL_ARTISAN.name,
+          email: p2Obj?.email || p1Obj?.email || INITIAL_ARTISAN.email,
+          mobile: p2Obj?.mobile || p1Obj?.mobile_number || p1Obj?.mobile || INITIAL_ARTISAN.mobile,
           city,
           state,
           location: resolvedLoc,
-          avatarUrl: isOldUnsplash || !rawAvatar ? DEFAULT_ARTISAN_AVATAR : rawAvatar,
-          craft: savedProfile.craft_specialty || savedProfile.desired_workshop || savedProfile.craft || INITIAL_ARTISAN.craft,
-          gender: savedProfile.gender || 'male',
-          trustScore: savedProfile.trustScore ?? INITIAL_ARTISAN.trustScore ?? 98,
+          avatarUrl: finalAvatar,
+          craft: p2Obj?.craft || p1Obj?.craft_specialty || p1Obj?.desired_workshop || INITIAL_ARTISAN.craft,
+          gender: p2Obj?.gender || p1Obj?.gender || 'male',
+          trustScore: p2Obj?.trustScore ?? p1Obj?.trustScore ?? INITIAL_ARTISAN.trustScore ?? 98,
         };
       } catch (_) {}
     }
@@ -182,7 +218,20 @@ export function App() {
             return prev;
           }
 
-          const merged = { ...prev, ...serverProfile };
+          // Protect customized user attributes from server default overrides
+          const preservedCity = (prev.city && prev.city !== 'Varanasi') ? prev.city : (serverProfile.city || prev.city);
+          const preservedState = (prev.state && prev.state !== 'Uttar Pradesh') ? prev.state : (serverProfile.state || prev.state);
+          const preservedLoc = (prev.location && prev.location !== 'Varanasi, Uttar Pradesh') ? prev.location : (serverProfile.location || prev.location);
+          const preservedAvatar = (prev.avatarUrl && prev.avatarUrl !== DEFAULT_ARTISAN_AVATAR) ? prev.avatarUrl : (serverProfile.avatarUrl || prev.avatarUrl);
+
+          const merged = {
+            ...prev,
+            ...serverProfile,
+            city: preservedCity,
+            state: preservedState,
+            location: preservedLoc,
+            avatarUrl: preservedAvatar,
+          };
           localStorage.setItem('shilpsetu_artisan', JSON.stringify(merged));
           return merged;
         });
@@ -245,11 +294,71 @@ export function App() {
               }
             } catch (_) {}
 
-            const rawLoc = (prof?.location || meta.location || localLoc || '').trim();
-            const city = (prof?.city || meta.city || (rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : '') || localCity || prev.city || 'Varanasi').trim();
-            const state = (prof?.state || meta.state || (rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : '') || localState || prev.state || 'Uttar Pradesh').trim();
-            const resolvedLoc = (prof?.location || meta.location || localLoc || (city ? `${city}${state ? `, ${state}` : ''}` : '') || prev.location || 'Varanasi, Uttar Pradesh').trim();
-            const avatarUrl = prof?.avatar_url || meta.avatar_url || localAvatar || prev.avatarUrl;
+            // If user has set a custom city/location/avatar locally and remote profile has the default values,
+            // prioritize the user's custom changes and prevent reverting to 'Varanasi'!
+            const isProfDefault = !prof?.city || prof?.city === 'Varanasi' || !prof?.location || prof?.location === 'Varanasi, Uttar Pradesh';
+            const hasCustomLocalCity = Boolean(localCity && localCity !== 'Varanasi');
+            const hasCustomLocalLoc = Boolean(localLoc && localLoc !== 'Varanasi, Uttar Pradesh');
+
+            const city = (
+              (hasCustomLocalCity && isProfDefault ? localCity : null) ||
+              prof?.city ||
+              meta.city ||
+              localCity ||
+              prev.city ||
+              'Varanasi'
+            ).trim();
+
+            const state = (
+              (localState && localState !== 'Uttar Pradesh' && isProfDefault ? localState : null) ||
+              prof?.state ||
+              meta.state ||
+              localState ||
+              prev.state ||
+              'Uttar Pradesh'
+            ).trim();
+
+            const resolvedLoc = (
+              (hasCustomLocalLoc && isProfDefault ? localLoc : null) ||
+              prof?.location ||
+              meta.location ||
+              localLoc ||
+              (city ? `${city}${state ? `, ${state}` : ''}` : '') ||
+              prev.location ||
+              'Varanasi, Uttar Pradesh'
+            ).trim();
+
+            const isProfAvatarDefault = !prof?.avatar_url || prof?.avatar_url === DEFAULT_ARTISAN_AVATAR;
+            const hasCustomLocalAvatar = Boolean(localAvatar && localAvatar !== DEFAULT_ARTISAN_AVATAR);
+            const avatarUrl = (
+              (hasCustomLocalAvatar && isProfAvatarDefault ? localAvatar : null) ||
+              prof?.avatar_url ||
+              meta.avatar_url ||
+              localAvatar ||
+              prev.avatarUrl ||
+              DEFAULT_ARTISAN_AVATAR
+            );
+
+            // Auto-heal Supabase with local customized attributes if remote was default
+            if ((hasCustomLocalCity || hasCustomLocalLoc || hasCustomLocalAvatar) && session.user.id) {
+              try {
+                supabase.auth.updateUser({
+                  data: {
+                    city,
+                    state,
+                    location: resolvedLoc,
+                    avatar_url: avatarUrl,
+                  }
+                }).catch(() => {});
+                supabase.from('profiles').update({
+                  city,
+                  state,
+                  location: resolvedLoc,
+                  avatar_url: avatarUrl,
+                  updated_at: new Date().toISOString(),
+                }).eq('id', session.user.id).then(() => {}, () => {});
+              } catch (_) {}
+            }
 
             const merged: ArtisanProfile = {
               ...prev,
@@ -362,11 +471,13 @@ export function App() {
     // Also sync to Supabase profile in background if available
     try {
       upsertSupabaseProfile({
+        userId: updated.id,
         fullName: updated.name,
         mobileNumber: updated.mobile || '',
         email: updated.email || '',
         craftSpecialty: updated.craft,
         city: updated.city,
+        state: updated.state,
         location: updated.location,
         avatarUrl: updated.avatarUrl,
         bio: updated.bio,
@@ -375,6 +486,22 @@ export function App() {
       }).catch((sbErr) => {
         console.warn('[Supabase Sync Warning]:', sbErr);
       });
+
+      if (isSupabaseConfigured()) {
+        supabase.auth.updateUser({
+          data: {
+            full_name: updated.name,
+            name: updated.name,
+            city: updated.city,
+            state: updated.state,
+            location: updated.location,
+            avatar_url: updated.avatarUrl,
+            mobile_number: updated.mobile,
+            email: updated.email,
+            bio: updated.bio,
+          },
+        }).catch(() => {});
+      }
     } catch (_) {}
   };
 

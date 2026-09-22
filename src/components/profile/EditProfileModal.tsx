@@ -337,6 +337,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           mobileNumber: safeMobile,
           avatarUrl: safeAvatar,
           city: selectedCity,
+          state: selectedState,
           location: combinedLocation,
           bio: safeBio,
           craftSpecialty: artisan.craft,
