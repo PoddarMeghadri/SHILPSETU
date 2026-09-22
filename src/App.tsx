@@ -52,17 +52,36 @@ export function App() {
 
   // App State with localStorage persistence
   const [artisan, setArtisan] = useState<ArtisanProfile>(() => {
-    const saved = localStorage.getItem('shilpsetu_artisan');
-    if (saved) {
+    let savedProfile: any = null;
+    try {
+      const p1 = localStorage.getItem('shilpsetu_user_profile');
+      const p2 = localStorage.getItem('shilpsetu_artisan');
+      if (p1) savedProfile = JSON.parse(p1);
+      else if (p2) savedProfile = JSON.parse(p2);
+    } catch (_) {}
+
+    if (savedProfile) {
       try {
-        const parsed = JSON.parse(saved);
-        const isOldUnsplash = parsed.avatarUrl?.includes('photo-1544005313-94ddf0286df2');
+        const isOldUnsplash = savedProfile.avatarUrl?.includes('photo-1544005313-94ddf0286df2') || savedProfile.avatar_url?.includes('photo-1544005313-94ddf0286df2');
+        const rawLoc = savedProfile.location || '';
+        const city = (savedProfile.city || (rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : rawLoc) || INITIAL_ARTISAN.city || '').trim();
+        const state = (savedProfile.state || (rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : '') || INITIAL_ARTISAN.state || '').trim();
+        const resolvedLoc = (savedProfile.location || (city ? `${city}${state ? `, ${state}` : ''}` : '') || INITIAL_ARTISAN.location).trim();
+        const rawAvatar = savedProfile.avatar_url || savedProfile.avatarUrl;
+
         return {
           ...INITIAL_ARTISAN,
-          ...parsed,
-          avatarUrl: isOldUnsplash || !parsed.avatarUrl ? DEFAULT_ARTISAN_AVATAR : parsed.avatarUrl,
-          gender: parsed.gender || 'male',
-          trustScore: parsed.trustScore ?? INITIAL_ARTISAN.trustScore ?? 98,
+          ...savedProfile,
+          name: savedProfile.full_name || savedProfile.name || INITIAL_ARTISAN.name,
+          email: savedProfile.email || INITIAL_ARTISAN.email,
+          mobile: savedProfile.mobile_number || savedProfile.mobile || INITIAL_ARTISAN.mobile,
+          city,
+          state,
+          location: resolvedLoc,
+          avatarUrl: isOldUnsplash || !rawAvatar ? DEFAULT_ARTISAN_AVATAR : rawAvatar,
+          craft: savedProfile.craft_specialty || savedProfile.desired_workshop || savedProfile.craft || INITIAL_ARTISAN.craft,
+          gender: savedProfile.gender || 'male',
+          trustScore: savedProfile.trustScore ?? INITIAL_ARTISAN.trustScore ?? 98,
         };
       } catch (_) {}
     }
@@ -179,10 +198,8 @@ export function App() {
         if (session.access_token) {
           localStorage.setItem('shilpsetu_token', session.access_token);
         }
-        // Only mark onboarding as completed if the user has already finalized onboarding
-        if (localStorage.getItem('shilpsetu_auth_done') === 'true') {
-          setHasCompletedOnboarding(true);
-        }
+        localStorage.setItem('shilpsetu_auth_done', 'true');
+        setHasCompletedOnboarding(true);
 
         try {
           const { data: prof } = await supabase
@@ -191,38 +208,59 @@ export function App() {
             .eq('id', session.user.id)
             .maybeSingle();
 
+          const meta = session.user.user_metadata || {};
           const registeredName =
             prof?.full_name?.trim() ||
-            session.user.user_metadata?.full_name?.trim() ||
-            session.user.user_metadata?.name?.trim();
+            meta.full_name?.trim() ||
+            meta.name?.trim();
 
-          if (prof?.preferred_language) {
-            setLanguage(prof.preferred_language as LanguageCode);
-            localStorage.setItem('shilpsetu_lang', prof.preferred_language);
+          const prefLang = prof?.preferred_language || meta.preferred_language;
+          if (prefLang) {
+            setLanguage(prefLang as LanguageCode);
+            localStorage.setItem('shilpsetu_lang', prefLang);
           }
 
-          if (registeredName || prof) {
-            setArtisan((prev) => {
-              const rawLoc = prof?.location || '';
-              const state = prof?.state || (rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : prev.state);
-              const city = prof?.city || (rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : prev.city);
-              const merged = {
-                ...prev,
-                name: registeredName || prev.name,
-                email: prof?.email || session.user.email || prev.email,
-                mobile: prof?.mobile_number || session.user.user_metadata?.mobile_number || prev.mobile,
-                craft: prof?.craft_specialty || prev.craft,
-                location: prof?.location || prev.location,
-                avatarUrl: prof?.avatar_url || prev.avatarUrl,
-                bio: prof?.bio || prev.bio,
-                state: state || prev.state,
-                city: city || prev.city,
-              };
-              localStorage.setItem('shilpsetu_artisan', JSON.stringify(merged));
-              return merged;
-            });
-          }
-        } catch (_) {}
+          setArtisan((prev) => {
+            const rawLoc = (prof?.location || meta.location || '').trim();
+            const city = (prof?.city || meta.city || (rawLoc.includes(',') ? rawLoc.split(',')[0].trim() : rawLoc) || prev.city || 'Varanasi').trim();
+            const state = (prof?.state || meta.state || (rawLoc.includes(',') ? rawLoc.split(',')[1].trim() : '') || prev.state || 'Uttar Pradesh').trim();
+            const resolvedLoc = (prof?.location || meta.location || (city ? `${city}${state ? `, ${state}` : ''}` : '') || prev.location || 'Varanasi, Uttar Pradesh').trim();
+            const avatarUrl = prof?.avatar_url || meta.avatar_url || prev.avatarUrl;
+
+            const merged: ArtisanProfile = {
+              ...prev,
+              id: session.user.id,
+              name: registeredName || prev.name,
+              email: prof?.email || session.user.email || prev.email,
+              mobile: prof?.mobile_number || meta.mobile_number || prev.mobile,
+              craft: prof?.craft_specialty || meta.desired_workshop || prev.craft,
+              city,
+              state,
+              location: resolvedLoc,
+              avatarUrl,
+              bio: prof?.bio || meta.bio || prev.bio,
+            };
+
+            const userProfileBackup = {
+              id: session.user.id,
+              full_name: merged.name,
+              email: merged.email,
+              mobile_number: merged.mobile,
+              city: merged.city,
+              state: merged.state,
+              location: merged.location,
+              avatar_url: merged.avatarUrl,
+              preferred_language: prefLang || 'hi',
+              desired_workshop: merged.craft,
+            };
+
+            localStorage.setItem('shilpsetu_user_profile', JSON.stringify(userProfileBackup));
+            localStorage.setItem('shilpsetu_artisan', JSON.stringify(merged));
+            return merged;
+          });
+        } catch (err) {
+          console.warn('[Supabase Session Sync Error]:', err);
+        }
       };
 
       supabase.auth.getSession().then(({ data: { session } }) => {
@@ -232,7 +270,7 @@ export function App() {
       }).catch(console.warn);
 
       const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-        if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+        if ((event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') && session?.user) {
           syncProfileFromSession(session);
         }
       });
@@ -280,6 +318,18 @@ export function App() {
     setArtisan(updated);
     try {
       localStorage.setItem('shilpsetu_artisan', JSON.stringify(updated));
+      localStorage.setItem('shilpsetu_user_profile', JSON.stringify({
+        id: updated.id,
+        full_name: updated.name,
+        email: updated.email,
+        mobile_number: updated.mobile,
+        city: updated.city,
+        state: updated.state,
+        location: updated.location,
+        avatar_url: updated.avatarUrl,
+        craft_specialty: updated.craft,
+        bio: updated.bio,
+      }));
     } catch (err) {
       console.warn('[Storage] Quota exceeded when saving artisan profile:', err);
     }
@@ -493,7 +543,13 @@ export function App() {
       supabase.auth.updateUser({
         data: {
           full_name: updatedArtisan.name,
+          name: updatedArtisan.name,
           mobile_number: updatedArtisan.mobile,
+          city: updatedArtisan.city,
+          location: updatedArtisan.location,
+          avatar_url: updatedArtisan.avatarUrl,
+          preferred_language: data.selectedLanguage || language,
+          desired_workshop: data.selectedCraft,
         },
       }).catch(() => {});
     }

@@ -347,6 +347,18 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
       // Safe local storage persistence
       safeLocalStorageSet('shilpsetu_artisan', JSON.stringify(updatedProfile));
+      safeLocalStorageSet('shilpsetu_user_profile', JSON.stringify({
+        id: updatedProfile.id,
+        full_name: updatedProfile.name,
+        email: updatedProfile.email,
+        mobile_number: updatedProfile.mobile,
+        city: updatedProfile.city,
+        state: updatedProfile.state,
+        location: updatedProfile.location,
+        avatar_url: updatedProfile.avatarUrl,
+        craft_specialty: updatedProfile.craft,
+        bio: updatedProfile.bio,
+      }));
       safeLocalStorageSet('shilpsetu_recent_photos', JSON.stringify(cleanedRecentPhotos));
 
       // Successfully close modal and release saving state

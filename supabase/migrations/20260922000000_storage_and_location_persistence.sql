@@ -1,7 +1,7 @@
--- ShilpSetu Profiles & Tables Schema for Supabase
--- Copy and paste this into the Supabase SQL Editor (Dashboard -> SQL Editor -> New Query -> Run)
+-- ShilpSetu: Storage policies, Location/City persistence, and Unique Account Constraints
+-- Copy and paste into the Supabase SQL Editor if running manually
 
--- 1. Create profiles table
+-- 1. Ensure columns exist on profiles
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT NOT NULL DEFAULT '',
@@ -18,7 +18,6 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Ensure columns exist
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS city text,
   ADD COLUMN IF NOT EXISTS location text,
@@ -26,64 +25,38 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS preferred_language text DEFAULT 'en',
   ADD COLUMN IF NOT EXISTS desired_workshop text;
 
--- Enforce strict uniqueness for single email and mobile
+-- 2. Enforce strict uniqueness for single email and mobile
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS unique_user_email;
 ALTER TABLE public.profiles ADD CONSTRAINT unique_user_email UNIQUE (email);
 
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS unique_user_mobile;
 ALTER TABLE public.profiles ADD CONSTRAINT unique_user_mobile UNIQUE (mobile_number);
 
--- 2. Enable Row Level Security (RLS)
+-- Enable RLS on profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- 3. Create RLS Policies for Profiles
-DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
-CREATE POLICY "Users can view their own profile" 
-  ON public.profiles FOR SELECT 
-  TO authenticated 
-  USING (id = auth.uid());
-
--- Allow unauthenticated lookup of contact identities during registration checks
-DROP POLICY IF EXISTS "Allow unauthenticated contact identity check" ON public.profiles;
-CREATE POLICY "Allow unauthenticated contact identity check" 
-  ON public.profiles FOR SELECT 
-  TO anon, authenticated 
+DROP POLICY IF EXISTS "Public Profile Read" ON public.profiles;
+CREATE POLICY "Public Profile Read" ON public.profiles
+  FOR SELECT TO anon, authenticated
   USING (true);
 
-DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
-CREATE POLICY "Users can insert their own profile" 
-  ON public.profiles FOR INSERT 
-  TO authenticated 
+DROP POLICY IF EXISTS "Authenticated User Profile Upsert" ON public.profiles;
+CREATE POLICY "Authenticated User Profile Upsert" ON public.profiles
+  FOR INSERT TO authenticated
   WITH CHECK (id = auth.uid());
 
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
-CREATE POLICY "Users can update their own profile" 
-  ON public.profiles FOR UPDATE 
-  TO authenticated 
+DROP POLICY IF EXISTS "Authenticated User Profile Update" ON public.profiles;
+CREATE POLICY "Authenticated User Profile Update" ON public.profiles
+  FOR UPDATE TO authenticated
   USING (id = auth.uid())
   WITH CHECK (id = auth.uid());
 
--- 4. Automatically create profile on new user signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email, full_name)
-  VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'full_name', ''))
-  ON CONFLICT (id) DO NOTHING;
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
-
--- 5. Storage Buckets and Policies for Avatars
+-- 3. Ensure avatars bucket exists and is public
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('avatars', 'avatars', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
+-- 4. Storage RLS policies for external uploads
 DROP POLICY IF EXISTS "Public Avatar Access" ON storage.objects;
 CREATE POLICY "Public Avatar Access" ON storage.objects
   FOR SELECT USING (bucket_id = 'avatars');
@@ -96,5 +69,5 @@ DROP POLICY IF EXISTS "Authenticated User Avatar Update" ON storage.objects;
 CREATE POLICY "Authenticated User Avatar Update" ON storage.objects
   FOR UPDATE USING (bucket_id = 'avatars' AND auth.role() = 'authenticated');
 
--- Notify schema cache reload
+-- 5. Reload Schema Cache
 NOTIFY pgrst, 'reload schema';

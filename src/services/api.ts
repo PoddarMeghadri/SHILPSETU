@@ -175,11 +175,17 @@ export const api = {
       if (!res.ok) return null;
       const data = await res.json();
       if (!data) return null;
+      const resolvedCity = data.city || (data.location && data.location.includes(',') ? data.location.split(',')[0].trim() : (data.location || 'Varanasi'));
+      const resolvedState = data.state || (data.location && data.location.includes(',') ? data.location.split(',')[1].trim() : 'Uttar Pradesh');
+      const resolvedLoc = data.location || `${resolvedCity}, ${resolvedState}`;
+
       return {
         name: data.fullName || data.name,
         gender: data.gender || 'male',
         title: data.title || 'Master Artisan',
-        location: `${data.city || 'Varanasi'}, ${data.state || 'Uttar Pradesh'}`,
+        location: resolvedLoc,
+        city: resolvedCity,
+        state: resolvedState,
         craft: data.craft || 'Traditional Handicrafts',
         avatarUrl: data.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80',
         completeness: data.completeness || 92,
@@ -206,6 +212,9 @@ export const api = {
           fullName: profile.name,
           craft: profile.craft,
           gender: profile.gender,
+          city: profile.city,
+          state: profile.state,
+          location: profile.location || (profile.city ? `${profile.city}${profile.state ? `, ${profile.state}` : ''}` : undefined),
           avatarUrl: profile.avatarUrl,
           bio: profile.bio,
           storyQuote: profile.storyQuote,

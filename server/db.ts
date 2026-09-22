@@ -19,6 +19,10 @@ export interface ArtisanRecord {
   craft: string;
   state: string;
   city: string;
+  location?: string;
+  avatarUrl?: string;
+  bio?: string;
+  storyQuote?: string;
   gender?: string;
   email?: string;
   language: string;
@@ -344,13 +348,21 @@ class LocalStoreManager {
     const id = existing?.id || profile.id || `artisan_${cleanMobile || Date.now()}`;
     const now = new Date().toISOString();
 
+    const parsedCity = profile.city || (profile.location && profile.location.includes(',') ? profile.location.split(',')[0].trim() : (profile.location?.trim() || existing?.city || 'Varanasi'));
+    const parsedState = profile.state || (profile.location && profile.location.includes(',') ? profile.location.split(',')[1].trim() : (existing?.state || 'Uttar Pradesh'));
+    const resolvedLocation = profile.location || `${parsedCity}, ${parsedState}`;
+
     const record: ArtisanRecord = {
       id,
       mobile: profile.mobile || existing?.mobile || '9876543210',
       fullName: profile.fullName || (profile as any).name || existing?.fullName || 'Master Artisan',
       craft: profile.craft || existing?.craft || 'Traditional Handicrafts',
-      state: profile.state || existing?.state || 'Uttar Pradesh',
-      city: profile.city || existing?.city || 'Varanasi',
+      state: parsedState,
+      city: parsedCity,
+      location: resolvedLocation,
+      avatarUrl: profile.avatarUrl || existing?.avatarUrl,
+      bio: profile.bio || existing?.bio,
+      storyQuote: profile.storyQuote || existing?.storyQuote,
       gender: profile.gender || existing?.gender || 'other',
       email: cleanEmail || existing?.email,
       language: profile.language || existing?.language || 'hi',

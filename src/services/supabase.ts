@@ -363,22 +363,43 @@ export async function upsertSupabaseProfile(profile: {
         : `artisan_${Date.now()}`;
     }
 
-    const effectiveCity = profile.city?.trim() || (profile.location?.includes(',') ? profile.location.split(',')[0].trim() : (profile.location?.trim() || ''));
+    const effectiveCity = (profile.city?.trim() || (profile.location?.includes(',') ? profile.location.split(',')[0].trim() : (profile.location?.trim() || ''))).trim();
+    const effectiveLocation = (profile.location?.trim() || effectiveCity || 'Varanasi, Uttar Pradesh').trim();
 
+    // Standardize: populate both city and location in the upsert object to eliminate schema mismatches
     const payload: any = {
       id: userId,
       full_name: profile.fullName?.trim() || 'Master Artisan',
       email: cleanEmail || null,
       mobile_number: cleanMobile || null,
-      city: effectiveCity || null,
+      city: effectiveCity || effectiveLocation || null,
+      location: effectiveLocation || effectiveCity || null,
       preferred_language: profile.preferredLanguage || 'hi',
       desired_workshop: profile.desiredWorkshop || 'pottery',
-      location: profile.location || (effectiveCity ? `${effectiveCity}, Uttar Pradesh` : 'Varanasi, Uttar Pradesh'),
       craft_specialty: profile.craftSpecialty || 'Terracotta Pottery',
       avatar_url: profile.avatarUrl || null,
       bio: profile.bio || null,
       updated_at: new Date().toISOString(),
     };
+
+    // Mirror to active Supabase Auth user metadata for instant cross-session resilience
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user) {
+        await supabase.auth.updateUser({
+          data: {
+            full_name: payload.full_name,
+            name: payload.full_name,
+            mobile_number: cleanMobile,
+            city: effectiveCity,
+            location: effectiveLocation,
+            avatar_url: payload.avatar_url,
+            preferred_language: payload.preferred_language,
+            desired_workshop: payload.desired_workshop,
+          },
+        });
+      }
+    } catch (_) {}
 
     const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
 
@@ -388,10 +409,20 @@ export async function upsertSupabaseProfile(profile: {
         console.warn('[Supabase Sync] public.profiles table is not created in Supabase yet. Artisan profile safely persisted to local and backend storage.');
         return { saved: true, localOnly: true };
       }
-      // If city column is missing in older remote schema, retry without city column
-      if (error.message?.includes('city') || error.message?.includes('column')) {
+      // If a column is missing in older remote schema, retry without that column
+      const colMatch = error.message?.match(/column "([^"]+)" of relation "profiles" does not exist/i) ||
+                       error.message?.match(/Could not find the '([^']+)' column/i);
+      if (colMatch && colMatch[1]) {
+        const missingCol = colMatch[1];
+        const fallbackPayload = { ...payload };
+        delete fallbackPayload[missingCol];
+        const { error: retryErr } = await supabase.from('profiles').upsert(fallbackPayload, { onConflict: 'id' });
+        if (!retryErr) return { saved: true };
+      }
+      if (error.message?.includes('city') || error.message?.includes('location')) {
         const fallbackPayload = { ...payload };
         delete fallbackPayload.city;
+        delete fallbackPayload.desired_workshop;
         const { error: retryErr } = await supabase.from('profiles').upsert(fallbackPayload, { onConflict: 'id' });
         if (!retryErr) return { saved: true };
       }
@@ -456,16 +487,40 @@ export async function signInSupabaseWithEmailOrMobile(identifier: string, passwo
     return { signedIn: false, error: msg };
   }
 
-  // Fetch full profile from remote profiles table including city and avatar_url
+  // Fetch full profile from remote profiles table including city, location, and avatar_url
   let profileData: any = null;
   try {
     const { data: prof } = await supabase
       .from('profiles')
-      .select('id, full_name, email, mobile_number, city, location, preferred_language, desired_workshop, craft_specialty, avatar_url, bio, updated_at')
+      .select('*')
       .eq('id', data.user.id)
       .maybeSingle();
     profileData = prof;
   } catch (_) {}
+
+  // Fallback to user metadata if profiles table is empty or missing columns
+  const meta = data.user.user_metadata || {};
+  if (!profileData) {
+    profileData = {
+      id: data.user.id,
+      full_name: meta.full_name || meta.name || 'Master Artisan',
+      email: data.user.email,
+      mobile_number: meta.mobile_number,
+      city: meta.city || 'Varanasi',
+      location: meta.location || (meta.city ? `${meta.city}, Uttar Pradesh` : 'Varanasi, Uttar Pradesh'),
+      avatar_url: meta.avatar_url,
+      preferred_language: meta.preferred_language || 'hi',
+      desired_workshop: meta.desired_workshop || 'pottery',
+    };
+  } else {
+    if (!profileData.city && meta.city) profileData.city = meta.city;
+    if (!profileData.location && (meta.location || meta.city)) {
+      profileData.location = meta.location || meta.city;
+    }
+    if (!profileData.avatar_url && meta.avatar_url) {
+      profileData.avatar_url = meta.avatar_url;
+    }
+  }
 
   return {
     signedIn: true,
@@ -530,7 +585,8 @@ export async function uploadAvatarToSupabase(
     // Direct client upload attempt to Supabase Storage 'avatars'
     if (isSupabaseConfigured() && typeof fileOrBase64 !== 'string') {
       const fileExt = (fileOrBase64 as File).name?.split('.').pop() || 'jpg';
-      const filePath = `${safeUserId}/avatar.${fileExt}`;
+      const fileName = `${safeUserId}-${Date.now()}.${fileExt}`;
+      const filePath = `${safeUserId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
@@ -542,22 +598,37 @@ export async function uploadAvatarToSupabase(
       if (!uploadError) {
         const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
         if (data?.publicUrl) {
+          const publicUrl = data.publicUrl;
           // Immediately update profile record with the permanent URL
-          if (safeUserId.includes('-')) {
-            try {
-              await supabase.from('profiles').update({ avatar_url: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', safeUserId);
-            } catch (_) {}
-          }
-          // Also sync to localStorage
+          try {
+            if (safeUserId.includes('@')) {
+              await supabase.from('profiles').update({ avatar_url: publicUrl, updated_at: new Date().toISOString() }).eq('email', safeUserId);
+            } else {
+              await supabase.from('profiles').update({ avatar_url: publicUrl, updated_at: new Date().toISOString() }).eq('id', safeUserId);
+            }
+          } catch (_) {}
+
+          try {
+            await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
+          } catch (_) {}
+
+          // Also sync to both localStorage stores
           try {
             const stored = localStorage.getItem('shilpsetu_artisan');
             if (stored) {
               const parsed = JSON.parse(stored);
-              parsed.avatarUrl = data.publicUrl;
+              parsed.avatarUrl = publicUrl;
               localStorage.setItem('shilpsetu_artisan', JSON.stringify(parsed));
             }
+            const storedUserProf = localStorage.getItem('shilpsetu_user_profile');
+            if (storedUserProf) {
+              const parsedUser = JSON.parse(storedUserProf);
+              parsedUser.avatar_url = publicUrl;
+              parsedUser.avatarUrl = publicUrl;
+              localStorage.setItem('shilpsetu_user_profile', JSON.stringify(parsedUser));
+            }
           } catch (_) {}
-          return { publicUrl: data.publicUrl };
+          return { publicUrl };
         }
       } else {
         console.warn('[Supabase Client Avatar Upload]:', uploadError.message);
@@ -575,20 +646,33 @@ export async function uploadAvatarToSupabase(
     });
     const data = await resp.json();
     if (resp.ok && data.publicUrl) {
-      if (isSupabaseConfigured() && safeUserId.includes('-')) {
-        try {
-          await supabase.from('profiles').update({ avatar_url: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', safeUserId);
-        } catch (_) {}
-      }
+      const publicUrl = data.publicUrl;
+      try {
+        if (safeUserId.includes('@')) {
+          await supabase.from('profiles').update({ avatar_url: publicUrl, updated_at: new Date().toISOString() }).eq('email', safeUserId);
+        } else {
+          await supabase.from('profiles').update({ avatar_url: publicUrl, updated_at: new Date().toISOString() }).eq('id', safeUserId);
+        }
+      } catch (_) {}
+      try {
+        await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
+      } catch (_) {}
       try {
         const stored = localStorage.getItem('shilpsetu_artisan');
         if (stored) {
           const parsed = JSON.parse(stored);
-          parsed.avatarUrl = data.publicUrl;
+          parsed.avatarUrl = publicUrl;
           localStorage.setItem('shilpsetu_artisan', JSON.stringify(parsed));
         }
+        const storedUserProf = localStorage.getItem('shilpsetu_user_profile');
+        if (storedUserProf) {
+          const parsedUser = JSON.parse(storedUserProf);
+          parsedUser.avatar_url = publicUrl;
+          parsedUser.avatarUrl = publicUrl;
+          localStorage.setItem('shilpsetu_user_profile', JSON.stringify(parsedUser));
+        }
       } catch (_) {}
-      return { publicUrl: data.publicUrl };
+      return { publicUrl };
     }
     return { error: data.error || 'Failed to upload avatar' };
   } catch (err: any) {

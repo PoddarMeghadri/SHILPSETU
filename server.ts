@@ -258,6 +258,10 @@ app.post('/api/auth/login', async (req, res) => {
         mobile: artisan.mobile,
         state: artisan.state,
         city: artisan.city,
+        location: artisan.location || (artisan.city ? `${artisan.city}, ${artisan.state || 'Uttar Pradesh'}` : 'Varanasi, Uttar Pradesh'),
+        avatarUrl: artisan.avatarUrl,
+        bio: artisan.bio,
+        storyQuote: artisan.storyQuote,
         craft: artisan.craft,
         gender: artisan.gender,
         language: artisan.language,
@@ -487,13 +491,19 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     const rawPassword = artisanDetails?.password;
     const passwordHash = rawPassword ? hashPassword(rawPassword) : existingArtisan?.passwordHash;
 
+    const effectiveCity = artisanDetails?.city || existingArtisan?.city || 'Varanasi';
+    const effectiveState = artisanDetails?.state || existingArtisan?.state || 'Uttar Pradesh';
+    const effectiveLoc = artisanDetails?.location || `${effectiveCity}, ${effectiveState}`;
+
     const artisan = db.upsertArtisan({
       id: existingArtisan?.id,
       mobile: mobile || artisanDetails?.mobile || existingArtisan?.mobile || '9876543210',
       fullName: artisanDetails?.fullName || existingArtisan?.fullName || 'Master Artisan',
       craft: artisanDetails?.selectedCraft || existingArtisan?.craft || 'Traditional Handicrafts',
-      state: artisanDetails?.state || existingArtisan?.state || 'Uttar Pradesh',
-      city: artisanDetails?.city || existingArtisan?.city || 'Varanasi',
+      state: effectiveState,
+      city: effectiveCity,
+      location: effectiveLoc,
+      avatarUrl: artisanDetails?.avatarUrl || existingArtisan?.avatarUrl,
       gender: artisanDetails?.gender || existingArtisan?.gender || 'male',
       email: normalizedEmail,
       language: artisanDetails?.selectedLanguage || existingArtisan?.language || 'hi',
@@ -909,11 +919,12 @@ app.post('/api/storage/avatar', uploadMiddleware.single('image'), async (req, re
       }
     }
 
-    if (publicUrl && userId && userId !== 'artisan_demo') {
+    if (publicUrl) {
       try {
         const artisan = db.getArtisanById(userId) || (userId.includes('@') ? db.getArtisanByEmail(userId) : null);
         if (artisan) {
-          db.upsertArtisan({ ...artisan, avatarUrl: publicUrl });
+          artisan.avatarUrl = publicUrl;
+          db.upsertArtisan(artisan);
         }
       } catch (_) {}
     }

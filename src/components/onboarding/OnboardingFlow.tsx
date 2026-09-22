@@ -590,6 +590,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setSelectedCraft(craftId);
 
       const artisanProfile = {
+        id: user?.id,
         name: artisanName,
         email: artisanEmail,
         mobile: artisanMobile,
@@ -603,6 +604,18 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         bio: profile?.bio || undefined,
       };
       localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
+      localStorage.setItem('shilpsetu_user_profile', JSON.stringify({
+        id: user?.id,
+        full_name: artisanName,
+        email: artisanEmail,
+        mobile_number: artisanMobile,
+        city: artisanCity,
+        state: artisanState,
+        location: `${artisanCity}, ${artisanState}`,
+        avatar_url: profile?.avatar_url || undefined,
+        preferred_language: profile?.preferred_language || language,
+        desired_workshop: craftId,
+      }));
 
       setIsVerifyingOtp(false);
       setOtpError('');
@@ -663,6 +676,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       preferredLanguage: language,
     };
     localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
+    localStorage.setItem('shilpsetu_user_profile', JSON.stringify({
+      id: supabaseVerification.session?.user?.id || supabaseVerification.user?.id,
+      full_name: artisanProfile.name,
+      email: cleanEmail,
+      mobile_number: cleanMobile,
+      city: effectiveCity,
+      state: selectedState,
+      location: `${effectiveCity}, ${selectedState}`,
+      preferred_language: language,
+      desired_workshop: selectedCraft,
+    }));
 
     sound.playSuccess();
     setIsVerifyingOtp(false);
@@ -676,6 +700,16 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     sound.playSuccess();
     const effectiveCity = selectedCity === 'Other' ? customCity.trim() : selectedCity;
     localStorage.setItem('shilpsetu_auth_done', 'true');
+    localStorage.setItem('shilpsetu_user_profile', JSON.stringify({
+      full_name: fullName.trim(),
+      email: email.trim() || undefined,
+      mobile_number: mobile.trim(),
+      city: effectiveCity,
+      state: selectedState,
+      location: `${effectiveCity}, ${selectedState}`,
+      preferred_language: language,
+      desired_workshop: selectedCraft,
+    }));
     onComplete({
       fullName: fullName.trim(),
       gender,
