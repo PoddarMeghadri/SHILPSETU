@@ -306,9 +306,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
         // 3. Prefer a six-digit SMS code when the account has a registered mobile.
         const registeredMobile = supabaseProfile?.mobile_number || (!identifier.includes('@') ? identifier : '');
+        let sentBySms = false;
         if (registeredMobile) {
           const smsResult = await sendFirebasePhoneOtp(registeredMobile);
           if (smsResult.sent && smsResult.confirmation) {
+            sentBySms = true;
             setOtpChannel('sms');
             setPhoneConfirmation(smsResult.confirmation);
           } else {
@@ -361,7 +363,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         sound.playSuccess();
         setIsSendingOtp(false);
         setResendCooldown(30);
-        setResendNotice(smsResult.sent
+        setResendNotice(sentBySms
           ? 'A 6-digit verification code was sent by SMS.'
           : 'A 6-digit verification code was sent to your email.');
         setOtpDigits(['', '', '', '', '', '']);
@@ -693,7 +695,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         );
     if (!supabaseVerification.verified) {
       sound.playError();
-      setOtpError(supabaseVerification.error || 'Invalid or expired 6-digit verification code. Please try again.');
+      setOtpError(
+        ('error' in supabaseVerification && supabaseVerification.error) ||
+        'Invalid or expired 6-digit verification code. Please try again.'
+      );
       setIsVerifyingOtp(false);
       return;
     }
@@ -1143,7 +1148,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     >
                       Forgot Password?
                     </button>
-                  </div>}
+                  </div>
                   <div className="relative">
                     <input
                       type={showSignInPassword ? 'text' : 'password'}
@@ -1165,7 +1170,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       </span>
                     </button>
                   </div>
-                </div>
+                </div>}
                 {signInError && <p className="text-xs text-red-500 font-medium">{signInError}</p>}
               </form>
             </div>
