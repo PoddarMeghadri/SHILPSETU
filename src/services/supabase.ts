@@ -523,6 +523,20 @@ export async function signInSupabaseWithEmailOrMobile(identifier: string, passwo
     if (isProfilesTableMissing) {
       return { signedIn: false, error: 'Mobile lookup requires the remote profiles table. Please use your email address to sign in.' };
     }
+
+    export async function findProfileByIdentifier(identifier: string): Promise<{
+      profile?: any;
+      error?: string;
+    }> {
+      if (!isSupabaseConfigured()) return { error: SUPABASE_CONFIGURATION_ERROR };
+      const value = identifier.trim().toLowerCase();
+      const query = value.includes('@')
+        ? supabase.from('profiles').select('*').eq('email', value).maybeSingle()
+        : supabase.from('profiles').select('*').eq('mobile_number', value.replace(/\D/g, '')).maybeSingle();
+      const { data, error } = await query;
+      if (error) return { error: error.message };
+      return data ? { profile: data } : { error: 'No registered account was found with those details.' };
+    }
     const { data, error } = await supabase
       .from('profiles')
       .select('email')
