@@ -3,25 +3,28 @@ import { ALL_TRANSLATIONS } from './locales';
 
 export const TRANSLATIONS: Record<LanguageCode, Record<string, string>> = ALL_TRANSLATIONS;
 
+function cleanedKeyFallback(key: string): string {
+  return key
+    .replace(/^(nav_|btn_|lbl_|hdr_)/, '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 export function getTranslation(key: string, language: LanguageCode | string = 'hi'): string {
-  const langKey = (language as LanguageCode);
-  const langDict = TRANSLATIONS[langKey];
-  if (langDict && langDict[key] && langDict[key].trim() !== '') {
-    return langDict[key];
+  const normalizedKey = typeof key === 'string' ? key.trim() : '';
+  if (!normalizedKey) return '';
+
+  const langKey = language as LanguageCode;
+  const dictionaries = [TRANSLATIONS[langKey], TRANSLATIONS.hi, TRANSLATIONS.en];
+  for (const dictionary of dictionaries) {
+    const value = dictionary?.[normalizedKey];
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
   }
 
-  // If user selected English, return the English translation if present, or key
-  if (langKey === 'en') {
-    return TRANSLATIONS['en']?.[key] || key;
-  }
-
-  // If missing for an Indic language, do not silently masquerade in the wrong language without notice
-  // If an English key exists, we clearly mark it as untranslated so the issue is transparent and never silent
-  if (TRANSLATIONS['en'] && TRANSLATIONS['en'][key]) {
-    return `[Not translated: ${TRANSLATIONS['en'][key]}]`;
-  }
-
-  return `[Not translated: ${key}]`;
+  return cleanedKeyFallback(normalizedKey);
 }
 
 // Re-export context, provider, and unified hooks for seamless reactive translations
@@ -31,4 +34,3 @@ export {
   useLanguage,
   useTranslation,
 } from '../context/LanguageContext';
-

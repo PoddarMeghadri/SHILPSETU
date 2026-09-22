@@ -597,7 +597,7 @@ export const AutoCatalogerScreen: React.FC<AutoCatalogerProps> = ({
           <div className="rounded-2xl p-3 bg-black/5 dark:bg-white/5 border border-[#22331E]/10 space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-bold uppercase tracking-wider text-[#B5451B] block">
-                {t('craft_photo', 'Craft Photo')} (Supabase Cloud Storage)
+                {t('craft_photo', 'Craft Photo')}
               </label>
               <button
                 type="button"
@@ -608,7 +608,7 @@ export const AutoCatalogerScreen: React.FC<AutoCatalogerProps> = ({
                 <span className={`material-symbols-outlined text-sm ${isUploadingCraftImage ? 'animate-spin' : ''}`}>
                   {isUploadingCraftImage ? 'progress_activity' : 'add_photo_alternate'}
                 </span>
-                <span>{isUploadingCraftImage ? 'Uploading...' : 'Upload Photo'}</span>
+                <span>{isUploadingCraftImage ? t('uploading', 'Uploading...') : t('upload_craft_photo', 'Upload Craft Photo')}</span>
               </button>
               <input
                 ref={craftFileInputRef}
