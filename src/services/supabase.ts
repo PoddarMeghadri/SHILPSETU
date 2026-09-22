@@ -44,12 +44,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * The placeholder key only keeps module initialization safe; all network operations are
  * gated by hasInjectedSupabaseCredentials so a static deployment cannot silently use it.
  */
-const fallbackSupabaseUrl = 'https://gxytjeznfhcbdnwzmeaa.supabase.co';
-const fallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4eXRqZXpuZmhjYmRud3ptZWFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NTI2MjIsImV4cCI6MjEwNTIyODYyMn0.c-bgiXJFfvBq4Q38ZNPgiO6-zn6uKZBZ70OrxsG7Wwc';
+const initializationSupabaseUrl = 'https://placeholder.supabase.co';
+const initializationSupabaseAnonKey = 'missing-supabase-anon-key';
 
 export const supabase = createClient(
-  supabaseUrl || fallbackSupabaseUrl,
-  supabaseAnonKey || fallbackSupabaseAnonKey,
+  supabaseUrl || initializationSupabaseUrl,
+  supabaseAnonKey || initializationSupabaseAnonKey,
   {
     auth: {
       persistSession: true,
