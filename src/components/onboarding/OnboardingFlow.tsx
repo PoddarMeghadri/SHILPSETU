@@ -477,7 +477,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
     const smsResult = await sendFirebasePhoneOtp(cleanMobile);
     if (!smsResult.sent || !smsResult.confirmation) {
-      const emailResult = await sendSupabaseOtp(cleanEmail, true);
+      const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
       if (!emailResult.sent) {
         setIsSendingOtp(false);
         setEmailError(emailResult.error || smsResult.error || 'Unable to send your verification code.');
@@ -662,7 +662,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       try {
         await phoneConfirmation.confirm(fullOtp);
         setPhoneConfirmation(null);
-        if (authFlowMode === 'sign_up') {
+        if (authFlowMode === 'sign_up' || signInOtpOnly) {
           const emailResult = await sendSupabaseOtp(cleanEmail, true);
           if (!emailResult.sent) throw new Error(emailResult.error || 'Unable to send the email verification code.');
           setOtpChannel('email');
