@@ -83,9 +83,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [signInPassword, setSignInPassword] = useState('');
   const [signInError, setSignInError] = useState('');
   const [signInEmail, setSignInEmail] = useState('');
-  // Sign-in always starts with mobile OTP; email verification is available
-  // from the OTP screen as the fallback channel.
-  const signInOtpOnly = true;
+  // Sign-in accepts either a registered email or mobile number, then requires
+  // the account password before sending the verification OTP.
+  const signInOtpOnly = false;
 
   // Clerk Auth Hooks
 
@@ -1094,7 +1094,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           </motion.div>
         )}
 
-        {/* STEP 1: SIGN IN (MOBILE NUMBER OTP) */}
+        {/* STEP 1: SIGN IN (IDENTIFIER + PASSWORD) */}
         {currentStep === 1 && authFlowMode === 'sign_in' && (
           <motion.div
             key="sign-in-screen"
@@ -1118,17 +1118,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               <div className="mb-8">
                 <h2 className="font-serif font-bold text-2xl mb-1">Sign In</h2>
                 <p className="text-xs text-black/70 dark:text-white/70">
-                  Enter your registered mobile number to receive a 6-digit code.
+                  Enter your registered email or mobile number and password to continue.
                 </p>
               </div>
               <form onSubmit={handleProceedToOtp} className="space-y-5">
                 <div>
                   <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B] mb-1.5">
-                    Mobile number
+                    Email or mobile number
                   </label>
                   <input autoFocus required value={signInIdentifier}
                     onChange={(e) => { setSignInIdentifier(e.target.value); setSignInError(''); }}
-                    placeholder="Enter registered 10-digit mobile number"
+                    placeholder="Enter email or 10-digit mobile number"
                     className="w-full px-4 py-3 rounded-2xl border text-sm bg-white dark:bg-[#1C221A] border-[#22331E]/20 dark:border-[#2D3A2B] focus:outline-hidden focus:ring-2 focus:ring-[#B5451B]/30" />
                 </div>
                 {!signInOtpOnly && <div>
