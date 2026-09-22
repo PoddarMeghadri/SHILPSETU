@@ -1275,7 +1275,7 @@ export const AIStudioScreen: React.FC<AIStudioScreenProps> = ({
                   ? 'bg-[#1C221A] border-[#D4A759]/40 text-[#E8B84B] hover:bg-[#252E22]'
                   : 'bg-[#EFE4CF] border-[#22331E]/20 text-[#B5451B] hover:bg-[#EAE0CC]'
               }`}
-              title={t('upload_photo', 'Upload Craft Photo')}
+              title={t('upload_craft_photo', 'Upload Craft Photo')}
               id="btn-viewfinder-upload"
             >
               <span className="material-symbols-outlined text-2xl">

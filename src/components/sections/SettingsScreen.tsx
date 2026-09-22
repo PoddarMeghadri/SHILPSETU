@@ -74,11 +74,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 </div>
                 <div>
                   <p className="font-serif font-bold text-xs">
-                    {isAdminMode ? 'App Interface' : t('theme_mode', 'Theme Appearance')}
+                    {isAdminMode ? t('app_interface', 'App Interface') : t('theme_mode', 'Theme Appearance')}
                   </p>
                   <p className="text-[10px] opacity-70">
                     {isAdminMode
-                      ? 'Switch between Heritage Dark and Light Mode'
+                      ? t('app_interface_sub', 'Switch between Heritage Dark and Light Mode')
                       : isDark
                       ? t('dark_mode_active_label', 'Heritage Dark Mode Active')
                       : t('light_mode_active_label', 'Warm Sandalwood Light Active')}
@@ -94,7 +94,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   }`}
                   style={!isDark && isAdminMode ? { color: 'var(--admin-accent)' } : undefined}
                 >
-                  {t('light_mode_btn', 'Light')}
+                  {t('light', 'Light')}
                 </button>
                 <button
                   type="button"
@@ -104,7 +104,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   }`}
                   style={isDark && isAdminMode ? { backgroundColor: 'var(--admin-accent)' } : undefined}
                 >
-                  {t('dark_mode_btn', 'Dark')}
+                  {t('dark', 'Dark')}
                 </button>
               </div>
             </div>
@@ -122,9 +122,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     <span className="material-symbols-outlined text-lg">palette</span>
                   </div>
                   <div>
-                    <h5 className="font-serif font-bold text-xs">Themes</h5>
+                    <h5 className="font-serif font-bold text-xs">{t('themes', 'Themes')}</h5>
                     <p className="text-[10px] opacity-70">
-                      Customize the primary accent theme color for Admin Mode (Default: Emerald)
+                      {t('themes_sub', 'Customize the primary accent theme color for Admin Mode')}
                     </p>
                   </div>
                 </div>
@@ -136,10 +136,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       resetAdminAccentColor();
                     }}
                     className="text-[10px] font-sans font-bold px-2.5 py-1 rounded-full border border-black/15 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/5 transition-all text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer shrink-0"
-                    title="Reset to default Emerald Green"
+                    title={t('reset_default', 'Reset to Default')}
                   >
                     <span className="material-symbols-outlined text-xs">refresh</span>
-                    <span>Reset to Default</span>
+                    <span>{t('reset_default', 'Reset to Default')}</span>
                   </button>
                 )}
               </div>
@@ -185,7 +185,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                           : 'bg-black/5 dark:bg-white/10 hover:bg-black/10'
                       }`}
                       style={!isPresetActive ? { backgroundColor: adminAccentColor } : undefined}
-                      title="Pick custom hex color with palette"
+                      title={t('custom_color_picker', 'Interactive custom color picker')}
                     >
                       {!isPresetActive ? (
                         <span className="material-symbols-outlined text-white text-sm font-bold drop-shadow-xs pointer-events-none">
@@ -205,7 +205,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                           setAdminAccentColor(val);
                         }}
                         className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                        aria-label="Interactive custom color picker"
+                        aria-label={t('custom_color_picker', 'Interactive custom color picker')}
                       />
                     </label>
                   </div>
@@ -238,7 +238,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     disabled={adminAccentColor.toLowerCase() === '#10b981'}
                   >
                     <span className="material-symbols-outlined text-xs">restart_alt</span>
-                    <span>Reset to Default</span>
+                    <span>{t('reset_default', 'Reset to Default')}</span>
                   </button>
                 </div>
               </div>
@@ -284,7 +284,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             className={`${rowClass} w-full p-3.5 flex items-center justify-between text-left hover:bg-black/5`}>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-[#B5451B] text-white flex items-center justify-center"><span className="material-symbols-outlined text-lg">lock_reset</span></div>
-              <div><p className="font-serif font-bold text-xs">Change password</p><p className="text-[10px] opacity-75">Use a strong password for your account</p></div>
+              <div><p className="font-serif font-bold text-xs">{t('change_password', 'Change password')}</p><p className="text-[10px] opacity-75">{t('change_password_sub', 'Use a strong password for your account')}</p></div>
             </div>
             <span className="material-symbols-outlined text-sm opacity-70">arrow_forward_ios</span>
           </button>
@@ -310,27 +310,27 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             event.preventDefault();
             const validation = validatePassword(newPassword);
             if (validation) { setPasswordMessage(validation); return; }
-            if (!passwordsMatch(newPassword, passwordConfirmation)) { setPasswordMessage('Passwords do not match.'); return; }
+            if (!passwordsMatch(newPassword, passwordConfirmation)) { setPasswordMessage(t('password_mismatch', 'Passwords do not match.')); return; }
             setIsSavingPassword(true);
             try {
               const result = await updateSupabasePassword(newPassword);
-              if (!result.updated) throw new Error(result.error || 'Unable to update password.');
-              setPasswordMessage('Password updated successfully.');
+              if (!result.updated) throw new Error(result.error || t('unable_update_password', 'Unable to update password.'));
+              setPasswordMessage(t('password_updated', 'Password updated successfully.'));
               setCurrentPassword(''); setNewPassword(''); setPasswordConfirmation('');
               setTimeout(() => setShowPasswordModal(false), 900);
-            } catch (error: any) { setPasswordMessage(error?.message || 'Unable to update password.'); }
+            } catch (error: any) { setPasswordMessage(error?.message || t('unable_update_password', 'Unable to update password.')); }
             finally { setIsSavingPassword(false); }
           }} className={`w-full max-w-sm rounded-3xl p-6 border shadow-2xl space-y-3 ${isDark ? 'bg-[#1C221A] border-[#2D3A2B] text-[#F4ECDE]' : 'bg-[#F4ECDE] border-[#22331E]/20 text-[#1A1815]'}`}>
-            <h4 className="font-serif font-bold text-lg">Change password</h4>
-            <div className="relative"><input aria-label="Current password" type={showCurrentPassword ? 'text' : 'password'} required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label="Toggle current password" onClick={() => setShowCurrentPassword((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showCurrentPassword ? 'visibility_off' : 'visibility'}</span></button></div>
-            <div className="relative"><input aria-label="New password" type={showNewPassword ? 'text' : 'password'} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label="Toggle new password" onClick={() => setShowNewPassword((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showNewPassword ? 'visibility_off' : 'visibility'}</span></button></div>
+            <h4 className="font-serif font-bold text-lg">{t('change_password', 'Change password')}</h4>
+            <div className="relative"><input aria-label={t('current_password', 'Current password')} type={showCurrentPassword ? 'text' : 'password'} required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder={t('current_password', 'Current password')} className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label={t('toggle_password', 'Toggle password')} onClick={() => setShowCurrentPassword((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showCurrentPassword ? 'visibility_off' : 'visibility'}</span></button></div>
+            <div className="relative"><input aria-label={t('new_password', 'New password')} type={showNewPassword ? 'text' : 'password'} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('new_password', 'New password')} className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label={t('toggle_password', 'Toggle password')} onClick={() => setShowNewPassword((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showNewPassword ? 'visibility_off' : 'visibility'}</span></button></div>
             <div className="flex gap-1" aria-label="Password strength meter">{[1, 2, 3, 4, 5].map((level) => <span key={level} className={`h-1.5 flex-1 rounded-full ${passwordStrength(newPassword) >= level ? 'bg-[#B5451B]' : 'bg-black/10 dark:bg-white/10'}`} />)}</div>
             <ul className="text-[10px] opacity-70 space-y-0.5"><li>{newPassword.length >= PASSWORD_MIN_LENGTH && newPassword.length <= PASSWORD_MAX_LENGTH ? '✓' : '○'} 8–16 characters</li><li>{/[A-Z]/.test(newPassword) && /[a-z]/.test(newPassword) ? '✓' : '○'} Uppercase and lowercase</li><li>{/\d/.test(newPassword) ? '✓' : '○'} Number</li><li>{/[!@#$%^&*(),.?":{}|<>]/.test(newPassword) ? '✓' : '○'} Special character</li></ul>
-            <div className="relative"><input aria-label="Confirm new password" type={showPasswordConfirmation ? 'text' : 'password'} required value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} placeholder="Confirm new password" className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label="Toggle password confirmation" onClick={() => setShowPasswordConfirmation((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showPasswordConfirmation ? 'visibility_off' : 'visibility'}</span></button></div>
+            <div className="relative"><input aria-label={t('confirm_new_password', 'Confirm new password')} type={showPasswordConfirmation ? 'text' : 'password'} required value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} placeholder={t('confirm_new_password', 'Confirm new password')} className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label={t('toggle_password', 'Toggle password')} onClick={() => setShowPasswordConfirmation((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showPasswordConfirmation ? 'visibility_off' : 'visibility'}</span></button></div>
             {passwordMessage && <p role="status" className="text-xs text-[#B5451B]">{passwordMessage}</p>}
             <div className="flex gap-2 pt-2">
-              <button type="button" onClick={() => setShowPasswordModal(false)} className="flex-1 py-2.5 rounded-2xl border text-xs font-bold">Cancel</button>
-              <button disabled={isSavingPassword} type="submit" className="flex-1 py-2.5 rounded-2xl bg-[#B5451B] text-white text-xs font-bold">{isSavingPassword ? 'Saving…' : 'Update password'}</button>
+              <button type="button" onClick={() => setShowPasswordModal(false)} className="flex-1 py-2.5 rounded-2xl border text-xs font-bold">{t('cancel', 'Cancel')}</button>
+              <button disabled={isSavingPassword} type="submit" className="flex-1 py-2.5 rounded-2xl bg-[#B5451B] text-white text-xs font-bold">{isSavingPassword ? t('saving', 'Saving…') : t('update_password', 'Update password')}</button>
             </div>
           </form>
         </div>

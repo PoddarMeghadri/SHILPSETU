@@ -68,7 +68,7 @@ export const B2BIntegrationScreen: React.FC<B2BScreenProps> = ({
               {t('gem_govt_vendor', 'GeM Government Portal Verified')}
             </span>
             <span className="text-xs font-bold bg-[#E8B84B]/20 text-[#E8B84B] px-3 py-1 rounded-full border border-[#E8B84B]/30">
-              {t('live_synced', 'Live & Synced')}
+              {t('saved', 'Saved')}
             </span>
           </div>
 
