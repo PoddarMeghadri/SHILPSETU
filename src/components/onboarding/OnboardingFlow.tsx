@@ -307,7 +307,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         }
 
         // 3. Prefer a six-digit SMS code when the account has a registered mobile.
-        const registeredMobile = supabaseProfile?.mobile_number || (!identifier.includes('@') ? identifier : '');
+        let registeredMobile = supabaseProfile?.mobile_number || (!identifier.includes('@') ? identifier : '');
+        if (!registeredMobile && identifier.includes('@')) {
+          const profileLookup = await findProfileByIdentifier(identifier);
+          registeredMobile = profileLookup.profile?.mobile_number || '';
+          if (profileLookup.profile && !supabaseProfile) {
+            supabaseProfile = profileLookup.profile;
+          }
+        }
         let sentBySms = false;
         if (registeredMobile) {
           const smsResult = await sendFirebasePhoneOtp(registeredMobile);
