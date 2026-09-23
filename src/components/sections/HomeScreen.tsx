@@ -24,9 +24,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   stories,
   onNavigate,
   onOpenVoiceAssistant,
+  language,
   isDark = false,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(language);
   const [activeStory, setActiveStory] = useState<StoryItem | null>(null);
 
   const lowStockItems = products

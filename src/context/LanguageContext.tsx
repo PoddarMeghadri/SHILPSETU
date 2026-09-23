@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { LanguageCode } from '../types';
 import { getTranslation } from '../services/translations';
+import i18n from '../i18n';
+import { upsertSupabaseProfile } from '../services/supabase';
 import {
   isRtlLanguage,
   getScriptForLanguage,
@@ -70,7 +72,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
   const script = useMemo<IndicScript>(() => getScriptForLanguage(language), [language]);
   const meta = useMemo<LanguageMeta>(() => getLanguageMeta(language), [language]);
 
-  // Synchronize document attributes for global RTL and Indic font rendering
+  // Synchronize document attributes and i18n for global RTL and Indic font rendering
   useEffect(() => {
     document.documentElement.setAttribute('dir', dir);
     document.documentElement.setAttribute('lang', language);
@@ -81,20 +83,47 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
     } else {
       document.body.classList.remove('rtl-layout');
     }
+    if (i18n.language !== language) {
+      i18n.changeLanguage(language);
+    }
   }, [dir, language, script, isRtl]);
 
   const setLanguage = useCallback((newLang: LanguageCode) => {
     setLanguageState(newLang);
     try {
       localStorage.setItem('shilpsetu_lang', newLang);
+      let artisanName = '';
       const storedArtisan = localStorage.getItem('shilpsetu_artisan');
       if (storedArtisan) {
         const parsed = JSON.parse(storedArtisan);
         parsed.preferredLanguage = newLang;
+        artisanName = parsed.name || '';
         localStorage.setItem('shilpsetu_artisan', JSON.stringify(parsed));
+      }
+      const storedUserProf = localStorage.getItem('shilpsetu_user_profile');
+      if (storedUserProf) {
+        const parsedUser = JSON.parse(storedUserProf);
+        parsedUser.preferred_language = newLang;
+        if (!artisanName) artisanName = parsedUser.full_name || '';
+        localStorage.setItem('shilpsetu_user_profile', JSON.stringify(parsedUser));
+      }
+      // Asynchronously update public.profiles (preferred_language)
+      if (artisanName) {
+        upsertSupabaseProfile({
+          fullName: artisanName,
+          preferredLanguage: newLang,
+        }).catch(() => {});
       }
     } catch {
       // ignore storage errors
+    }
+    try {
+      i18n.changeLanguage(newLang);
+    } catch (e) {
+      console.warn('[i18n] Failed to switch language:', e);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('shilpsetu:language-sync', { detail: { language: newLang } }));
     }
   }, []);
 
@@ -103,11 +132,13 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'shilpsetu_lang' && e.newValue) {
         setLanguageState(e.newValue as LanguageCode);
+        i18n.changeLanguage(e.newValue);
       }
     };
     const handleCustomLang = (e: any) => {
       if (e.detail?.language) {
         setLanguageState(e.detail.language as LanguageCode);
+        i18n.changeLanguage(e.detail.language);
       }
     };
     window.addEventListener('storage', handleStorage);
@@ -120,6 +151,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
 
   const t = useCallback(
     (key: string, fallback?: string, params?: Record<string, string | number>): string => {
+      // Direct, instantaneous locale dictionary lookup for the active selected language
       let result = getTranslation(key, language);
       if (result === key && fallback !== undefined) {
         result = fallback;

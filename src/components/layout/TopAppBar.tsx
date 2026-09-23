@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArtisanProfile, LanguageCode, ScreenId } from '../../types';
-import { LANGUAGES } from '../../data/mockData';
+import { APP_LANGUAGES } from '../../data/mockData';
 import { sound } from '../../services/sound';
 import { ShilpSetuLogo } from '../common/ShilpSetuLogo';
 import { useLanguage } from '../../context/LanguageContext';
@@ -36,9 +36,9 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [langSearch, setLangSearch] = useState('');
 
-  const activeLangObj = LANGUAGES.find((l) => l.code === effectiveLanguage) || LANGUAGES[0];
+  const activeLangObj = APP_LANGUAGES.find((l) => l.code === effectiveLanguage) || APP_LANGUAGES[0];
 
-  const filteredLanguages = LANGUAGES.filter(
+  const filteredLanguages = APP_LANGUAGES.filter(
     (l) =>
       l.label.toLowerCase().includes(langSearch.toLowerCase()) ||
       l.nativeLabel.toLowerCase().includes(langSearch.toLowerCase())
@@ -163,7 +163,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                   : 'bg-[#EFE4CF] border-[#22331E]/10 text-[#1A1815] hover:bg-[#EAE0CC]'
               }`}
             >
-              <span className="material-symbols-outlined text-xs text-[#B5451B]">translate</span>
+              <span className={`material-symbols-outlined text-xs ${isAdminMode ? 'text-[var(--admin-accent,#059669)]' : 'text-[#B5451B]'}`}>translate</span>
               <span>{activeLangObj.nativeLabel}</span>
               <span className="material-symbols-outlined text-[10px] opacity-60">expand_more</span>
             </button>
@@ -186,7 +186,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
               }`}
             >
               <div className="flex items-center justify-between pb-2.5 border-b border-current/10 mb-2">
-                <h4 className="font-serif font-bold text-sm text-[#B5451B] flex items-center gap-1.5">
+                <h4 className={`font-serif font-bold text-sm ${isAdminMode ? 'text-[var(--admin-accent,#059669)]' : 'text-[#B5451B]'} flex items-center gap-1.5`}>
                   <span className="material-symbols-outlined text-base">language</span>
                   {t('select_language', 'Select Language')}
                 </h4>
@@ -239,7 +239,9 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                       }}
                       className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-sm transition-colors ${
                         effectiveLanguage === lang.code
-                          ? 'bg-[#B5451B] text-white font-semibold shadow-xs'
+                          ? isAdminMode
+                            ? 'bg-[var(--admin-accent,#059669)] text-white font-semibold shadow-xs'
+                            : 'bg-[#B5451B] text-white font-semibold shadow-xs'
                           : isDark
                           ? 'hover:bg-[#252E22] text-[#F4ECDE]'
                           : 'hover:bg-[#EFE4CF] text-[#1A1815]'

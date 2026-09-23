@@ -264,8 +264,9 @@ export function App() {
             meta.full_name?.trim() ||
             meta.name?.trim();
 
+          const localChosenLang = localStorage.getItem('shilpsetu_lang');
           const prefLang = prof?.preferred_language || meta.preferred_language;
-          if (prefLang) {
+          if (!localChosenLang && prefLang) {
             setLanguage(prefLang as LanguageCode);
             localStorage.setItem('shilpsetu_lang', prefLang);
           }
@@ -384,7 +385,7 @@ export function App() {
               state: merged.state,
               location: merged.location,
               avatar_url: merged.avatarUrl,
-              preferred_language: prefLang || 'hi',
+              preferred_language: (localStorage.getItem('shilpsetu_lang') as LanguageCode) || prefLang || 'en',
               desired_workshop: merged.craft,
             };
 

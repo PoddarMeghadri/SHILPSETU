@@ -128,20 +128,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     </p>
                   </div>
                 </div>
-                {adminAccentColor.toLowerCase() !== '#10b981' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sound.playTap();
-                      resetAdminAccentColor();
-                    }}
-                    className="text-[10px] font-sans font-bold px-2.5 py-1 rounded-full border border-black/15 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/5 transition-all text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer shrink-0"
-                    title={t('reset_default', 'Reset to Default')}
-                  >
-                    <span className="material-symbols-outlined text-xs">refresh</span>
-                    <span>{t('reset_default', 'Reset to Default')}</span>
-                  </button>
-                )}
               </div>
 
               {/* 10 Preset Color Swatches + Interactive Custom Color Picker */}
@@ -185,7 +171,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                           : 'bg-black/5 dark:bg-white/10 hover:bg-black/10'
                       }`}
                       style={!isPresetActive ? { backgroundColor: adminAccentColor } : undefined}
-                      title={t('custom_color_picker', 'Interactive custom color picker')}
+                      title={t('color_palette', 'Color Palette')}
                     >
                       {!isPresetActive ? (
                         <span className="material-symbols-outlined text-white text-sm font-bold drop-shadow-xs pointer-events-none">
@@ -205,7 +191,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                           setAdminAccentColor(val);
                         }}
                         className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                        aria-label={t('custom_color_picker', 'Interactive custom color picker')}
+                        aria-label={t('color_palette', 'Color Palette')}
                       />
                     </label>
                   </div>

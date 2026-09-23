@@ -1678,15 +1678,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       <span>{t('email_address', 'Email Address')}</span>
                       <span className="text-red-500">*</span>
                     </label>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isAdminMode
-                          ? 'bg-[#059669]/10 text-[#059669]'
-                          : 'bg-[#B5451B]/10 text-[#B5451B]'
-                      }`}
-                    >
-                      {t('mandatory', 'Mandatory')}
-                    </span>
                   </div>
                   <div className="relative">
                     <span
@@ -1719,7 +1710,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           } catch (_) {}
                         }
                       }}
-                      placeholder={t('enter_email_mandatory', 'Enter email address (e.g. artisan@craft.in)')}
+                      placeholder={t('enter_email_address', 'Enter Email Address')}
                       className={`w-full pl-10 pr-4 py-3 rounded-2xl border text-sm font-sans focus:outline-hidden focus:ring-2 transition-all ${
                         isAdminMode ? 'focus:ring-[#059669]' : 'focus:ring-[#B5451B]'
                       } ${
@@ -1729,7 +1720,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       }`}
                     />
                   </div>
-                  {emailError ? (
+                  {emailError && (
                     <div className="mt-1 space-y-1">
                       <p className="text-[11px] text-red-500 font-medium">{emailError}</p>
                       {(emailError.includes('already registered') ||
@@ -1750,10 +1741,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         </button>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-[10px] text-black/60 dark:text-white/60 mt-1">
-                      {t('we_will_send_email_otp', 'we will send a 6 digit OTP to this email address')}
-                    </p>
                   )}
                 </div>
 

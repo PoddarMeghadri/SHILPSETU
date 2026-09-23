@@ -17,14 +17,17 @@ export interface OnboardingLanguage {
 }
 
 /**
- * The 23 official languages for ShilpSetu onboarding in the strict sequential order:
+ * The 10 supported app languages for ShilpSetu app interface & onboarding:
  * 1. English
  * 2. Hindi
- * Followed alphabetically by the remaining 21 official scheduled Indian languages:
- * 3. Assamese, 4. Bengali, 5. Bodo, 6. Dogri, 7. Gujarati, 8. Kannada, 9. Kashmiri,
- * 10. Konkani, 11. Maithili, 12. Malayalam, 13. Manipuri, 14. Marathi, 15. Nepali,
- * 16. Odia, 17. Punjabi, 18. Sanskrit, 19. Santali, 20. Sindhi, 21. Tamil,
- * 22. Telugu, 23. Urdu (Indian Urdu / اُردُو - BCP-47: ur-IN strictly)
+ * 3. Bengali
+ * 4. Kannada
+ * 5. Malayalam
+ * 6. Odia
+ * 7. Punjabi
+ * 8. Tamil
+ * 9. Telugu
+ * 10. Urdu
  */
 export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
   // 1. English
@@ -59,23 +62,7 @@ export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
     isRtl: false,
     script: 'Devanagari',
   },
-  // 3. Assamese
-  {
-    code: 'as',
-    englishName: 'Assamese',
-    nativeName: 'অসমীয়া',
-    subLabel: 'অসমৰ হস্তশিল্প',
-    bcp47: 'as-IN',
-    region: 'Assam & Northeast India',
-    welcomeGreeting: 'শিল্পসেতুলৈ আপোনাক স্বাগতম',
-    headerTitle: 'আপোনাৰ পছন্দৰ ভাষা বাছনি কৰক',
-    headerSubtitle: 'আপোনাৰ মাতৃভাষাত শিল্পসেতু অনুভৱ কৰক',
-    continueButton: 'শিল্প বাছনিৰ বাবে আগবাঢ়ক',
-    audioButtonLabel: 'স্বাগতম বাৰ্তা শুনক',
-    isRtl: false,
-    script: 'Bengali-Assamese',
-  },
-  // 4. Bengali
+  // 3. Bengali
   {
     code: 'bn',
     englishName: 'Bengali',
@@ -91,55 +78,7 @@ export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
     isRtl: false,
     script: 'Bengali',
   },
-  // 5. Bodo
-  {
-    code: 'brx',
-    englishName: 'Bodo',
-    nativeName: 'बड़ो',
-    subLabel: 'बर’ हारिमु आरो आखाइ दानाय',
-    bcp47: 'brx-IN',
-    region: 'Bodoland & Assam',
-    welcomeGreeting: 'शिल्पसेतुआव नोंथांखौ बरायबाय',
-    headerTitle: 'गावनि मोजां मोननाय राव सायख’',
-    headerSubtitle: 'गावनि आइजें रावजों शिल्पसेतु बाहाय',
-    continueButton: 'सिपनि राव सायख\'नो थां',
-    audioButtonLabel: 'बरायनाय खोनासंव',
-    isRtl: false,
-    script: 'Devanagari',
-  },
-  // 6. Dogri
-  {
-    code: 'doi',
-    englishName: 'Dogri',
-    nativeName: 'डोगरी',
-    subLabel: 'डुग्गर दे लोक शिल्प',
-    bcp47: 'doi-IN',
-    region: 'Jammu & Kashmir, Himachal',
-    welcomeGreeting: 'शिल्पसेतु च थुआढ़ा स्वागत ऐ',
-    headerTitle: 'अपनी मनपसंद बोली चुनो',
-    headerSubtitle: 'अपनी मातृबोली च शिल्पसेतु दा अनुभव करो',
-    continueButton: 'शिल्प चुनने लेई अग्गे बधो',
-    audioButtonLabel: 'स्वागत सुणो',
-    isRtl: false,
-    script: 'Devanagari',
-  },
-  // 7. Gujarati
-  {
-    code: 'gu',
-    englishName: 'Gujarati',
-    nativeName: 'ગુજરાતી',
-    subLabel: 'ગુજરાતની પરંપરાગત હસ્તકળા',
-    bcp47: 'gu-IN',
-    region: 'Gujarat & Western India',
-    welcomeGreeting: 'શિલ્પસેતુમાં આપનું સ્વાગત છે',
-    headerTitle: 'તમારી પસંદગીની ભાષા પસંદ કરો',
-    headerSubtitle: 'તમારી માતૃભાષામાં શિલ્પસેતુનો અનુભવ કરો',
-    continueButton: 'હસ્તકળા પસંદગી માટે આગળ વધો',
-    audioButtonLabel: 'સ્વાગત સંદેશ સાંભળો',
-    isRtl: false,
-    script: 'Gujarati',
-  },
-  // 8. Kannada
+  // 4. Kannada
   {
     code: 'kn',
     englishName: 'Kannada',
@@ -155,55 +94,7 @@ export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
     isRtl: false,
     script: 'Kannada',
   },
-  // 9. Kashmiri
-  {
-    code: 'ks',
-    englishName: 'Kashmiri',
-    nativeName: 'कॉशुर / کٲشُر',
-    subLabel: 'کٔشِیرِ ہُنٛد دَستکٲری',
-    bcp47: 'ks-IN',
-    region: 'Kashmir Valley',
-    welcomeGreeting: 'شلپ سیتو منٛز چھُ تۄہہِ پؠٹھ خیرمقدم',
-    headerTitle: 'پَنٕنۍ پسندیدہ زَبان ژارِو',
-    headerSubtitle: 'پَنٕنۍ مٲدری زَبانہِ منٛز شلپ سیتو ہیوُن',
-    continueButton: 'دَستکٲری ژارنہٕ باپتھ برٛونٛہہ پکِو',
-    audioButtonLabel: 'خیرمقدم بوزِو',
-    isRtl: true,
-    script: 'Perso-Arabic',
-  },
-  // 10. Konkani
-  {
-    code: 'kok',
-    englishName: 'Konkani',
-    nativeName: 'कोंकणी',
-    subLabel: 'कोंकणची कला आनी परंपरा',
-    bcp47: 'kok-IN',
-    region: 'Goa & Konkan Coastal',
-    welcomeGreeting: 'शिल्पसेतूंत तुमकां येवकार',
-    headerTitle: 'तुमची आवडती भास वेंचून काढा',
-    headerSubtitle: 'तुमचे आवयभाशेंत शिल्पसेतूचो अणभव घेयात',
-    continueButton: 'हस्तकला वेंचपाक फुडें वचा',
-    audioButtonLabel: 'येवकार संदेश आयकात',
-    isRtl: false,
-    script: 'Devanagari',
-  },
-  // 11. Maithili
-  {
-    code: 'mai',
-    englishName: 'Maithili',
-    nativeName: 'मैथिली',
-    subLabel: 'मिथिलाक मधुबनी व पारम्परिक कला',
-    bcp47: 'mai-IN',
-    region: 'Mithila, Bihar & Jharkhand',
-    welcomeGreeting: 'शिल्पसेतु में अहाँक स्वागत अछि',
-    headerTitle: 'अपन पसंदक भाषा चुनू',
-    headerSubtitle: 'अपन मातृभाषा में शिल्पसेतुक अनुभव करू',
-    continueButton: 'शिल्प चुनबाक लेल आगू बढ़ू',
-    audioButtonLabel: 'स्वागत संदेश सुनू',
-    isRtl: false,
-    script: 'Devanagari',
-  },
-  // 12. Malayalam
+  // 5. Malayalam
   {
     code: 'ml',
     englishName: 'Malayalam',
@@ -219,55 +110,7 @@ export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
     isRtl: false,
     script: 'Malayalam',
   },
-  // 13. Manipuri
-  {
-    code: 'mni',
-    englishName: 'Manipuri',
-    nativeName: 'মৈতৈলোন্',
-    subLabel: 'মণিপুরগী হৈশিংবা খুৎশম্লন',
-    bcp47: 'mni-IN',
-    region: 'Manipur & Northeast',
-    welcomeGreeting: 'শিল্পসেতুদা অদোমবু তরাম্না ওকচরি',
-    headerTitle: 'অদোমগী পামজবা লোল খনবিয়ু',
-    headerSubtitle: 'অদোমগী ইমা লোলদা শিল্পসেতু শীজিন্নবীয়ু',
-    continueButton: 'হৈশিংবা কলা খনবদা মাংলোমদা চংশিল্লু',
-    audioButtonLabel: 'ওকপগী পাউজেল তাবীয়ু',
-    isRtl: false,
-    script: 'Bengali-Manipuri',
-  },
-  // 14. Marathi
-  {
-    code: 'mr',
-    englishName: 'Marathi',
-    nativeName: 'मराठी',
-    subLabel: 'महाराष्ट्राची समृद्ध लोककला',
-    bcp47: 'mr-IN',
-    region: 'Maharashtra',
-    welcomeGreeting: 'शिल्पसेतू मध्ये आपले स्वागत आहे',
-    headerTitle: 'आपली आवडती भाषा निवडा',
-    headerSubtitle: 'आपल्या मातृभाषेत शिल्पसेतूचा अनुभव घ्या',
-    continueButton: 'हस्तकला निवडीसाठी पुढे जा',
-    audioButtonLabel: 'स्वागत संदेश ऐका',
-    isRtl: false,
-    script: 'Devanagari',
-  },
-  // 15. Nepali
-  {
-    code: 'ne',
-    englishName: 'Nepali',
-    nativeName: 'नेपाली',
-    subLabel: 'हिमाली हस्तकला र सिर्जना',
-    bcp47: 'ne-IN',
-    region: 'Sikkim, Darjeeling & North',
-    welcomeGreeting: 'शिल्पसेतुमा यहाँलाई स्वागत छ',
-    headerTitle: 'आफ्नो मनपर्ने भाषा छान्नुहोस्',
-    headerSubtitle: 'आफ्नो मातृभाषामा शिल्पसेतुको अनुभव लिनुहोस्',
-    continueButton: 'शिल्पकला छनोटको लागि अगाडि बढ्नुहोस्',
-    audioButtonLabel: 'स्वागत सन्देश सुन्नुहोस्',
-    isRtl: false,
-    script: 'Devanagari',
-  },
-  // 16. Odia
+  // 6. Odia
   {
     code: 'or',
     englishName: 'Odia',
@@ -283,7 +126,7 @@ export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
     isRtl: false,
     script: 'Oriya',
   },
-  // 17. Punjabi
+  // 7. Punjabi
   {
     code: 'pa',
     englishName: 'Punjabi',
@@ -299,55 +142,7 @@ export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
     isRtl: false,
     script: 'Gurmukhi',
   },
-  // 18. Sanskrit
-  {
-    code: 'sa',
-    englishName: 'Sanskrit',
-    nativeName: 'संस्कृतम्',
-    subLabel: 'भारतस्य पुरातनशिल्पपरम्परा',
-    bcp47: 'sa-IN',
-    region: 'Classical Heritage of India',
-    welcomeGreeting: 'शिल्पसेतौ भवतां हार्दिकं स्वागतम्',
-    headerTitle: 'स्वाभीष्टां भाषां चिनोतु',
-    headerSubtitle: 'स्वमातृभाषायां शिल्पसेतोः अनुभवं प्राप्नुवन्तु',
-    continueButton: 'शिल्पकलाचयनार्थम् अग्रे गच्छतु',
-    audioButtonLabel: 'स्वागतसन्देशं शृणोतु',
-    isRtl: false,
-    script: 'Devanagari',
-  },
-  // 19. Santali
-  {
-    code: 'sat',
-    englishName: 'Santali',
-    nativeName: 'ᱥᱟᱱᱛᱟᱲᱤ',
-    subLabel: 'ᱥᱟᱱᱛᱟᱲ ᱦᱩᱱᱟᱹᱨ ᱟᱨ ᱞᱟᱠᱪᱟᱨ',
-    bcp47: 'sat-IN',
-    region: 'Jharkhand, Odisha, West Bengal',
-    welcomeGreeting: 'ᱥᱤᱞᱯᱥᱮᱛᱩ ᱨᱮ ᱟᱯᱮᱭᱟᱜ ᱥᱟᱜᱩᱱ ᱫᱟᱨᱟᱢ',
-    headerTitle: 'ᱟᱢᱟᱜ ᱠᱩᱥᱤᱭᱟᱱ ᱯᱟᱹᱨᱥᱤ ᱵᱟᱪᱷᱟᱣ ᱢᱮ',
-    headerSubtitle: 'ᱟᱢᱟᱜ ᱟᱭᱳ ᱟᱲᱟᱝ ᱛᱮ ᱥᱤᱞᱯᱥᱮᱛᱩ ᱵᱮᱵᱷᱟᱨ ᱢᱮ',
-    continueButton: 'ᱦᱩᱱᱟᱹᱨ ᱵᱟᱪᱷᱟᱣ ᱞᱟᱹᱜᱤᱫ ᱞᱟᱦᱟᱜ ᱢᱮ',
-    audioButtonLabel: 'ᱥᱟᱜᱩᱱ ᱫᱟᱨᱟᱢ ᱠᱟᱛᱷᱟ ᱟᱸᱡᱚᱢ ᱢᱮ',
-    isRtl: false,
-    script: 'Ol-Chiki',
-  },
-  // 20. Sindhi
-  {
-    code: 'sd',
-    englishName: 'Sindhi',
-    nativeName: 'सिन्धी / سنڌي',
-    subLabel: 'سنڌي ثقافت ۽ قديم ڪاريگري',
-    bcp47: 'sd-IN',
-    region: 'Sindhi Heritage & Cultural Diaspora',
-    welcomeGreeting: 'شلپ سيتو ۾ اوهان جو آڌرڀاءُ آهي',
-    headerTitle: 'پنهنجي پسند جي ٻولي چونڊيو',
-    headerSubtitle: 'پنهنجي مادري ٻوليءَ ۾ شلپ سيتو جو تجربو حاصل ڪريو',
-    continueButton: 'دستڪاري چونڊڻ لاءِ اڳتي وڌو',
-    audioButtonLabel: 'آڌرڀاءُ پيغام ٻڌو',
-    isRtl: true,
-    script: 'Perso-Arabic / Devanagari',
-  },
-  // 21. Tamil
+  // 8. Tamil
   {
     code: 'ta',
     englishName: 'Tamil',
@@ -363,7 +158,7 @@ export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
     isRtl: false,
     script: 'Tamil',
   },
-  // 22. Telugu
+  // 9. Telugu
   {
     code: 'te',
     englishName: 'Telugu',
@@ -373,13 +168,13 @@ export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
     region: 'Andhra Pradesh & Telangana',
     welcomeGreeting: 'శిల్పసేతుకు మీకు స్వాగతం',
     headerTitle: 'మీకు ఇష్టమైన భాషను ఎంచుకోండి',
-    headerSubtitle: 'మీ మాతృభాషలో శిల్పసేతును అనుభవించండి',
-    continueButton: 'హస్తకళ ఎంపికకు కొనసాగించండి',
+    headerSubtitle: 'మీ మాతୃభాషలో శిల్పసేతును అనుభవించండి',
+    continueButton: 'హస్తకళ ఎంపಿಕకు కొనసాగించండి',
     audioButtonLabel: 'స్వాగత సందేశం వినండి',
     isRtl: false,
     script: 'Telugu',
   },
-  // 23. Urdu (Indian Urdu / اُردُو - BCP-47: ur-IN strictly)
+  // 10. Urdu
   {
     code: 'ur',
     englishName: 'Urdu',
@@ -388,7 +183,7 @@ export const ONBOARDING_LANGUAGES: OnboardingLanguage[] = [
     bcp47: 'ur-IN',
     region: 'Pan-India Cultural Centers',
     welcomeGreeting: 'شلپ سیتو میں آپ کا خیر مقدم ہے',
-    headerTitle: 'اپنی پسندیدہ زبان منتخب کریں',
+    headerTitle: 'अपनी پسندیدہ زبان منتخب کریں',
     headerSubtitle: 'اپنی مادری زبان میں شلپ سیتو کا تجربہ کریں',
     continueButton: 'دستکاری کے انتخاب کے لیے آگے بڑھیں',
     audioButtonLabel: 'خیر مقدم سنیں',

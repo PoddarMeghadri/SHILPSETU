@@ -36,9 +36,10 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   currentScreen,
   onNavigate,
   isDark = false,
+  language,
   artisanAvatar,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(language);
   const { unreadCount } = useNotifications();
   const { isAdminMode } = useAdminMode();
 

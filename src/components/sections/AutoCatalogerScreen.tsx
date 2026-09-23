@@ -9,6 +9,7 @@ import { useTranslation } from '../../services/translations';
 import { generateLocalizedListing } from '../../services/aiTranslationService';
 import { isRtlLanguage } from '../../i18n/types';
 import { uploadCraftToSupabase } from '../../services/supabase';
+import { translateIndicContent } from '../../services/indicTranslation';
 
 interface AutoCatalogerProps {
   products: ProductItem[];
@@ -205,6 +206,13 @@ export const AutoCatalogerScreen: React.FC<AutoCatalogerProps> = ({
   const capturedTextRef = useRef<string>('');
   const recordingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Synchronize when app-level language changes
+  useEffect(() => {
+    if (language && language !== selectedLang) {
+      setSelectedLang(language);
+    }
+  }, [language]);
+
   // Initialize or re-populate when language changes
   useEffect(() => {
     const prompt = SAMPLE_TRANSCRIPTS[selectedLang] || SAMPLE_TRANSCRIPTS.hi!;
@@ -224,6 +232,22 @@ export const AutoCatalogerScreen: React.FC<AutoCatalogerProps> = ({
     setEnglishTitle(generated.englishExportTitle);
     setEnglishDescription(generated.englishExportDesc);
     setPrice(generated.suggestedPrice);
+
+    // Call real-time Indic translation pipeline (Bhashini + Google fallback)
+    let isCancelled = false;
+    translateIndicContent({
+      text: generated.englishExportDesc || generated.description,
+      sourceLang: 'en',
+      targetLang: selectedLang,
+    }).then((dynamicTranslated) => {
+      if (!isCancelled && dynamicTranslated && dynamicTranslated.trim()) {
+        setDescription(dynamicTranslated);
+      }
+    }).catch(() => {});
+
+    return () => {
+      isCancelled = true;
+    };
   }, [selectedLang]);
 
   const isCurrentLangRtl = isRtlLanguage(selectedLang);

@@ -51,7 +51,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   language,
   onOpenVoiceAssistant,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(language);
   const { unreadCount } = useNotifications();
   const { isAdminMode } = useAdminMode();
 

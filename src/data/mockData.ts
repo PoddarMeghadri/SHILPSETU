@@ -1,5 +1,6 @@
 import { ArtisanProfile, ProductItem, ActivityItem, StoryAvatar, BulkInquiry, OrderItem, LanguageOption } from '../types';
 
+// All 23 languages retained intact for Auto-Cataloger
 export const LANGUAGES: LanguageOption[] = [
   { code: 'en', label: 'English', nativeLabel: 'English' },
   { code: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी' },
@@ -21,6 +22,23 @@ export const LANGUAGES: LanguageOption[] = [
   { code: 'sa', label: 'Sanskrit', nativeLabel: 'संस्कृतम्' },
   { code: 'sat', label: 'Santali', nativeLabel: 'ᱥᱟᱱᱛᱟᱲᱤ' },
   { code: 'sd', label: 'Sindhi', nativeLabel: 'सिन्धी / سنڌي' },
+  { code: 'ta', label: 'Tamil', nativeLabel: 'தமிழ்' },
+  { code: 'te', label: 'Telugu', nativeLabel: 'తెలుగు' },
+  { code: 'ur', label: 'Urdu', nativeLabel: 'اُردُو' },
+];
+
+/**
+ * The 10 supported app languages for UI navigation & app language changing mechanism:
+ * English, Hindi, Bengali, Kannada, Malayalam, Odia, Punjabi, Tamil, Telugu, Urdu.
+ */
+export const APP_LANGUAGES: LanguageOption[] = [
+  { code: 'en', label: 'English', nativeLabel: 'English' },
+  { code: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी' },
+  { code: 'bn', label: 'Bengali', nativeLabel: 'বাংলা' },
+  { code: 'kn', label: 'Kannada', nativeLabel: 'ಕನ್ನಡ' },
+  { code: 'ml', label: 'Malayalam', nativeLabel: 'മലയാളം' },
+  { code: 'or', label: 'Odia', nativeLabel: 'ଓଡ଼ିଆ' },
+  { code: 'pa', label: 'Punjabi', nativeLabel: 'ਪੰਜਾਬੀ' },
   { code: 'ta', label: 'Tamil', nativeLabel: 'தமிழ்' },
   { code: 'te', label: 'Telugu', nativeLabel: 'తెలుగు' },
   { code: 'ur', label: 'Urdu', nativeLabel: 'اُردُو' },

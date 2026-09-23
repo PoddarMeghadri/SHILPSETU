@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ClerkProvider } from '@clerk/clerk-react';
+import './i18n';
 import { LanguageProvider } from './context/LanguageContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminModeProvider } from './context/AdminModeContext';
@@ -31,22 +31,45 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class AppErrorBoundary extends React.Component<any, any> {
-  props: any;
-  state = { hasError: false };
+class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  props: ErrorBoundaryProps;
+  state: ErrorBoundaryState;
 
-  constructor(props: any) {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
     this.props = props;
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
   }
 
-  componentDidCatch(error: any, errorInfo: any) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[App Crash Caught by ErrorBoundary]:', error, errorInfo);
   }
+
+  handleReload = () => {
+    // In-memory React recovery for sandboxed iframes where window.location.reload may be blocked
+    (this as any).setState({ hasError: false, error: null });
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        window.location.reload();
+      }
+    } catch (_) {
+      // Ignored if blocked by iframe sandbox
+    }
+  };
+
+  handleResetAppState = () => {
+    try {
+      localStorage.removeItem('shilpsetu_auth_done');
+      localStorage.removeItem('shilpsetu_user_profile');
+      localStorage.removeItem('shilpsetu_artisan');
+      sessionStorage.clear();
+    } catch (_) {}
+    this.handleReload();
+  };
 
   render() {
     if (this.state.hasError) {
@@ -64,49 +87,40 @@ class AppErrorBoundary extends React.Component<any, any> {
                 The application encountered a display refresh requirement. Click below to continue.
               </p>
             </div>
-            <button
-              onClick={() => {
-                window.location.reload();
-              }}
-              className="w-full py-3.5 px-6 rounded-xl bg-[#B5451B] hover:bg-[#9B3714] text-white font-medium text-sm transition-all shadow-md active:scale-98"
-            >
-              Reload Application
-            </button>
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={this.handleReload}
+                className="w-full py-3.5 px-6 rounded-xl bg-[#B5451B] hover:bg-[#9B3714] text-white font-medium text-sm transition-all shadow-md active:scale-98 cursor-pointer"
+              >
+                Reload Application
+              </button>
+              <button
+                type="button"
+                onClick={this.handleResetAppState}
+                className="w-full py-2.5 px-4 rounded-xl border border-black/15 dark:border-white/15 text-xs text-neutral-600 dark:text-neutral-400 hover:bg-black/5 dark:hover:bg-white/5 transition-all cursor-pointer"
+              >
+                Reset Session & Recover
+              </button>
+            </div>
           </div>
         </div>
       );
     }
-    return (this.props as any).children;
+    return this.props.children;
   }
 }
-
-// Clerk Publishable Key from environment or valid project instance
-function getClerkPublishableKey(): string {
-  const envKey = (import.meta as any).env?.VITE_CLERK_PUBLISHABLE_KEY || '';
-  const cleaned = String(envKey)
-    .replace(/^VITE_CLERK_PUBLISHABLE_KEY=/, '')
-    .replace(/^["']|["']$/g, '')
-    .trim();
-  if (cleaned && (cleaned.startsWith('pk_test_') || cleaned.startsWith('pk_live_'))) {
-    return cleaned;
-  }
-  return 'pk_test_ZXRlcm5hbC1maXJlZmx5LTgyODYuY2xlcmsuYWNjb3VudHMuZGV2JA';
-}
-
-const CLERK_PUBLISHABLE_KEY = getClerkPublishableKey();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AppErrorBoundary>
-      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
-        <LanguageProvider>
-          <NotificationProvider>
-            <AdminModeProvider>
-              <App />
-            </AdminModeProvider>
-          </NotificationProvider>
-        </LanguageProvider>
-      </ClerkProvider>
+      <LanguageProvider>
+        <NotificationProvider>
+          <AdminModeProvider>
+            <App />
+          </AdminModeProvider>
+        </NotificationProvider>
+      </LanguageProvider>
     </AppErrorBoundary>
   </StrictMode>,
 );
