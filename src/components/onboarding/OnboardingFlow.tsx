@@ -24,6 +24,8 @@ import {
   clearPhoneRecaptcha,
   sendFirebasePhoneOtp,
 } from '../../services/firebase';
+import { formatToE164, maskPhone, maskEmail } from '../../utils/phoneUtils';
+import { DualOtpVerificationModal } from '../DualOtpVerificationModal';
 
 export interface OnboardingUserData {
   fullName: string;
@@ -229,7 +231,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         setFullName(profile.full_name || 'Master Artisan');
         setOtpDigits(['', '', '', '', '', '']);
         setResendCooldown(30);
-        setResendNotice('A 6-digit verification code was sent.');
+        setResendNotice(sent ? 'A 6-digit verification code was sent by SMS.' : 'A 6-digit verification code was sent to your email.');
         setCurrentStep(2);
         setIsSendingOtp(false);
         return;
@@ -291,54 +293,58 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           return;
         }
 
-        // 2. Resolve registered email address
-        const targetEmail = (
-          supabaseProfile?.email ||
-          (identifier.includes('@') ? identifier.trim().toLowerCase() : supabaseUser?.email) ||
+        // 2. Resolve registered mobile number (First option) and email address (Fallback)
+        let registeredMobile = (
+          supabaseProfile?.mobile_number ||
+          (!identifier.includes('@') ? identifier.replace(/\D/g, '') : '') ||
           ''
-        ).trim().toLowerCase();
+        ).trim();
 
-        if (!targetEmail) {
-          sound.playError();
-          setSignInError('Could not find registered email address for this account.');
-          setIsSendingOtp(false);
-          localStorage.removeItem('shilpsetu_pending_signin_otp');
-          return;
-        }
-
-        // 3. Prefer a six-digit SMS code when the account has a registered mobile.
-        let registeredMobile = supabaseProfile?.mobile_number || (!identifier.includes('@') ? identifier : '');
-        if (!registeredMobile && identifier.includes('@')) {
+        if (!registeredMobile) {
           const profileLookup = await findProfileByIdentifier(identifier);
           registeredMobile = profileLookup.profile?.mobile_number || '';
           if (profileLookup.profile && !supabaseProfile) {
             supabaseProfile = profileLookup.profile;
           }
         }
+
+        const targetEmail = (
+          supabaseProfile?.email ||
+          (identifier.includes('@') ? identifier.trim().toLowerCase() : supabaseUser?.email) ||
+          ''
+        ).trim().toLowerCase();
+
+        // 3. FIRST OPTION: Send 6-digit OTP through mobile number verification (SMS)
         let sentBySms = false;
-        if (registeredMobile) {
+        let smsErrorMessage = '';
+        let smsDemoOtp = '';
+        if (registeredMobile && registeredMobile.replace(/\D/g, '').length >= 10) {
           const smsResult = await sendFirebasePhoneOtp(registeredMobile);
           if (smsResult.sent && smsResult.confirmation) {
             sentBySms = true;
             setOtpChannel('sms');
             setPhoneConfirmation(smsResult.confirmation);
+            if (smsResult.demoOtp) smsDemoOtp = smsResult.demoOtp;
           } else {
-            const emailResult = await sendSupabaseOtp(targetEmail, false);
-            if (!emailResult.sent) {
-              sound.playError();
-              setSignInError(emailResult.error || smsResult.error || 'Unable to send a verification code.');
-              setIsSendingOtp(false);
-              localStorage.removeItem('shilpsetu_pending_signin_otp');
-              return;
-            }
-            setOtpChannel('email');
-            setPhoneConfirmation(null);
+            smsErrorMessage = smsResult.error || '';
           }
-        } else {
+        }
+
+        // FALLBACK: Verify through email if mobile SMS was not sent or is unavailable
+        if (!sentBySms) {
+          if (!targetEmail) {
+            sound.playError();
+            setSignInError(
+              smsErrorMessage || 'Unable to send SMS verification code and no registered email is associated with this account.'
+            );
+            setIsSendingOtp(false);
+            localStorage.removeItem('shilpsetu_pending_signin_otp');
+            return;
+          }
           const emailResult = await sendSupabaseOtp(targetEmail, false);
           if (!emailResult.sent) {
             sound.playError();
-            setSignInError(emailResult.error || 'Unable to send a verification code.');
+            setSignInError(emailResult.error || smsErrorMessage || 'Unable to send a verification code.');
             setIsSendingOtp(false);
             localStorage.removeItem('shilpsetu_pending_signin_otp');
             return;
@@ -372,9 +378,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         sound.playSuccess();
         setIsSendingOtp(false);
         setResendCooldown(30);
-        setResendNotice(sentBySms
-          ? 'A 6-digit verification code was sent by SMS.'
-          : 'A 6-digit verification code was sent to your email.');
+        setResendNotice(
+          sentBySms
+            ? smsDemoOtp
+              ? `A 6-digit verification code was sent by SMS. (Test OTP: ${smsDemoOtp})`
+              : 'A 6-digit verification code was sent by SMS.'
+            : 'A 6-digit verification code was sent to your email.'
+        );
         setOtpDigits(['', '', '', '', '', '']);
         setOtpError('');
         setCurrentStep(2);
@@ -502,10 +512,15 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
     setIsSendingOtp(false);
     setResendCooldown(30);
-    setResendNotice(smsResult.sent && smsResult.confirmation
-      ? 'A 6-digit verification code was sent by SMS.'
-      : 'A 6-digit verification code was sent to your email.');
+    setResendNotice(
+      smsResult.sent && smsResult.confirmation
+        ? smsResult.demoOtp
+          ? `A 6-digit verification code was sent by SMS. (Test OTP: ${smsResult.demoOtp})`
+          : 'A 6-digit verification code was sent by SMS.'
+        : 'A 6-digit verification code was sent to your email.'
+    );
     setOtpDigits(['', '', '', '', '', '']);
+    setOtpError('');
     setCurrentStep(2);
     return;
   };
@@ -520,7 +535,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       clearPhoneRecaptcha();
       const smsResult = await sendFirebasePhoneOtp(mobile);
       result = smsResult;
-      if (smsResult.sent && smsResult.confirmation) setPhoneConfirmation(smsResult.confirmation);
+      if (smsResult.sent && smsResult.confirmation) {
+        setPhoneConfirmation(smsResult.confirmation);
+      }
     } else {
       result = await sendSupabaseOtp(email.trim().toLowerCase(), authFlowMode === 'sign_up');
       setPhoneConfirmation(null);
@@ -533,7 +550,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setOtpChannel(nextChannel);
     setOtpDigits(['', '', '', '', '', '']);
     setResendCooldown(30);
-    setResendNotice(nextChannel === 'sms' ? 'A 6-digit code was sent by SMS.' : 'A 6-digit code was sent to your email.');
+    setResendNotice(
+      nextChannel === 'sms'
+        ? ('demoOtp' in result && result.demoOtp)
+          ? `A 6-digit code was sent by SMS. (Test OTP: ${result.demoOtp})`
+          : 'A 6-digit code was sent by SMS.'
+        : 'A 6-digit code was sent to your email.'
+    );
   };
 
   // Resend verification code with cooldown protection
@@ -548,7 +571,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setIsSendingOtp(true);
     setOtpError('');
     const cleanEmail = email.trim().toLowerCase();
-    let result: { sent: boolean; error?: string } = { sent: false };
+    let result: { sent: boolean; demoOtp?: string; error?: string } = { sent: false };
     if (otpChannel === 'sms') {
       clearPhoneRecaptcha();
       const smsResult = await sendFirebasePhoneOtp(mobile);
@@ -565,7 +588,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
     setResendCooldown(30);
-    setResendNotice('New 6-digit verification code sent.');
+    setResendNotice(
+      otpChannel === 'sms' && result.demoOtp
+        ? `New 6-digit verification code sent. (Test OTP: ${result.demoOtp})`
+        : 'New 6-digit verification code sent.'
+    );
     setOtpDigits(['', '', '', '', '', '']);
   };
 
@@ -673,16 +700,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       try {
         await phoneConfirmation.confirm(fullOtp);
         setPhoneConfirmation(null);
-        if (authFlowMode === 'sign_up' || signInOtpOnly) {
-          const emailResult = await sendSupabaseOtp(cleanEmail, true);
-          if (!emailResult.sent) throw new Error(emailResult.error || 'Unable to send the email verification code.');
-          setOtpChannel('email');
-          setOtpDigits(['', '', '', '', '', '']);
-          setResendCooldown(30);
-          setResendNotice('Mobile verified. A 6-digit code was sent to your email.');
-          setIsVerifyingOtp(false);
-          return;
-        }
       } catch (error) {
         sound.playError();
         setOtpError(error instanceof Error ? error.message : 'Invalid or expired mobile verification code.');
@@ -811,14 +828,34 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }
 
     if (authFlowMode === 'sign_up') {
-      const passwordResult = await updateSupabasePassword(password);
-      if (!passwordResult.updated) {
-        setOtpError(passwordResult.error || 'Unable to save your password.');
-        setIsVerifyingOtp(false);
-        return;
+      const client = getSupabase();
+      if (otpChannel === 'sms') {
+        if (client) {
+          try {
+            const { data: signUpData } = await client.auth.signUp({
+              email: cleanEmail,
+              password: password,
+              options: {
+                data: {
+                  full_name: fullName.trim(),
+                  mobile_number: cleanMobile,
+                },
+              },
+            });
+            if (signUpData?.session?.access_token) {
+              localStorage.setItem('shilpsetu_token', signUpData.session.access_token);
+            }
+          } catch (signUpErr) {
+            console.warn('[Sign up creation notice]:', signUpErr);
+          }
+        }
+      } else {
+        const passwordResult = await updateSupabasePassword(password);
+        if (!passwordResult.updated) {
+          console.warn('[Password update notice]:', passwordResult.error);
+        }
       }
       try {
-        const client = getSupabase();
         if (client) {
           await client.auth.updateUser({
             data: {
@@ -1925,8 +1962,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     }`}
                   >
                     {otpChannel === 'sms'
-                      ? `+91 ******${mobile.replace(/\D/g, '').slice(-4)}`
-                      : email || 'your email'}
+                      ? maskPhone(mobile)
+                      : maskEmail(email || 'your email')}
                   </span>
                 </p>
                 <div className="mb-3">
@@ -2053,13 +2090,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   <div className="text-center pt-2">
                     <button
                       type="button"
-                      disabled={isSendingOtp || resendCooldown > 0}
+                      disabled={isSendingOtp}
                       onClick={switchOtpChannel}
-                      className="text-xs font-semibold text-[#B5451B] hover:underline disabled:opacity-50"
+                      className="text-xs font-semibold text-[#B5451B] hover:underline disabled:opacity-50 cursor-pointer"
                     >
                       {otpChannel === 'sms'
-                        ? "Didn't receive SMS? Verify via Email instead"
-                        : 'Verify via Mobile SMS instead'}
+                        ? "Didn't receive SMS? Verify through Email instead (Fallback)"
+                        : 'Verify through Mobile No. instead'}
                     </button>
                   </div>
                 )}

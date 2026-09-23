@@ -5,7 +5,7 @@ import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
 import { INDIAN_STATES_AND_CITIES, parseLocationString } from '../../data/indianLocations';
 import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
-import { uploadAvatarToSupabase, upsertSupabaseProfile } from '../../services/supabase';
+import { uploadAvatarToSupabase, upsertSupabaseProfile, supabase, isSupabaseConfigured } from '../../services/supabase';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -150,11 +150,22 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         mobile: artisan.mobile || '',
         email: artisan.email || '',
         udyamNumber: artisan.udyamNumber || '',
+        avatarUrl: artisan.avatarUrl || DEFAULT_AVATAR,
       });
       const parsed = parseLocationString(artisan.location);
       setSelectedState(artisan.state || parsed.state || 'Uttar Pradesh');
       setSelectedCity(artisan.city || parsed.city || 'Varanasi');
       setSelectedPortraitForDelete(artisan.avatarUrl || null);
+
+      // Ensure uploadedPortraits contains current avatar if custom
+      if (artisan.avatarUrl && artisan.avatarUrl !== DEFAULT_AVATAR) {
+        setUploadedPortraits((prev) => {
+          if (prev.includes(artisan.avatarUrl!)) return prev;
+          const merged = [artisan.avatarUrl!, ...prev].slice(0, 8);
+          safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(merged));
+          return merged;
+        });
+      }
     }
   }, [isOpen, artisan]);
 
@@ -188,7 +199,20 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       setIsUploadingAvatar(true);
       try {
         const uploadResult = await uploadAvatarToSupabase(file, artisan.id);
-        const finalUrl = uploadResult.publicUrl;
+        let finalUrl = uploadResult.publicUrl;
+
+        if (!finalUrl) {
+          // Robust client compression fallback if upload failed or returned empty
+          const rawUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => resolve((event.target?.result as string) || '');
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(file);
+          });
+          if (rawUrl) {
+            finalUrl = await compressImage(rawUrl, 400, 400, 0.82);
+          }
+        }
 
         if (finalUrl) {
           setFormData((prev) => ({ ...prev, avatarUrl: finalUrl }));
@@ -197,26 +221,15 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           setUploadedPortraits(updatedPortraits);
           safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(updatedPortraits));
           sound.playSuccess();
-        } else {
-          // Fallback to client compression
-          const reader = new FileReader();
-          reader.onload = async (event) => {
-            const rawUrl = event.target?.result as string;
-            if (rawUrl) {
-              const compressed = await compressImage(rawUrl, 400, 400, 0.82);
-              setFormData((prev) => ({ ...prev, avatarUrl: compressed }));
-              setSelectedPortraitForDelete(compressed);
-              const updated = [compressed, ...uploadedPortraits.filter((p) => p !== compressed)].slice(0, 8);
-              setUploadedPortraits(updated);
-              safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(updated));
-            }
-          };
-          reader.readAsDataURL(file);
         }
       } catch (err) {
         console.warn('[Avatar upload error]:', err);
       } finally {
         setIsUploadingAvatar(false);
+        // Reset file input so selecting the same file again triggers onChange
+        if (e.target) {
+          e.target.value = '';
+        }
       }
     }
   };
@@ -328,7 +341,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         console.warn('[EditProfileModal] onSave warning:', saveErr);
       }
 
-      // Sync to Supabase profiles table
+      // Sync to Supabase profiles table and user auth metadata
       try {
         await upsertSupabaseProfile({
           userId: artisan.id,
@@ -344,6 +357,22 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         });
       } catch (sbErr) {
         console.warn('[Supabase profile sync warning]:', sbErr);
+      }
+
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.updateUser({
+            data: {
+              avatar_url: safeAvatar,
+              full_name: safeName,
+              city: selectedCity,
+              state: selectedState,
+              location: combinedLocation,
+            },
+          });
+        }
+      } catch (authMetaErr) {
+        console.warn('[Supabase auth meta update warning]:', authMetaErr);
       }
 
       // Safe local storage persistence

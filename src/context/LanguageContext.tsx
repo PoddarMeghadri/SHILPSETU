@@ -47,6 +47,11 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
   const [language, setLanguageState] = useState<LanguageCode>(() => {
     if (initialLanguage) return initialLanguage;
     if (typeof window !== 'undefined') {
+      // Onboarding page must always load in English
+      const isAuthDone = localStorage.getItem('shilpsetu_auth_done') === 'true';
+      if (!isAuthDone) {
+        return 'en';
+      }
       const stored = localStorage.getItem('shilpsetu_lang') as LanguageCode;
       if (stored) return stored;
       try {

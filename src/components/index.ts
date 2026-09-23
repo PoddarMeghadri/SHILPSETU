@@ -1,0 +1,1 @@
+export { DualOtpVerificationModal } from './DualOtpVerificationModal';
