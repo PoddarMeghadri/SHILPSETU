@@ -502,6 +502,8 @@ export const hi: Record<string, string> = {
   registration_desc: 'अपनी सत्यापित कारीगर प्रोफ़ाइल बनाने के लिए कृपया अपना व्यक्तिगत विवरण प्रदान करें।',
   continue_to_otp: 'ओटीपी सत्यापन के लिए आगे बढ़ें',
   otp_verification_title: '6-अंकीय ओटीपी सत्यापन',
+  mobile_otp_verification: 'मोबाइल OTP सत्यापन',
+  email_otp_verification: 'ईमेल OTP सत्यापन',
   enter_otp_sent_to: 'इस नंबर पर भेजा गया 6-अंकीय ओटीपी दर्ज करें',
   verify_and_continue: 'सत्यापित करें और आगे बढ़ें',
   verifying_otp: 'ओटीपी सत्यापित किया जा रहा है...',

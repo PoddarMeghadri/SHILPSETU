@@ -392,9 +392,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         setResendCooldown(30);
         setResendNotice(
           sentBySms
-            ? smsDemoOtp
-              ? `A 6-digit verification code was sent by SMS. (Test OTP: ${smsDemoOtp})`
-              : 'A 6-digit verification code was sent by SMS.'
+            ? 'A 6-digit verification code was sent by SMS.'
             : 'A 6-digit verification code was sent to your email.'
         );
         setOtpDigits(['', '', '', '', '', '']);
@@ -526,9 +524,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setResendCooldown(30);
     setResendNotice(
       smsResult.sent && smsResult.confirmation
-        ? smsResult.demoOtp
-          ? `A 6-digit verification code was sent by SMS. (Test OTP: ${smsResult.demoOtp})`
-          : 'A 6-digit verification code was sent by SMS.'
+        ? 'A 6-digit verification code was sent by SMS.'
         : 'A 6-digit verification code was sent to your email.'
     );
     setOtpDigits(['', '', '', '', '', '']);
@@ -564,9 +560,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setResendCooldown(30);
     setResendNotice(
       nextChannel === 'sms'
-        ? ('demoOtp' in result && result.demoOtp)
-          ? `A 6-digit code was sent by SMS. (Test OTP: ${result.demoOtp})`
-          : 'A 6-digit code was sent by SMS.'
+        ? 'A 6-digit code was sent by SMS.'
         : 'A 6-digit code was sent to your email.'
     );
   };
@@ -600,11 +594,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
     setResendCooldown(30);
-    setResendNotice(
-      otpChannel === 'sms' && result.demoOtp
-        ? `New 6-digit verification code sent. (Test OTP: ${result.demoOtp})`
-        : 'New 6-digit verification code sent.'
-    );
+    setResendNotice('New 6-digit verification code sent.');
     setOtpDigits(['', '', '', '', '', '']);
   };
 
@@ -1924,7 +1914,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
                       }`}
                     >
-                      {isAdminMode ? t('app_title', 'SHILPSETU') : `${t('app_title', 'SHILPSETU')} AUTH`}
+                      {t('app_title', 'SHILPSETU')}
                     </span>
                   </div>
                 </div>
@@ -1963,8 +1953,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   {isAdminMode
                     ? 'Admin Verification'
                     : otpChannel === 'sms'
-                    ? t('mobile_otp_verification', 'Verify Your Mobile Number')
-                    : t('email_otp_verification', 'Verify Your Email Address')}
+                    ? t('mobile_otp_verification', 'Mobile OTP Verification')
+                    : t('email_otp_verification', 'Email OTP Verification')}
                 </h2>
                 <p className="text-xs text-black/70 dark:text-white/70 font-sans max-w-xs mx-auto mb-1">
                   {t('enter_6_digit_otp_sent_to', 'A 6-digit verification code was sent to')}{' '}
@@ -2107,7 +2097,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       className="text-xs font-semibold text-[#B5451B] hover:underline disabled:opacity-50 cursor-pointer"
                     >
                       {otpChannel === 'sms'
-                        ? "Didn't receive SMS? Verify through Email instead (Fallback)"
+                        ? "Didn't receive SMS? Verify through Email instead"
                         : 'Verify through Mobile No. instead'}
                     </button>
                   </div>

@@ -104,7 +104,7 @@ export const DualOtpVerificationModal: React.FC<DualOtpProps> = ({
         } as unknown as ConfirmationResult;
 
         setConfirmationResult(mockConfirmation);
-        setInfoMessage(`A 6-digit OTP has been sent via SMS to ${maskPhone(phone)} (Test Code: 123456)`);
+        setInfoMessage(`A 6-digit OTP has been sent via SMS to ${maskPhone(phone)}`);
         setCooldown(30);
         return;
       }
@@ -147,7 +147,7 @@ export const DualOtpVerificationModal: React.FC<DualOtpProps> = ({
         } as unknown as ConfirmationResult;
 
         setConfirmationResult(mockConfirmation);
-        setInfoMessage(`A 6-digit OTP has been sent via SMS to ${maskPhone(phone)} (Test Code: 123456)`);
+        setInfoMessage(`A 6-digit OTP has been sent via SMS to ${maskPhone(phone)}`);
         setCooldown(30);
         setError('');
         return;
@@ -383,7 +383,7 @@ export const DualOtpVerificationModal: React.FC<DualOtpProps> = ({
               onClick={() => handleSwitchChannel('email')}
               className="text-xs text-[#E05326] hover:underline cursor-pointer"
             >
-              Didn't receive SMS? Verify through Email instead (Fallback)
+              Didn't receive SMS? Verify through Email instead
             </button>
           ) : (
             <button

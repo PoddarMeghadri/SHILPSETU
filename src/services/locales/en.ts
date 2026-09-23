@@ -502,6 +502,8 @@ export const en: Record<string, string> = {
   registration_desc: 'Please provide your personal details to create your verified artisan profile.',
   continue_to_otp: 'Continue to OTP Verification',
   otp_verification_title: '6-Digit OTP Verification',
+  mobile_otp_verification: 'Mobile OTP Verification',
+  email_otp_verification: 'Email OTP Verification',
   enter_otp_sent_to: 'Enter the 6-digit OTP sent to',
   verify_and_continue: 'Verify & Continue',
   verifying_otp: 'Verifying OTP...',

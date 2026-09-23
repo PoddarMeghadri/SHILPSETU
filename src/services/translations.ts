@@ -8,7 +8,10 @@ function cleanedKeyFallback(key: string): string {
     .replace(/^(nav_|btn_|lbl_|hdr_)/, '')
     .replace(/[_-]+/g, ' ')
     .trim()
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/\bOtp\b/gi, 'OTP')
+    .replace(/\bSms\b/gi, 'SMS')
+    .replace(/\bId\b/gi, 'ID');
 }
 
 export function getTranslation(key: string, language: LanguageCode | string = 'hi'): string {

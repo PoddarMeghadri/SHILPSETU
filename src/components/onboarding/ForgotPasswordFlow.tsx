@@ -40,8 +40,8 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
   const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
   const [resendCooldown, setResendCooldown] = useState<number>(0);
 
-  // Step 2: Flexible 6-Digit (or 9-Digit) OTP state
-  const [otpLength, setOtpLength] = useState<number>(6);
+  // Step 2: Strict 6-Digit OTP state
+  const OTP_LENGTH = 6;
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [otpError, setOtpError] = useState<string>('');
   const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
@@ -91,7 +91,7 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
     const supabaseResult = await sendSupabaseRecoveryOtp(cleanEmail);
     if (supabaseResult.sent) {
       setResendCooldown(30);
-      setOtpDigits(Array(otpLength).fill(''));
+      setOtpDigits(['', '', '', '', '', '']);
       setOtpError('');
       setCurrentStep('otp');
       setIsSendingOtp(false);
@@ -110,7 +110,7 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
     setOtpDigits(updated);
     setOtpError('');
 
-    if (digit && index < otpLength - 1) {
+    if (digit && index < OTP_LENGTH - 1) {
       otpInputRefs.current[index + 1]?.focus();
     }
   };
@@ -122,22 +122,20 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
     }
   };
 
-  // Handle OTP paste (supports 6 to 9 digits)
+  // Handle OTP paste (strictly 6 digits)
   const handleOtpPaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 9);
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
     if (!pasted) return;
 
-    const targetLength = pasted.length >= 7 ? Math.min(9, pasted.length) : 6;
-    setOtpLength(targetLength);
-    const updated = Array(targetLength).fill('');
-    for (let i = 0; i < targetLength; i++) {
+    const updated = Array(OTP_LENGTH).fill('');
+    for (let i = 0; i < pasted.length; i++) {
       updated[i] = pasted[i] || '';
     }
     setOtpDigits(updated);
     setOtpError('');
 
-    const nextIndex = Math.min(pasted.length, targetLength - 1);
+    const nextIndex = Math.min(pasted.length, OTP_LENGTH - 1);
     otpInputRefs.current[nextIndex]?.focus();
   };
 
@@ -146,8 +144,8 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
     if (e) e.preventDefault();
     const fullOtp = otpDigits.join('');
 
-    if (fullOtp.length !== otpLength || !/^\d+$/.test(fullOtp)) {
-      setOtpError(`Please enter all ${otpLength} digits of the verification code.`);
+    if (fullOtp.length !== OTP_LENGTH || !/^\d+$/.test(fullOtp)) {
+      setOtpError('Please enter all 6 digits of the verification code.');
       sound.playTap();
       return;
     }
@@ -162,10 +160,10 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
         setResetToken('');
         return;
       }
-      throw new Error(supabaseResult.error || `Invalid or expired ${otpLength}-digit verification code. Please try again.`);
+      throw new Error(supabaseResult.error || 'Invalid or expired 6-digit verification code. Please try again.');
     } catch (err: any) {
       sound.playTap();
-      setOtpError(err.message || `Invalid or expired ${otpLength}-digit verification code. Please try again.`);
+      setOtpError(err.message || 'Invalid or expired 6-digit verification code. Please try again.');
     } finally {
       setIsVerifyingOtp(false);
     }
@@ -394,10 +392,10 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
                   <span className="material-symbols-outlined text-2xl">pin</span>
                 </div>
                 <h2 className="font-serif font-bold text-2xl mb-1 text-[#22331E] dark:text-[#F4ECDE]">
-                  Enter {otpLength}-Digit OTP
+                  Enter 6-Digit OTP
                 </h2>
                 <p className="text-xs text-black/70 dark:text-white/70">
-                  We have sent a {otpLength}-digit verification code to{' '}
+                  We have sent a 6-digit verification code to{' '}
                   <strong className="text-[#B5451B] dark:text-[#E8B84B] font-semibold">{email}</strong>.
                   Please check your inbox or spam folder.
                 </p>
@@ -406,24 +404,10 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
               <form onSubmit={handleVerifyOtp} className="space-y-5">
                 {/* Individual Digit Inputs */}
                 <div>
-                  <div className="flex items-center justify-between mb-2.5">
+                  <div className="mb-2.5">
                     <label className="block text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
-                      {otpLength}-Digit Verification Code <span className="text-red-500">*</span>
+                      6-Digit Verification Code <span className="text-red-500">*</span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        sound.playTap();
-                        const nextLen = otpLength === 6 ? 9 : 6;
-                        setOtpLength(nextLen);
-                        setOtpDigits(Array(nextLen).fill(''));
-                        setOtpError('');
-                      }}
-                      className="text-[11px] font-semibold text-[#B5451B] dark:text-[#E8B84B] hover:underline flex items-center gap-1 cursor-pointer bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded-full"
-                    >
-                      <span className="material-symbols-outlined text-xs">tune</span>
-                      <span>{otpLength === 6 ? 'Switch to 9 digits' : 'Switch to 6 digits'}</span>
-                    </button>
                   </div>
                   <div
                     className="flex justify-center sm:justify-start flex-wrap gap-2 sm:gap-2.5"
@@ -443,11 +427,7 @@ export const ForgotPasswordFlow: React.FC<ForgotPasswordFlowProps> = ({
                         value={digit}
                         onChange={(e) => handleOtpChange(index, e.target.value)}
                         onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                        className={`${
-                          otpLength > 6
-                            ? 'w-9 h-12 text-lg sm:w-10 sm:h-14 sm:text-xl'
-                            : 'w-11 h-14 sm:w-13 sm:h-16 text-xl sm:text-2xl'
-                        } text-center font-bold font-mono rounded-2xl border transition-all ${
+                        className={`w-11 h-14 sm:w-13 sm:h-16 text-xl sm:text-2xl text-center font-bold font-mono rounded-2xl border transition-all ${
                           digit
                             ? 'border-[#B5451B] bg-white dark:bg-[#1C221A] text-[#B5451B] dark:text-[#E8B84B] shadow-xs'
                             : 'border-[#22331E]/20 dark:border-[#2D3A2B] bg-black/5 dark:bg-white/5'

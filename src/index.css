@@ -553,6 +553,14 @@ html.dark:root[data-theme='admin'] [class*="text-emerald-400"],
   --tw-gradient-to: var(--admin-accent-hover, #047857) !important;
 }
 
+/* Hide Google reCAPTCHA badge from bottom-right corner */
+.grecaptcha-badge {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+
 
 
 
