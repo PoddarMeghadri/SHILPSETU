@@ -563,8 +563,8 @@ app.put('/api/artisan', authenticateJwt, (req: AuthenticatedRequest, res) => {
     const updated = db.upsertArtisan({
       ...req.body,
       id: artisanId,
-      email: req.body.email || req.artisan?.email,
-      mobile: req.body.mobile || req.artisan?.mobile || '9876543210',
+      email: req.body.email !== undefined ? req.body.email : req.artisan?.email,
+      mobile: req.body.mobile !== undefined ? req.body.mobile : (req.artisan?.mobile ?? ''),
       fullName: req.body.fullName || req.body.name || req.artisan?.fullName || 'Master Artisan',
     });
     res.json(updated);

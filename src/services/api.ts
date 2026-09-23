@@ -246,6 +246,8 @@ export const api = {
           storyQuote: profile.storyQuote,
           udyamNumber: profile.udyamNumber,
           recentPhotos: profile.recentPhotos,
+          mobile: profile.mobile !== undefined ? profile.mobile : '',
+          email: profile.email !== undefined ? profile.email : '',
         }),
       });
       const contentType = res.headers.get('content-type') || '';

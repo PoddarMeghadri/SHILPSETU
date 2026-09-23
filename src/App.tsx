@@ -105,12 +105,21 @@ export function App() {
         const isOldUnsplash = typeof rawAvatar === 'string' && rawAvatar.includes('photo-1544005313-94ddf0286df2');
         const finalAvatar = isOldUnsplash || !rawAvatar ? DEFAULT_ARTISAN_AVATAR : rawAvatar;
 
+        const savedEmail = p2Obj?.email !== undefined 
+          ? p2Obj.email 
+          : (p1Obj?.email !== undefined ? p1Obj.email : INITIAL_ARTISAN.email);
+        const savedMobile = p2Obj?.mobile !== undefined 
+          ? p2Obj.mobile 
+          : (p1Obj?.mobile_number !== undefined 
+              ? p1Obj.mobile_number 
+              : (p1Obj?.mobile !== undefined ? p1Obj.mobile : INITIAL_ARTISAN.mobile));
+
         return {
           ...INITIAL_ARTISAN,
           ...savedProfile,
           name: p2Obj?.name || p1Obj?.full_name || p1Obj?.name || INITIAL_ARTISAN.name,
-          email: p2Obj?.email || p1Obj?.email || INITIAL_ARTISAN.email,
-          mobile: p2Obj?.mobile || p1Obj?.mobile_number || p1Obj?.mobile || INITIAL_ARTISAN.mobile,
+          email: savedEmail,
+          mobile: savedMobile,
           city,
           state,
           location: resolvedLoc,
@@ -223,6 +232,8 @@ export function App() {
           const preservedState = (prev.state && prev.state !== 'Uttar Pradesh') ? prev.state : (serverProfile.state || prev.state);
           const preservedLoc = (prev.location && prev.location !== 'Varanasi, Uttar Pradesh') ? prev.location : (serverProfile.location || prev.location);
           const preservedAvatar = (prev.avatarUrl && prev.avatarUrl !== DEFAULT_ARTISAN_AVATAR) ? prev.avatarUrl : (serverProfile.avatarUrl || prev.avatarUrl);
+          const preservedMobile = prev.mobile !== undefined ? prev.mobile : (serverProfile.mobile ?? '');
+          const preservedEmail = prev.email !== undefined ? prev.email : (serverProfile.email ?? '');
 
           const merged = {
             ...prev,
@@ -231,6 +242,8 @@ export function App() {
             state: preservedState,
             location: preservedLoc,
             avatarUrl: preservedAvatar,
+            mobile: preservedMobile,
+            email: preservedEmail,
           };
           localStorage.setItem('shilpsetu_artisan', JSON.stringify(merged));
           return merged;
@@ -272,11 +285,13 @@ export function App() {
           }
 
           setArtisan((prev) => {
-            // Also inspect localStorage to preserve any user-saved city, location, and avatar
+            // Also inspect localStorage to preserve any user-saved city, location, avatar, mobile, and email
             let localCity = prev.city;
             let localState = prev.state;
             let localLoc = prev.location;
             let localAvatar = prev.avatarUrl;
+            let localMobile = prev.mobile;
+            let localEmail = prev.email;
             try {
               const stored = localStorage.getItem('shilpsetu_artisan');
               if (stored) {
@@ -285,6 +300,8 @@ export function App() {
                 if (parsed.state && parsed.state !== 'Uttar Pradesh') localState = parsed.state;
                 if (parsed.location && parsed.location !== 'Varanasi, Uttar Pradesh') localLoc = parsed.location;
                 if (parsed.avatarUrl && parsed.avatarUrl !== DEFAULT_ARTISAN_AVATAR) localAvatar = parsed.avatarUrl;
+                if (parsed.mobile !== undefined) localMobile = parsed.mobile;
+                if (parsed.email !== undefined) localEmail = parsed.email;
               }
               const storedUserProf = localStorage.getItem('shilpsetu_user_profile');
               if (storedUserProf) {
@@ -293,6 +310,8 @@ export function App() {
                 if (parsedUser.state && parsedUser.state !== 'Uttar Pradesh') localState = parsedUser.state;
                 if (parsedUser.location && parsedUser.location !== 'Varanasi, Uttar Pradesh') localLoc = parsedUser.location;
                 if (parsedUser.avatar_url && parsedUser.avatar_url !== DEFAULT_ARTISAN_AVATAR) localAvatar = parsedUser.avatar_url;
+                if (parsedUser.mobile_number !== undefined) localMobile = parsedUser.mobile_number;
+                if (parsedUser.email !== undefined) localEmail = parsedUser.email;
               }
             } catch (_) {}
 
@@ -366,8 +385,8 @@ export function App() {
               ...prev,
               id: session.user.id,
               name: registeredName || prev.name,
-              email: prof?.email || session.user.email || prev.email,
-              mobile: prof?.mobile_number || meta.mobile_number || prev.mobile,
+              email: localEmail !== undefined ? localEmail : (prof?.email || session.user.email || prev.email),
+              mobile: localMobile !== undefined ? localMobile : (prof?.mobile_number ?? meta.mobile_number ?? prev.mobile),
               craft: prof?.craft_specialty || meta.desired_workshop || prev.craft,
               city,
               state,

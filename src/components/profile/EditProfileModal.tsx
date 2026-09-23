@@ -137,9 +137,11 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
-  // Sync state & city when modal opens
+  const prevIsOpenRef = useRef(false);
+
+  // Sync state & city only when modal opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       setIsSaving(false);
       setFormData({
         ...artisan,
@@ -147,7 +149,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         title: artisan.title || '',
         bio: artisan.bio || '',
         storyQuote: artisan.storyQuote || '',
-        mobile: artisan.mobile || '',
+        mobile: artisan.mobile !== undefined ? artisan.mobile : '',
         email: artisan.email || '',
         udyamNumber: artisan.udyamNumber || '',
         avatarUrl: artisan.avatarUrl || DEFAULT_AVATAR,
@@ -167,7 +169,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         });
       }
     }
-  }, [isOpen, artisan]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen]);
 
   // Update cities list when state changes
   const currentCities =
@@ -310,8 +313,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       const safeTitle = (formData.title || artisan.title || 'Master Artisan').trim();
       const safeBio = (formData.bio || '').trim();
       const safeStoryQuote = (formData.storyQuote || '').trim();
-      const safeMobile = (formData.mobile || artisan.mobile || '').trim();
-      const safeEmail = formData.email?.trim() ? formData.email.trim() : undefined;
+      const safeMobile = (formData.mobile !== undefined ? formData.mobile : (artisan.mobile || '')).trim();
+      const safeEmail = (formData.email !== undefined ? formData.email : (artisan.email || '')).trim();
       const safeAvatar = formData.avatarUrl || artisan.avatarUrl || DEFAULT_AVATAR;
 
       const updatedProfile: ArtisanProfile = {
@@ -665,11 +668,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   <input
                     type="tel"
                     maxLength={10}
-                    required
-                    value={formData.mobile || ''}
+                    value={formData.mobile ?? ''}
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                      setFormData({ ...formData, mobile: val });
+                      setFormData((prev) => ({ ...prev, mobile: val }));
                     }}
                     className={`w-full pl-16 pr-3.5 py-2.5 rounded-2xl border text-xs font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] ${
                       isDark
@@ -698,8 +700,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   <input
                     type="email"
                     required
-                    value={formData.email || ''}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    value={formData.email ?? ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                     className={`w-full pl-9 pr-3.5 py-2.5 rounded-2xl border text-xs font-sans focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] ${
                       isDark
                         ? 'bg-[#121411] border-[#2D3A2B] text-white'
