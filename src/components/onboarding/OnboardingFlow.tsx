@@ -46,6 +46,18 @@ interface OnboardingFlowProps {
   onSetTheme?: (theme: 'light' | 'dark') => void;
 }
 
+const cleanAuthError = (raw: string): string => {
+  if (!raw) return '';
+  let cleaned = raw
+    .replace(/Firebase:\s*Error\s*\([^)]*\)\.?/gi, '')
+    .replace(/Firebase/gi, '')
+    .replace(/Supabase/gi, '')
+    .replace(/\(auth\/[a-z0-9-_]+\)/gi, '')
+    .trim();
+  if (!cleaned) return 'Verification service is temporarily unavailable. Please verify via email or try again.';
+  return cleaned;
+};
+
 export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   onComplete,
   isDark = false,
@@ -2039,7 +2051,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
                 {otpError && (
                   <div className="text-center px-4 space-y-1">
-                    <p className="text-xs text-red-500 font-medium">{otpError}</p>
+                    <p className="text-xs text-red-500 font-medium">{cleanAuthError(otpError)}</p>
                     {otpError.includes('already exists') && (
                       <button
                         type="button"
