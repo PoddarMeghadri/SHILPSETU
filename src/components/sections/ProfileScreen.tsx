@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ArtisanProfile, ScreenId, LanguageCode } from '../../types';
 import { sound } from '../../services/sound';
 import { EditProfileModal } from '../profile/EditProfileModal';
@@ -32,7 +33,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [redirectPlatform, setRedirectPlatform] = useState<SocialPlatformType | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const directFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   const handleDirectAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -349,10 +358,37 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         artisan={artisan}
         onSave={(updated) => {
           onUpdateArtisan(updated);
+          setToastMessage('Profile updated successfully');
         }}
         language={language}
         isDark={isDark}
       />
+
+      {/* Profile Updated Confirmation Toast */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-6 right-6 z-[120] flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#1C1714] text-[#EDE8E3] border border-[#3A2D27] shadow-2xl backdrop-blur-md"
+          >
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-lg">check_circle</span>
+            </div>
+            <div>
+              <p className="text-xs font-serif font-bold text-white">{toastMessage}</p>
+              <p className="text-[10px] text-[#A89F91]">Your credentials & craft identity have been synced.</p>
+            </div>
+            <button
+              onClick={() => setToastMessage(null)}
+              className="text-[#A89F91] hover:text-white p-1 rounded-full cursor-pointer ml-1"
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Live QR Code & Storefront Modal */}
       <ShareWorkshopModal

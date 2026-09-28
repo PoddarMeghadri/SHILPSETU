@@ -4,6 +4,7 @@ import { ArtisanProfile, ScreenId, LanguageCode } from '../../types';
 import { sound } from '../../services/sound';
 import { SuccessModal } from '../common/SuccessModal';
 import { useTranslation } from '../../services/translations';
+import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
 
 interface HeritageStoryProps {
   artisan: ArtisanProfile;
@@ -225,7 +226,7 @@ export const HeritageStoryScreen: React.FC<HeritageStoryProps> = ({
             {/* Header with Artisan Avatar & Title */}
             <div className="flex items-center gap-4 pb-4 border-b border-black/10">
               <img
-                src={artisan.avatarUrl}
+                src={artisan.avatarUrl || DEFAULT_ARTISAN_AVATAR}
                 alt={artisan.name}
                 className="w-14 h-14 rounded-full object-cover border-2 border-[#B5451B]"
               />

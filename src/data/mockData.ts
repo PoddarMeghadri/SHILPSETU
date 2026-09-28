@@ -71,11 +71,7 @@ export const INITIAL_ARTISAN: ArtisanProfile & { mobile?: string; email?: string
   bio: 'Third-generation terracotta artisan shaping sustainable earthenware, temple lamps, and bespoke architectural murals with local riverbed clay.',
   mobile: '9876543210',
   email: '',
-  recentPhotos: [
-    'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=600&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=600&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?w=600&auto=format&fit=crop&q=80',
-  ],
+  recentPhotos: [],
 };
 
 export const INITIAL_PRODUCTS: ProductItem[] = [

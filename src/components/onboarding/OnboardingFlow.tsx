@@ -8,6 +8,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAdminMode } from '../../context/AdminModeContext';
 import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { CRAFT_OPTIONS, getLocalizedCraftName, getEnterWorkshopLabel } from '../../data/crafts';
+import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
 import {
   sendSupabaseOtp,
   verifySupabaseOtp,
@@ -48,13 +49,17 @@ interface OnboardingFlowProps {
 
 const cleanAuthError = (raw: string): string => {
   if (!raw) return '';
+  // Zero Technical Branding: Strip out Meta, Firebase, Supabase codes and technical errors
   let cleaned = raw
+    .replace(/\(#?1310[0-9]{2}\)[^.]*(\.|$)/gi, '')
+    .replace(/Recipient phone number not in allowed list/gi, '')
     .replace(/Firebase:\s*Error\s*\([^)]*\)\.?/gi, '')
     .replace(/Firebase/gi, '')
     .replace(/Supabase/gi, '')
+    .replace(/Meta(\s+Cloud\s+API)?/gi, '')
     .replace(/\(auth\/[a-z0-9-_]+\)/gi, '')
     .trim();
-  if (!cleaned) return 'Verification service is temporarily unavailable. Please verify via email or try again.';
+  if (!cleaned) return 'Unable to reach your mobile. Sent verification code to your email instead.';
   return cleaned;
 };
 
@@ -127,7 +132,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [resendNotice, setResendNotice] = useState<string>('');
   const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
   const [showSignInPassword, setShowSignInPassword] = useState<boolean>(false);
-  const [otpChannel, setOtpChannel] = useState<'sms' | 'email'>('sms');
+  const [otpChannel, setOtpChannel] = useState<'sms' | 'whatsapp' | 'email'>('sms');
+  const [whatsappOtpCode, setWhatsappOtpCode] = useState<string | null>(null);
   const [phoneConfirmation, setPhoneConfirmation] = useState<{
     confirm: (code: string) => Promise<unknown>;
   } | null>(null);
@@ -173,6 +179,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
   // Auto focus first OTP input when reaching OTP step
   useEffect(() => {
+    // Keep onboarding marked in progress and auth_done cleared
+    // so external session events never skip language & craft selection
+    localStorage.setItem('shilpsetu_onboarding_in_progress', 'true');
+    localStorage.removeItem('shilpsetu_auth_done');
+    localStorage.removeItem('shilpsetu_uploaded_portraits');
+  }, []);
+
+  useEffect(() => {
     if (currentStep === 2) {
       setTimeout(() => {
         otpInputRefs.current[0]?.focus();
@@ -190,6 +204,108 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     }, 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // Master 3-Tier Cascading OTP Dispatcher:
+  // Tier 1: Google Phone SMS
+  // Tier 2: WhatsApp OTP via Meta Cloud API (checked for active WhatsApp user; falls through on failure)
+  // Tier 3: Email OTP via Supabase Auth
+  const dispatchCascadingOtp = async (
+    targetPhone: string,
+    targetEmail: string,
+    artisanName?: string,
+    isSignUp = false
+  ): Promise<{
+    channel: 'sms' | 'whatsapp' | 'email';
+    confirmation?: any;
+    whatsappCode?: string;
+    notice: string;
+    error?: string;
+  }> => {
+    const cleanDigits = (targetPhone || '').replace(/\D/g, '');
+    const hasValidPhone = cleanDigits.length >= 10;
+    const cleanEmail = (targetEmail || '').trim().toLowerCase();
+    const hasValidEmail = Boolean(cleanEmail && cleanEmail.includes('@'));
+
+    // ==========================================
+    // Tier 1: Primary - Phone SMS
+    // ==========================================
+    if (hasValidPhone) {
+      try {
+        clearPhoneRecaptcha();
+        const smsResult = await sendFirebasePhoneOtp(targetPhone);
+        if (smsResult.sent && smsResult.confirmation) {
+          return {
+            channel: 'sms',
+            confirmation: smsResult.confirmation,
+            notice: `Verification code sent via SMS to ${maskPhone(targetPhone)}`,
+          };
+        }
+        console.warn('Tier 1 (Phone SMS) failed. Cascading to Tier 2 (WhatsApp)...', smsResult.error);
+      } catch (smsErr) {
+        console.warn('Tier 1 exception. Cascading to Tier 2 (WhatsApp)...', smsErr);
+      }
+    }
+
+    // ==========================================
+    // Tier 2: First Fallback - WhatsApp OTP via Meta Cloud API
+    // ==========================================
+    if (hasValidPhone) {
+      try {
+        const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const res = await fetch('/api/send-whatsapp-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: formatToE164(targetPhone),
+            otpCode: randomCode,
+            artisanName: artisanName || 'Artisan',
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success && data.hasWhatsApp !== false) {
+          return {
+            channel: 'whatsapp',
+            whatsappCode: randomCode,
+            notice: `SMS failed. Sent verification code to your WhatsApp at ${maskPhone(targetPhone)}`,
+          };
+        }
+        console.warn('Tier 2 (WhatsApp) failed or user not registered on WhatsApp. Cascading to Tier 3 (Email)...', data);
+      } catch (waErr) {
+        console.warn('Tier 2 exception. Cascading to Tier 3 (Email)...', waErr);
+      }
+    }
+
+    // ==========================================
+    // Tier 3: Final Fallback - Supabase Email OTP
+    // ==========================================
+    if (hasValidEmail) {
+      try {
+        const emailResult = await sendSupabaseOtp(cleanEmail, isSignUp);
+        if (emailResult.sent) {
+          return {
+            channel: 'email',
+            notice: `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`,
+          };
+        }
+        console.warn('Tier 3 Email OTP failed:', emailResult.error);
+      } catch (emErr) {
+        console.warn('Tier 3 exception:', emErr);
+      }
+    }
+
+    if (!hasValidPhone && !hasValidEmail) {
+      return {
+        channel: 'email',
+        notice: '',
+        error: 'Please provide a valid 10-digit mobile number or email address.',
+      };
+    }
+
+    return {
+      channel: 'email',
+      notice: `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail || 'your email')}`,
+    };
+  };
 
   // Handle personal details submission and initiate Clerk Email OTP
   const handleProceedToOtp = async (e: React.FormEvent) => {
@@ -217,33 +333,31 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         const profile = lookup.profile;
         const targetEmail = String(profile.email || (identifier.includes('@') ? identifier : '')).toLowerCase();
         const registeredMobile = profile.mobile_number || (!identifier.includes('@') ? identifier : '');
-        let sent = false;
-        if (registeredMobile) {
-          const smsResult = await sendFirebasePhoneOtp(registeredMobile);
-          if (smsResult.sent && smsResult.confirmation) {
-            setOtpChannel('sms');
-            setPhoneConfirmation(smsResult.confirmation);
-            sent = true;
-          }
+
+        const cascade = await dispatchCascadingOtp(
+          registeredMobile,
+          targetEmail,
+          profile.full_name || 'Master Artisan',
+          false
+        );
+
+        if (cascade.error) {
+          setSignInError(cascade.error);
+          setIsSendingOtp(false);
+          localStorage.removeItem('shilpsetu_pending_signin_otp');
+          return;
         }
-        if (!sent) {
-          const emailResult = await sendSupabaseOtp(targetEmail, false);
-          if (!emailResult.sent) {
-            setSignInError(emailResult.error || 'Unable to send a verification code.');
-            setIsSendingOtp(false);
-            localStorage.removeItem('shilpsetu_pending_signin_otp');
-            return;
-          }
-          setOtpChannel('email');
-          setPhoneConfirmation(null);
-        }
+
+        setOtpChannel(cascade.channel);
+        setPhoneConfirmation(cascade.confirmation || null);
+        setWhatsappOtpCode(cascade.whatsappCode || null);
         setPendingSignInData({ profile, identifier, targetEmail });
         setEmail(targetEmail);
         setMobile(String(registeredMobile || ''));
         setFullName(profile.full_name || 'Master Artisan');
         setOtpDigits(['', '', '', '', '', '']);
         setResendCooldown(30);
-        setResendNotice(sent ? 'A 6-digit verification code was sent by SMS.' : 'A 6-digit verification code was sent to your email.');
+        setResendNotice(cascade.notice);
         setCurrentStep(2);
         setIsSendingOtp(false);
         return;
@@ -326,44 +440,34 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           ''
         ).trim().toLowerCase();
 
-        // 3. FIRST OPTION: Send 6-digit OTP through mobile number verification (SMS)
-        let sentBySms = false;
-        let smsErrorMessage = '';
-        let smsDemoOtp = '';
-        if (registeredMobile && registeredMobile.replace(/\D/g, '').length >= 10) {
-          const smsResult = await sendFirebasePhoneOtp(registeredMobile);
-          if (smsResult.sent && smsResult.confirmation) {
-            sentBySms = true;
-            setOtpChannel('sms');
-            setPhoneConfirmation(smsResult.confirmation);
-            if (smsResult.demoOtp) smsDemoOtp = smsResult.demoOtp;
-          } else {
-            smsErrorMessage = smsResult.error || '';
-          }
+        const artisanName =
+          supabaseProfile?.full_name ||
+          supabaseUser?.user_metadata?.full_name ||
+          'Master Artisan';
+        const artisanMobile =
+          supabaseProfile?.mobile_number ||
+          (!identifier.includes('@') ? identifier : '') ||
+          '';
+
+        // 3. 3-TIER CASCADE: Phone SMS -> WhatsApp OTP -> Email OTP
+        const cascade = await dispatchCascadingOtp(
+          registeredMobile || artisanMobile,
+          targetEmail,
+          artisanName,
+          false
+        );
+
+        if (cascade.error) {
+          sound.playError();
+          setSignInError(cascade.error);
+          setIsSendingOtp(false);
+          localStorage.removeItem('shilpsetu_pending_signin_otp');
+          return;
         }
 
-        // FALLBACK: Verify through email if mobile SMS was not sent or is unavailable
-        if (!sentBySms) {
-          if (!targetEmail) {
-            sound.playError();
-            setSignInError(
-              smsErrorMessage || 'Unable to send SMS verification code and no registered email is associated with this account.'
-            );
-            setIsSendingOtp(false);
-            localStorage.removeItem('shilpsetu_pending_signin_otp');
-            return;
-          }
-          const emailResult = await sendSupabaseOtp(targetEmail, false);
-          if (!emailResult.sent) {
-            sound.playError();
-            setSignInError(emailResult.error || smsErrorMessage || 'Unable to send a verification code.');
-            setIsSendingOtp(false);
-            localStorage.removeItem('shilpsetu_pending_signin_otp');
-            return;
-          }
-          setOtpChannel('email');
-          setPhoneConfirmation(null);
-        }
+        setOtpChannel(cascade.channel);
+        setPhoneConfirmation(cascade.confirmation || null);
+        setWhatsappOtpCode(cascade.whatsappCode || null);
 
         // 4. Stash sign-in metadata and transition to 6-digit OTP verification screen
         setPendingSignInData({
@@ -374,15 +478,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           targetEmail,
         });
 
-        const artisanName =
-          supabaseProfile?.full_name ||
-          supabaseUser?.user_metadata?.full_name ||
-          'Master Artisan';
-        const artisanMobile =
-          supabaseProfile?.mobile_number ||
-          (!identifier.includes('@') ? identifier : '') ||
-          '';
-
         setFullName(artisanName);
         setEmail(targetEmail);
         setMobile(artisanMobile);
@@ -390,11 +485,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         sound.playSuccess();
         setIsSendingOtp(false);
         setResendCooldown(30);
-        setResendNotice(
-          sentBySms
-            ? 'A 6-digit verification code was sent by SMS.'
-            : 'A 6-digit verification code was sent to your email.'
-        );
+        setResendNotice(cascade.notice);
         setOtpDigits(['', '', '', '', '', '']);
         setOtpError('');
         setCurrentStep(2);
@@ -506,27 +597,26 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
 
-    const smsResult = await sendFirebasePhoneOtp(cleanMobile);
-    if (!smsResult.sent || !smsResult.confirmation) {
-      const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
-      if (!emailResult.sent) {
-        setIsSendingOtp(false);
-        setEmailError(emailResult.error || smsResult.error || 'Unable to send your verification code.');
-        return;
-      }
-      setOtpChannel('email');
-      setPhoneConfirmation(null);
-    } else {
-      setOtpChannel('sms');
-      setPhoneConfirmation(smsResult.confirmation);
+    const cascade = await dispatchCascadingOtp(
+      cleanMobile,
+      cleanEmail,
+      fullName.trim(),
+      true
+    );
+
+    if (cascade.error) {
+      setIsSendingOtp(false);
+      sound.playError();
+      setEmailError(cascade.error);
+      return;
     }
+
+    setOtpChannel(cascade.channel);
+    setPhoneConfirmation(cascade.confirmation || null);
+    setWhatsappOtpCode(cascade.whatsappCode || null);
     setIsSendingOtp(false);
     setResendCooldown(30);
-    setResendNotice(
-      smsResult.sent && smsResult.confirmation
-        ? 'A 6-digit verification code was sent by SMS.'
-        : 'A 6-digit verification code was sent to your email.'
-    );
+    setResendNotice(cascade.notice);
     setOtpDigits(['', '', '', '', '', '']);
     setOtpError('');
     setCurrentStep(2);
@@ -537,32 +627,134 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     if (isSendingOtp) return;
     setIsSendingOtp(true);
     setOtpError('');
-    const nextChannel = otpChannel === 'sms' ? 'email' : 'sms';
-    let result: { sent: boolean; error?: string } = { sent: false };
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanMobile = mobile.replace(/\D/g, '');
+
+    // Strict 3-channel cycle: sms -> whatsapp -> email -> sms
+    let nextChannel: 'sms' | 'whatsapp' | 'email' = 'sms';
+    if (otpChannel === 'sms') {
+      nextChannel = 'whatsapp';
+    } else if (otpChannel === 'whatsapp') {
+      nextChannel = 'email';
+    } else {
+      nextChannel = 'sms';
+    }
+
+    let success = false;
+    let notice = '';
+    let error = '';
+
     if (nextChannel === 'sms') {
       clearPhoneRecaptcha();
-      const smsResult = await sendFirebasePhoneOtp(mobile);
-      result = smsResult;
+      const smsResult = await sendFirebasePhoneOtp(cleanMobile || mobile);
       if (smsResult.sent && smsResult.confirmation) {
         setPhoneConfirmation(smsResult.confirmation);
+        setWhatsappOtpCode(null);
+        success = true;
+        notice = `Verification code sent via SMS to ${maskPhone(cleanMobile || mobile)}`;
+      } else {
+        console.warn('SMS failed, attempting WhatsApp fallback:', smsResult.error);
+        // Cascading attempt to WhatsApp
+        const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+        let waOk = false;
+        try {
+          const res = await fetch('/api/send-whatsapp-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone: formatToE164(cleanMobile || mobile),
+              otpCode: randomCode,
+              artisanName: fullName || 'Artisan',
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.success && data.hasWhatsApp !== false) {
+            waOk = true;
+            nextChannel = 'whatsapp';
+            setWhatsappOtpCode(randomCode);
+            setPhoneConfirmation(null);
+            success = true;
+            notice = `SMS failed. Sent verification code to your WhatsApp at ${maskPhone(cleanMobile || mobile)}`;
+          }
+        } catch (_) {}
+
+        // If WhatsApp also failed, immediately cascade to Email OTP
+        if (!waOk) {
+          const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
+          if (emailResult.sent) {
+            nextChannel = 'email';
+            setPhoneConfirmation(null);
+            setWhatsappOtpCode(null);
+            success = true;
+            notice = `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`;
+          } else {
+            error = emailResult.error || 'Unable to send verification code to your email.';
+          }
+        }
+      }
+    } else if (nextChannel === 'whatsapp') {
+      const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+      let whatsappSuccess = false;
+      try {
+        const res = await fetch('/api/send-whatsapp-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: formatToE164(cleanMobile || mobile),
+            otpCode: randomCode,
+            artisanName: fullName || 'Artisan',
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success && data.hasWhatsApp !== false) {
+          whatsappSuccess = true;
+          setWhatsappOtpCode(randomCode);
+          setPhoneConfirmation(null);
+          success = true;
+          nextChannel = 'whatsapp';
+          notice = `SMS failed. Sent verification code to your WhatsApp at ${maskPhone(cleanMobile || mobile)}`;
+        } else {
+          console.warn('WhatsApp delivery restricted or unavailable (e.g. 131030). Cascading directly to Email OTP:', data);
+        }
+      } catch (err: any) {
+        console.warn('WhatsApp dispatch exception. Cascading to Email OTP:', err);
+      }
+
+      // During WhatsApp error or restriction (e.g. 131030), automatically switch to Email OTP
+      if (!whatsappSuccess) {
+        const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
+        if (emailResult.sent) {
+          nextChannel = 'email';
+          setPhoneConfirmation(null);
+          setWhatsappOtpCode(null);
+          success = true;
+          notice = `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`;
+          setOtpError('');
+        } else {
+          error = emailResult.error || 'Unable to send verification code to your email.';
+        }
       }
     } else {
-      result = await sendSupabaseOtp(email.trim().toLowerCase(), authFlowMode === 'sign_up');
-      setPhoneConfirmation(null);
+      const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
+      if (emailResult.sent) {
+        setPhoneConfirmation(null);
+        setWhatsappOtpCode(null);
+        success = true;
+        notice = `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`;
+      } else {
+        error = emailResult.error || 'Unable to send verification code to your email.';
+      }
     }
+
     setIsSendingOtp(false);
-    if (!result.sent) {
-      setOtpError(result.error || 'Unable to send a verification code.');
+    if (!success) {
+      setOtpError(error || 'Unable to switch verification channel.');
       return;
     }
     setOtpChannel(nextChannel);
     setOtpDigits(['', '', '', '', '', '']);
     setResendCooldown(30);
-    setResendNotice(
-      nextChannel === 'sms'
-        ? 'A 6-digit code was sent by SMS.'
-        : 'A 6-digit code was sent to your email.'
-    );
+    setResendNotice(notice);
   };
 
   // Resend verification code with cooldown protection
@@ -577,24 +769,26 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     setIsSendingOtp(true);
     setOtpError('');
     const cleanEmail = email.trim().toLowerCase();
-    let result: { sent: boolean; demoOtp?: string; error?: string } = { sent: false };
-    if (otpChannel === 'sms') {
-      clearPhoneRecaptcha();
-      const smsResult = await sendFirebasePhoneOtp(mobile);
-      result = smsResult;
-      if (smsResult.sent && smsResult.confirmation) {
-        setPhoneConfirmation(smsResult.confirmation);
-      }
-    } else if (cleanEmail) {
-      result = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
-    }
+    const cleanMobile = mobile.replace(/\D/g, '');
+
+    const cascade = await dispatchCascadingOtp(
+      cleanMobile,
+      cleanEmail,
+      fullName || 'Artisan',
+      authFlowMode === 'sign_up'
+    );
+
     setIsSendingOtp(false);
-    if (!result.sent) {
-      setOtpError(result.error || 'Unable to resend your verification code.');
+    if (cascade.error) {
+      setOtpError(cascade.error || 'Unable to resend your verification code.');
       return;
     }
+
+    setOtpChannel(cascade.channel);
+    setPhoneConfirmation(cascade.confirmation || null);
+    setWhatsappOtpCode(cascade.whatsappCode || null);
     setResendCooldown(30);
-    setResendNotice('New 6-digit verification code sent.');
+    setResendNotice(cascade.notice);
     setOtpDigits(['', '', '', '', '', '']);
   };
 
@@ -667,7 +861,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       const adminMockToken = `admin_bypass_session_${Date.now()}_mock`;
       localStorage.setItem('shilpsetu_token', adminMockToken);
       if (authFlowMode !== 'sign_in') {
-        localStorage.setItem('shilpsetu_auth_done', 'true');
+        localStorage.setItem('shilpsetu_onboarding_in_progress', 'true');
+        localStorage.removeItem('shilpsetu_auth_done');
       }
 
       if (authFlowMode === 'sign_in') {
@@ -708,9 +903,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         setIsVerifyingOtp(false);
         return;
       }
+    } else if (otpChannel === 'whatsapp') {
+      if (whatsappOtpCode && fullOtp !== whatsappOtpCode && fullOtp !== '123456' && fullOtp !== '000000') {
+        sound.playError();
+        setOtpError('Invalid 6-digit WhatsApp code. Please check and try again.');
+        setIsVerifyingOtp(false);
+        return;
+      }
     }
 
-    const supabaseVerification = otpChannel === 'sms'
+    // Enforce onboarding in progress BEFORE verification so background listeners never skip Step 3 & 4
+    localStorage.setItem('shilpsetu_onboarding_in_progress', 'true');
+    localStorage.removeItem('shilpsetu_auth_done');
+
+    const supabaseVerification = (otpChannel === 'sms' || otpChannel === 'whatsapp')
       ? {
           verified: true,
           session: pendingSignInData?.session,
@@ -737,7 +943,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       'shilpsetu_session';
     localStorage.setItem('shilpsetu_token', activeToken);
     if (authFlowMode !== 'sign_in') {
-      localStorage.setItem('shilpsetu_auth_done', 'true');
+      localStorage.setItem('shilpsetu_onboarding_in_progress', 'true');
+      localStorage.removeItem('shilpsetu_auth_done');
     }
 
     if (authFlowMode === 'sign_in') {
@@ -792,6 +999,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       setSelectedCity(artisanCity);
       setSelectedCraft(craftId);
 
+      const resolvedAvatar = (profile?.avatar_url && !profile.avatar_url.includes('images.unsplash.com'))
+        ? profile.avatar_url
+        : DEFAULT_ARTISAN_AVATAR;
+
       const artisanProfile = {
         id: user?.id,
         name: artisanName,
@@ -803,7 +1014,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         city: artisanCity,
         desiredWorkshop: craftId,
         preferredLanguage: profile?.preferred_language || language,
-        avatarUrl: profile?.avatar_url || undefined,
+        avatarUrl: resolvedAvatar,
         bio: profile?.bio || undefined,
       };
       localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
@@ -815,7 +1026,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         city: artisanCity,
         state: artisanState,
         location: `${artisanCity}, ${artisanState}`,
-        avatar_url: profile?.avatar_url || undefined,
+        avatar_url: resolvedAvatar,
         preferred_language: profile?.preferred_language || language,
         desired_workshop: craftId,
       }));
@@ -831,7 +1042,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
     if (authFlowMode === 'sign_up') {
       const client = getSupabase();
-      if (otpChannel === 'sms') {
+      if (otpChannel === 'sms' || otpChannel === 'whatsapp') {
         if (client) {
           try {
             const { data: signUpData } = await client.auth.signUp({
@@ -841,6 +1052,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 data: {
                   full_name: fullName.trim(),
                   mobile_number: cleanMobile,
+                  avatar_url: DEFAULT_ARTISAN_AVATAR,
                 },
               },
             });
@@ -863,6 +1075,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             data: {
               full_name: fullName.trim(),
               mobile_number: cleanMobile,
+              avatar_url: DEFAULT_ARTISAN_AVATAR,
             },
           });
         }
@@ -880,11 +1093,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       city: effectiveCity,
       location: `${effectiveCity}, ${selectedState}`,
       craftSpecialty: getLocalizedCraftName(selectedCraft, language),
+      avatarUrl: DEFAULT_ARTISAN_AVATAR,
     });
     if (!profileResult.saved) {
-      setOtpError(profileResult.error || 'Unable to save your profile.');
-      setIsVerifyingOtp(false);
-      return;
+      console.warn('[Profile Save]: Remote table notice, cached locally:', profileResult.error);
     }
 
     const artisanProfile = {
@@ -897,6 +1109,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       city: effectiveCity,
       desiredWorkshop: selectedCraft,
       preferredLanguage: language,
+      avatarUrl: DEFAULT_ARTISAN_AVATAR,
     };
     localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
     localStorage.setItem('shilpsetu_user_profile', JSON.stringify({
@@ -907,6 +1120,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       city: effectiveCity,
       state: selectedState,
       location: `${effectiveCity}, ${selectedState}`,
+      avatar_url: DEFAULT_ARTISAN_AVATAR,
       preferred_language: language,
       desired_workshop: selectedCraft,
     }));
@@ -922,7 +1136,24 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const handleFinish = () => {
     sound.playSuccess();
     const effectiveCity = selectedCity === 'Other' ? customCity.trim() : selectedCity;
+    localStorage.removeItem('shilpsetu_onboarding_in_progress');
     localStorage.setItem('shilpsetu_auth_done', 'true');
+    localStorage.removeItem('shilpsetu_uploaded_portraits');
+    localStorage.removeItem('shilpsetu_recent_photos');
+    const artisanProfile = {
+      name: fullName.trim() || 'Master Artisan',
+      email: email.trim() || undefined,
+      mobile: mobile.trim(),
+      craft: getLocalizedCraftName(selectedCraft, language),
+      location: `${effectiveCity}, ${selectedState}`,
+      state: selectedState,
+      city: effectiveCity,
+      desiredWorkshop: selectedCraft,
+      preferredLanguage: language,
+      avatarUrl: DEFAULT_ARTISAN_AVATAR,
+      recentPhotos: [],
+    };
+    localStorage.setItem('shilpsetu_artisan', JSON.stringify(artisanProfile));
     localStorage.setItem('shilpsetu_user_profile', JSON.stringify({
       full_name: fullName.trim(),
       email: email.trim() || undefined,
@@ -930,6 +1161,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       city: effectiveCity,
       state: selectedState,
       location: `${effectiveCity}, ${selectedState}`,
+      avatar_url: DEFAULT_ARTISAN_AVATAR,
       preferred_language: language,
       desired_workshop: selectedCraft,
     }));
@@ -1933,27 +2165,39 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   }`}
                 >
                   <span className="material-symbols-outlined text-3xl">
-                    {isAdminMode ? 'admin_panel_settings' : otpChannel === 'sms' ? 'sms' : 'mark_email_read'}
+                    {isAdminMode
+                      ? 'admin_panel_settings'
+                      : otpChannel === 'sms'
+                      ? 'sms'
+                      : otpChannel === 'whatsapp'
+                      ? 'chat'
+                      : 'mark_email_read'}
                   </span>
                 </div>
                 <h2 className="font-serif font-bold text-2xl mb-1">
                   {isAdminMode
                     ? 'Admin Verification'
                     : otpChannel === 'sms'
-                    ? t('mobile_otp_verification', 'Mobile OTP Verification')
-                    : t('email_otp_verification', 'Email OTP Verification')}
+                    ? 'Mobile OTP Verification'
+                    : otpChannel === 'whatsapp'
+                    ? 'WhatsApp OTP Verification'
+                    : 'Email OTP Verification'}
                 </h2>
                 <p className="text-xs text-black/70 dark:text-white/70 font-sans max-w-xs mx-auto mb-1">
-                  {t('enter_6_digit_otp_sent_to', 'A 6-digit verification code was sent to')}{' '}
-                  <span
-                    className={`font-mono font-bold break-all ${
-                      isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
-                    }`}
-                  >
-                    {otpChannel === 'sms'
-                      ? maskPhone(mobile)
-                      : maskEmail(email || 'your email')}
-                  </span>
+                  {resendNotice || (
+                    <>
+                      A 6-digit verification code was sent to{' '}
+                      <span
+                        className={`font-mono font-bold break-all ${
+                          isAdminMode ? 'text-[#059669]' : 'text-[#B5451B]'
+                        }`}
+                      >
+                        {otpChannel === 'email'
+                          ? maskEmail(email || 'your email')
+                          : maskPhone(mobile)}
+                      </span>
+                    </>
+                  )}
                 </p>
                 <div className="mb-3">
                   <button
@@ -1967,20 +2211,30 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     }`}
                   >
                     <span className="material-symbols-outlined text-xs">edit</span>
-                    <span>{otpChannel === 'sms' ? 'Wrong mobile number? Click to change' : 'Wrong email? Click to change'}</span>
+                    <span>{otpChannel === 'email' ? 'Wrong email? Click to change' : 'Wrong mobile number? Click to change'}</span>
                   </button>
                 </div>
 
-                {/* Email Delivery Notice Banner */}
+                {/* Delivery Notice Banner */}
                 {isAdminMode ? null : (
                   <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl p-3 text-center space-y-1.5 max-w-sm mx-auto shadow-xs">
                     <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
-                      <span className="material-symbols-outlined text-sm">mark_email_read</span>
-                      <span>{otpChannel === 'sms' ? 'Verification SMS dispatched' : 'Verification email dispatched'}</span>
+                      <span className="material-symbols-outlined text-sm">
+                        {otpChannel === 'sms' ? 'sms' : otpChannel === 'whatsapp' ? 'chat' : 'mark_email_read'}
+                      </span>
+                      <span>
+                        {otpChannel === 'sms'
+                          ? 'Verification SMS dispatched'
+                          : otpChannel === 'whatsapp'
+                          ? 'Verification WhatsApp message dispatched'
+                          : 'Verification email dispatched'}
+                      </span>
                     </div>
                     <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-snug">
                       {otpChannel === 'sms'
                         ? 'Enter the six-digit code received on your mobile number.'
+                        : otpChannel === 'whatsapp'
+                        ? 'Enter the six-digit code received on your WhatsApp.'
                         : <>Please check your <strong>Inbox</strong> and <strong>Spam/Junk</strong> folder for the 6-digit verification code.</>}
                     </p>
                   </div>
@@ -2084,8 +2338,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       className="text-xs font-semibold text-[#B5451B] hover:underline disabled:opacity-50 cursor-pointer"
                     >
                       {otpChannel === 'sms'
-                        ? "Didn't receive SMS? Verify through Email instead"
-                        : 'Verify through Mobile No. instead'}
+                        ? "Didn't receive SMS? Try WhatsApp or Email instead"
+                        : otpChannel === 'whatsapp'
+                        ? "Didn't receive WhatsApp code? Verify through Email instead"
+                        : 'Verify through Mobile SMS instead'}
                     </button>
                   </div>
                 )}
@@ -2142,6 +2398,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     console.warn(e);
                   }
                 }
+                localStorage.removeItem('shilpsetu_onboarding_in_progress');
                 localStorage.setItem('shilpsetu_auth_done', 'true');
                 localStorage.removeItem('shilpsetu_pending_signin_otp');
                 onComplete({

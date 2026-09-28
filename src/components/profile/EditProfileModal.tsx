@@ -6,6 +6,8 @@ import { useTranslation } from '../../services/translations';
 import { INDIAN_STATES_AND_CITIES, parseLocationString } from '../../data/indianLocations';
 import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
 import { uploadAvatarToSupabase, upsertSupabaseProfile, supabase, isSupabaseConfigured } from '../../services/supabase';
+import { CascadingOtpModal } from '../CascadingOtpModal';
+import { formatToE164 } from '../../utils/phoneUtils';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -124,11 +126,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         list = JSON.parse(saved);
       } catch (_) {}
     } else {
-      list = artisan.recentPhotos || [
-        'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=600&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=600&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?w=600&auto=format&fit=crop&q=80',
-      ];
+      list = artisan.recentPhotos || [];
     }
     // Never include avatar in recent photos
     const currentAvatar = artisan.avatarUrl;
@@ -137,12 +135,99 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
+  // Inline Verification States for Mobile & Email
+  const [isMobileVerified, setIsMobileVerified] = useState(false);
+  const [verifiedMobileNumber, setVerifiedMobileNumber] = useState<string | null>(null);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [verifiedEmailAddress, setVerifiedEmailAddress] = useState<string | null>(null);
+
+  // OTP Verification Modal configuration
+  const [otpModalConfig, setOtpModalConfig] = useState<{
+    isOpen: boolean;
+    type: 'mobile' | 'email';
+    targetPhone: string;
+    targetEmail: string;
+  }>({
+    isOpen: false,
+    type: 'mobile',
+    targetPhone: '',
+    targetEmail: '',
+  });
+
+  // Track Unverified Modifications & Mandatory Presence Validation
+  const currentSavedMobile = (artisan.mobile || '').replace(/\D/g, '').slice(-10);
+  const enteredMobile = (formData.mobile || '').replace(/\D/g, '').slice(-10);
+  const isMobileMissing = !enteredMobile || enteredMobile.length < 10;
+  const isMobileChanged = Boolean(enteredMobile && enteredMobile !== currentSavedMobile);
+  const mobileNeedsVerification = !isMobileMissing && isMobileChanged && (!isMobileVerified || verifiedMobileNumber !== enteredMobile);
+
+  const currentSavedEmail = (artisan.email || '').trim().toLowerCase();
+  const enteredEmail = (formData.email || '').trim().toLowerCase();
+  const isEmailValid = Boolean(enteredEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(enteredEmail));
+  const isEmailMissing = !enteredEmail || !isEmailValid;
+  const isEmailChanged = Boolean(enteredEmail && enteredEmail !== currentSavedEmail);
+  const emailNeedsVerification = !isEmailMissing && isEmailChanged && (!isEmailVerified || verifiedEmailAddress !== enteredEmail);
+
+  // Hard Guard: Both phone number and email address MUST be present AND any modifications must be verified
+  const isMissingRequiredContact = isMobileMissing || isEmailMissing;
+  const hasUnverifiedChanges = mobileNeedsVerification || emailNeedsVerification;
+  const cannotSave = isSaving || isMissingRequiredContact || hasUnverifiedChanges;
+
+  const saveButtonTitle = isMissingRequiredContact
+    ? (isMobileMissing && isEmailMissing
+        ? "Both a 10-digit mobile number and a valid email address are required to save."
+        : isMobileMissing
+        ? "A valid 10-digit mobile number is mandatory and cannot be removed."
+        : "A valid email address is mandatory and cannot be removed.")
+    : hasUnverifiedChanges
+    ? "Please verify your new mobile number or email address before saving."
+    : "Save Profile Changes";
+
+  const handleStartMobileVerification = () => {
+    sound.playTap();
+    if (enteredMobile.length < 10) return;
+    setOtpModalConfig({
+      isOpen: true,
+      type: 'mobile',
+      targetPhone: formatToE164(enteredMobile),
+      targetEmail: formData.email || artisan.email || '',
+    });
+  };
+
+  const handleStartEmailVerification = () => {
+    sound.playTap();
+    if (!enteredEmail || !enteredEmail.includes('@')) return;
+    setOtpModalConfig({
+      isOpen: true,
+      type: 'email',
+      targetPhone: formatToE164(enteredMobile || artisan.mobile || ''),
+      targetEmail: enteredEmail,
+    });
+  };
+
+  const handleOtpSuccess = async () => {
+    sound.playSuccess();
+    if (otpModalConfig.type === 'mobile') {
+      setIsMobileVerified(true);
+      setVerifiedMobileNumber(enteredMobile);
+    } else {
+      setIsEmailVerified(true);
+      setVerifiedEmailAddress(enteredEmail);
+    }
+    setOtpModalConfig((prev) => ({ ...prev, isOpen: false }));
+  };
+
   const prevIsOpenRef = useRef(false);
 
   // Sync state & city only when modal opens
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       setIsSaving(false);
+      setIsMobileVerified(false);
+      setVerifiedMobileNumber(null);
+      setIsEmailVerified(false);
+      setVerifiedEmailAddress(null);
+      setOtpModalConfig({ isOpen: false, type: 'mobile', targetPhone: '', targetEmail: '' });
       setFormData({
         ...artisan,
         name: artisan.name || '',
@@ -152,18 +237,19 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         mobile: artisan.mobile !== undefined ? artisan.mobile : '',
         email: artisan.email || '',
         udyamNumber: artisan.udyamNumber || '',
-        avatarUrl: artisan.avatarUrl || DEFAULT_AVATAR,
+        avatarUrl: (artisan.avatarUrl && !artisan.avatarUrl.includes('images.unsplash.com')) ? artisan.avatarUrl : DEFAULT_AVATAR,
       });
       const parsed = parseLocationString(artisan.location);
       setSelectedState(artisan.state || parsed.state || 'Uttar Pradesh');
       setSelectedCity(artisan.city || parsed.city || 'Varanasi');
-      setSelectedPortraitForDelete(artisan.avatarUrl || null);
+      const safeAvatar = (artisan.avatarUrl && !artisan.avatarUrl.includes('images.unsplash.com')) ? artisan.avatarUrl : DEFAULT_AVATAR;
+      setSelectedPortraitForDelete(safeAvatar !== DEFAULT_AVATAR ? safeAvatar : null);
 
       // Ensure uploadedPortraits contains current avatar if custom
-      if (artisan.avatarUrl && artisan.avatarUrl !== DEFAULT_AVATAR) {
+      if (safeAvatar && safeAvatar !== DEFAULT_AVATAR && !safeAvatar.includes('images.unsplash.com')) {
         setUploadedPortraits((prev) => {
-          if (prev.includes(artisan.avatarUrl!)) return prev;
-          const merged = [artisan.avatarUrl!, ...prev].slice(0, 8);
+          if (prev.includes(safeAvatar)) return prev;
+          const merged = [safeAvatar, ...prev].slice(0, 8);
           safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(merged));
           return merged;
         });
@@ -296,7 +382,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   // Robust profile submit handler that never hangs or gets stuck
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving) return;
+    if (isSaving || isMissingRequiredContact || hasUnverifiedChanges) return;
     setIsSaving(true);
 
     try {
@@ -315,6 +401,12 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       const safeStoryQuote = (formData.storyQuote || '').trim();
       const safeMobile = (formData.mobile !== undefined ? formData.mobile : (artisan.mobile || '')).trim();
       const safeEmail = (formData.email !== undefined ? formData.email : (artisan.email || '')).trim();
+
+      // Strict sanity guard against empty credentials
+      if (!safeMobile || safeMobile.replace(/\D/g, '').length < 10 || !safeEmail || !safeEmail.includes('@')) {
+        setIsSaving(false);
+        return;
+      }
       const safeAvatar = formData.avatarUrl || artisan.avatarUrl || DEFAULT_AVATAR;
 
       const updatedProfile: ArtisanProfile = {
@@ -364,15 +456,23 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
       try {
         if (isSupabaseConfigured()) {
-          await supabase.auth.updateUser({
+          const authUpdates: any = {
             data: {
               avatar_url: safeAvatar,
               full_name: safeName,
               city: selectedCity,
               state: selectedState,
               location: combinedLocation,
+              mobile_number: safeMobile,
             },
-          });
+          };
+          if (safeEmail && safeEmail !== artisan.email) {
+            authUpdates.email = safeEmail;
+          }
+          if (safeMobile && safeMobile !== artisan.mobile) {
+            authUpdates.phone = formatToE164(safeMobile);
+          }
+          await supabase.auth.updateUser(authUpdates);
         }
       } catch (authMetaErr) {
         console.warn('[Supabase auth meta update warning]:', authMetaErr);
@@ -415,7 +515,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           className={`w-full max-w-md rounded-3xl p-6 shadow-2xl border my-8 relative overflow-hidden max-h-[90vh] overflow-y-auto ${
             isDark
-              ? 'bg-[#1C221A] text-[#F4ECDE] border-[#2D3A2B]'
+              ? 'bg-[#1C1714] text-[#EDE8E3] border-[#3A2D27]'
               : 'bg-[#F4ECDE] text-[#1A1815] border-[#22331E]/15'
           }`}
         >
@@ -646,74 +746,185 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               </div>
             </div>
 
-            {/* SEPARATE CONTACT EDIT OPTIONS: MOBILE NUMBER & EMAIL ADDRESS */}
-            <div className="bg-black/5 dark:bg-white/5 p-3.5 rounded-2xl border border-[#22331E]/10 space-y-3">
-              <div className="flex items-center gap-1.5 text-xs font-bold font-serif uppercase tracking-wider text-[#B5451B]">
+            {/* SEPARATE CONTACT EDIT OPTIONS: MOBILE NUMBER & EMAIL ADDRESS WITH STRICT VERIFICATION */}
+            <div className={`p-3.5 rounded-2xl border space-y-3.5 ${
+              isDark ? 'bg-[#120F0D] border-[#3A2D27]' : 'bg-black/5 border-[#22331E]/10'
+            }`}>
+              <div className="flex items-center gap-1.5 text-xs font-bold font-serif uppercase tracking-wider text-[#E05326]">
                 <span className="material-symbols-outlined text-base">contact_phone</span>
                 <span>{t('contact_details', 'Contact Details (Mobile & Email)')}</span>
               </div>
 
               {/* 1. Mobile Number Option */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-medium opacity-80">
-                    {t('reg_mobile_num', 'Registered Mobile Number')} <span className="text-red-500">*</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-medium opacity-90">
+                    {t('reg_mobile_num', 'Registered Mobile Number')} <span className="text-red-500 font-bold">*</span>
                   </label>
+                  {/* Inline Verification / Requirement Status Tag */}
+                  {isMobileMissing ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">
+                      <span className="material-symbols-outlined text-[13px]">error</span>
+                      <span>Required (10 digits)</span>
+                    </span>
+                  ) : mobileNeedsVerification ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse">
+                      <span className="material-symbols-outlined text-[13px]">warning</span>
+                      <span>Unverified - Verification required</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                      <span>Verified</span>
+                    </span>
+                  )}
                 </div>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3 flex items-center gap-1 pointer-events-none text-xs font-mono font-bold opacity-75">
-                    <span>🇮🇳</span>
-                    <span>+91</span>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex items-center flex-1">
+                    <div className="absolute left-3 flex items-center gap-1 pointer-events-none text-xs font-mono font-bold opacity-75">
+                      <span>🇮🇳</span>
+                      <span>+91</span>
+                    </div>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      value={formData.mobile ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setFormData((prev) => ({ ...prev, mobile: val }));
+                      }}
+                      className={`w-full pl-16 pr-3.5 py-2.5 rounded-2xl border text-xs font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-[#E05326] ${
+                        isMobileMissing
+                          ? 'border-red-500/70 focus:border-red-500 ring-1 ring-red-500/30'
+                          : mobileNeedsVerification
+                          ? 'border-amber-500/60 focus:border-amber-500 ring-1 ring-amber-500/30'
+                          : isDark
+                          ? 'border-[#3A2D27]'
+                          : 'border-[#22331E]/20'
+                      } ${isDark ? 'bg-[#120F0D] text-white' : 'bg-white text-[#1A1815]'}`}
+                      placeholder={t('placeholder_mobile', '10-digit mobile number')}
+                    />
                   </div>
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    value={formData.mobile ?? ''}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                      setFormData((prev) => ({ ...prev, mobile: val }));
-                    }}
-                    className={`w-full pl-16 pr-3.5 py-2.5 rounded-2xl border text-xs font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] ${
-                      isDark
-                        ? 'bg-[#121411] border-[#2D3A2B] text-white'
-                        : 'bg-white border-[#22331E]/20 text-[#1A1815]'
-                    }`}
-                    placeholder={t('placeholder_mobile', '10-digit mobile number')}
-                  />
+                  {mobileNeedsVerification && (
+                    <button
+                      type="button"
+                      onClick={handleStartMobileVerification}
+                      disabled={enteredMobile.length < 10}
+                      className="px-3.5 py-2.5 rounded-2xl bg-[#E05326] hover:bg-[#C84318] text-white font-serif font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0 active:scale-95"
+                      title="Verify this mobile number via 6-digit OTP"
+                    >
+                      <span className="material-symbols-outlined text-sm">verified_user</span>
+                      <span>Verify</span>
+                    </button>
+                  )}
                 </div>
-                <p className="text-[10px] opacity-60 mt-1">
-                  {t('mobile_help_text', 'Primary mobile number used for GeM orders and buyer inquiries.')}
-                </p>
+                {isMobileMissing ? (
+                  <p className="text-[10px] text-red-400 font-medium mt-1 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-xs shrink-0">error</span>
+                    <span>Registered mobile number is mandatory and cannot be removed.</span>
+                  </p>
+                ) : (
+                  <p className="text-[10px] opacity-60 mt-1">
+                    {t('mobile_help_text', 'Primary mobile number used for GeM orders and buyer inquiries.')}
+                  </p>
+                )}
               </div>
 
               {/* 2. Email Address */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-medium opacity-80">
-                    {t('email_address', 'Email Address')} <span className="text-red-500">*</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-medium opacity-90">
+                    {t('email_address', 'Email Address')} <span className="text-red-500 font-bold">*</span>
                   </label>
+                  {/* Inline Verification / Requirement Status Tag */}
+                  {isEmailMissing ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">
+                      <span className="material-symbols-outlined text-[13px]">error</span>
+                      <span>Required</span>
+                    </span>
+                  ) : emailNeedsVerification ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse">
+                      <span className="material-symbols-outlined text-[13px]">warning</span>
+                      <span>Unverified - Verification required</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                      <span>Verified</span>
+                    </span>
+                  )}
                 </div>
-                <div className="relative flex items-center">
-                  <span className="material-symbols-outlined absolute left-3 text-sm opacity-60 pointer-events-none">
-                    mail
-                  </span>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email ?? ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                    className={`w-full pl-9 pr-3.5 py-2.5 rounded-2xl border text-xs font-sans focus:outline-hidden focus:ring-2 focus:ring-[#B5451B] ${
-                      isDark
-                        ? 'bg-[#121411] border-[#2D3A2B] text-white'
-                        : 'bg-white border-[#22331E]/20 text-[#1A1815]'
-                    }`}
-                    placeholder={t('placeholder_email', 'Enter email address')}
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="relative flex items-center flex-1">
+                    <span className="material-symbols-outlined absolute left-3 text-sm opacity-60 pointer-events-none">
+                      mail
+                    </span>
+                    <input
+                      type="email"
+                      required
+                      value={formData.email ?? ''}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                      className={`w-full pl-9 pr-3.5 py-2.5 rounded-2xl border text-xs font-sans focus:outline-hidden focus:ring-2 focus:ring-[#E05326] ${
+                        isEmailMissing
+                          ? 'border-red-500/70 focus:border-red-500 ring-1 ring-red-500/30'
+                          : emailNeedsVerification
+                          ? 'border-amber-500/60 focus:border-amber-500 ring-1 ring-amber-500/30'
+                          : isDark
+                          ? 'border-[#3A2D27]'
+                          : 'border-[#22331E]/20'
+                      } ${isDark ? 'bg-[#120F0D] text-white' : 'bg-white text-[#1A1815]'}`}
+                      placeholder={t('placeholder_email', 'Enter email address')}
+                    />
+                  </div>
+                  {emailNeedsVerification && (
+                    <button
+                      type="button"
+                      onClick={handleStartEmailVerification}
+                      disabled={isEmailMissing}
+                      className="px-3.5 py-2.5 rounded-2xl bg-[#E05326] hover:bg-[#C84318] text-white font-serif font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0 active:scale-95"
+                      title="Verify this email address via 6-digit OTP"
+                    >
+                      <span className="material-symbols-outlined text-sm">verified_user</span>
+                      <span>Verify</span>
+                    </button>
+                  )}
                 </div>
-                <p className="text-[10px] opacity-60 mt-1">
-                  {t('email_help_text', 'Primary email address used for 6-digit OTP verification and account security.')}
-                </p>
+                {isEmailMissing ? (
+                  <p className="text-[10px] text-red-400 font-medium mt-1 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-xs shrink-0">error</span>
+                    <span>Valid email address is mandatory and cannot be removed.</span>
+                  </p>
+                ) : (
+                  <p className="text-[10px] opacity-60 mt-1">
+                    {t('email_help_text', 'Primary email address used for 6-digit OTP verification and account security.')}
+                  </p>
+                )}
               </div>
+
+              {/* Missing Credential Notice Banner */}
+              {isMissingRequiredContact && (
+                <div className="flex items-start gap-2 p-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs">
+                  <span className="material-symbols-outlined text-base text-red-400 shrink-0 mt-0.5">error</span>
+                  <p className="leading-snug">
+                    {isMobileMissing && isEmailMissing
+                      ? 'Both mobile number and email address are mandatory. You cannot save the profile without both.'
+                      : isMobileMissing
+                      ? 'Mobile number is mandatory. You cannot save the profile without a 10-digit mobile number.'
+                      : 'Email address is mandatory. You cannot save the profile without a valid email address.'}
+                  </p>
+                </div>
+              )}
+
+              {/* Unverified Warning Banner */}
+              {!isMissingRequiredContact && hasUnverifiedChanges && (
+                <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs">
+                  <span className="material-symbols-outlined text-base text-amber-400 shrink-0 mt-0.5">info</span>
+                  <p className="leading-snug">
+                    Please verify your new mobile number or email address before saving.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* LOCATION SECTION: SEPARATE STATE & CITY DROPDOWN MENUS */}
@@ -909,40 +1120,70 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               />
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2.5 pt-2 sticky bottom-0 bg-inherit pb-2 z-20">
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playTap();
-                  onClose();
-                }}
-                className="flex-1 py-3 rounded-2xl font-serif text-xs font-bold border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-colors active:scale-95 cursor-pointer"
-              >
-                {t('cancel', 'Cancel')}
-              </button>
+            {/* Action Buttons with Strict Validation Guard */}
+            <div className="space-y-2 pt-2 sticky bottom-0 bg-inherit pb-2 z-20">
+              {/* Helper indicator if user cannot save */}
+              {isMissingRequiredContact ? (
+                <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-[11px] font-medium text-center">
+                  <span className="material-symbols-outlined text-xs">report_problem</span>
+                  <span>Both mobile number and email address are required to save profile.</span>
+                </div>
+              ) : hasUnverifiedChanges ? (
+                <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[11px] font-medium text-center">
+                  <span className="material-symbols-outlined text-xs">warning</span>
+                  <span>Please verify your new {mobileNeedsVerification && emailNeedsVerification ? 'mobile number and email address' : mobileNeedsVerification ? 'mobile number' : 'email address'} before saving.</span>
+                </div>
+              ) : null}
 
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="flex-1 bg-[#B5451B] hover:bg-[#9C3A14] text-white font-serif font-bold py-3 rounded-2xl text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-75"
-              >
-                {isSaving ? (
-                  <>
-                    <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
-                    <span>{t('saving', 'Saving...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-base">check</span>
-                    <span>{t('save_changes', 'Save Changes')}</span>
-                  </>
-                )}
-              </button>
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playTap();
+                    onClose();
+                  }}
+                  className="flex-1 py-3 rounded-2xl font-serif text-xs font-bold border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-colors active:scale-95 cursor-pointer"
+                >
+                  {t('cancel', 'Cancel')}
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={cannotSave}
+                  title={saveButtonTitle}
+                  className="flex-1 bg-[#E05326] hover:bg-[#C84318] text-white font-serif font-bold py-3 rounded-2xl text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? (
+                    <>
+                      <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                      <span>{t('saving', 'Saving...')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-base">check</span>
+                      <span>{t('save_changes', 'Save Profile Changes')}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </form>
         </motion.div>
       </div>
+
+      {/* Cascading OTP Verification Modal for Mobile & Email Changes */}
+      {otpModalConfig.isOpen && (
+        <CascadingOtpModal
+          isOpen={otpModalConfig.isOpen}
+          onClose={() => setOtpModalConfig((prev) => ({ ...prev, isOpen: false }))}
+          phone={otpModalConfig.targetPhone}
+          email={otpModalConfig.targetEmail}
+          existingEmail={artisan.email}
+          artisanName={formData.name || artisan.name}
+          verificationType={otpModalConfig.type}
+          onVerificationSuccess={handleOtpSuccess}
+        />
+      )}
     </AnimatePresence>
   );
 };

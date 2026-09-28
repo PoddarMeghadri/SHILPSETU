@@ -1,4 +1,5 @@
 import { ArtisanProfile, ProductItem } from '../types';
+import { DEFAULT_ARTISAN_AVATAR } from '../data/mockData';
 
 const API_BASE = '/api';
 
@@ -209,7 +210,7 @@ export const api = {
         city: resolvedCity,
         state: resolvedState,
         craft: data.craft || 'Traditional Handicrafts',
-        avatarUrl: data.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80',
+        avatarUrl: data.avatarUrl || DEFAULT_ARTISAN_AVATAR,
         completeness: data.completeness || 92,
         trustScore: data.trustScore || 98,
         udyamNumber: data.udyamNumber || 'UDYAM-UP-00-1294821',

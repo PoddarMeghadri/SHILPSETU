@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import sendWhatsappOtpHandler from './api/send-whatsapp-otp';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
@@ -78,6 +79,52 @@ app.get('/api/health', (req, res) => {
 /* =========================================================================
    1. AUTHENTICATION & OTP ENDPOINTS
    ========================================================================= */
+
+// Meta WhatsApp OTP Dispatcher (Tier 2 Fallback)
+app.post('/api/send-whatsapp-otp', sendWhatsappOtpHandler);
+
+// Meta WhatsApp Diagnostic & Status Endpoint
+app.get('/api/whatsapp-status', async (req, res) => {
+  const token = process.env.META_WHATSAPP_TOKEN;
+  const phoneId = process.env.META_PHONE_NUMBER_ID || '1273759089163100';
+  const hasToken = Boolean(token && !token.startsWith('<'));
+
+  if (!hasToken) {
+    return res.json({
+      configured: false,
+      message: 'META_WHATSAPP_TOKEN is not configured.',
+    });
+  }
+
+  try {
+    const phoneRes = await fetch(
+      `https://graph.facebook.com/v20.0/${phoneId}?fields=verified_name,display_phone_number,quality_rating,code_verification_status`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const phoneData = await phoneRes.json();
+
+    const tplRes = await fetch(
+      `https://graph.facebook.com/v20.0/1098057639373886?fields=name,status,category,components`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const tplData = await tplRes.json();
+
+    const isTestNumber = phoneData.display_phone_number?.includes('555-147-9194') || phoneId === '1273759089163100';
+
+    res.json({
+      configured: true,
+      phoneId,
+      phoneDetails: phoneData,
+      isTestNumber,
+      template: tplData,
+      guidance: isTestNumber
+        ? 'Using Meta Sandbox Test Number (+1 555-147-9194). WhatsApp messages will ONLY be delivered to numbers added to the allowed recipient list in Meta Developer Portal (WhatsApp -> API Setup -> Manage phone number list). To send to all users without restriction, register a real business phone number in WhatsApp Manager and set META_PHONE_NUMBER_ID.'
+        : 'Using registered live phone number.',
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Check if an account already exists with this email address
 app.post('/api/auth/check-email', (req, res) => {

@@ -6,6 +6,7 @@ import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
 import { useNotifications } from '../../context/NotificationContext';
 import { useAdminMode } from '../../context/AdminModeContext';
+import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
 
 interface DesktopSidebarProps {
   currentScreen: ScreenId;
@@ -457,7 +458,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         >
           <div className="relative shrink-0 mx-auto">
             <img
-              src={artisan.avatarUrl}
+              src={artisan.avatarUrl || DEFAULT_ARTISAN_AVATAR}
               alt={artisan.name}
               className={`${isCollapsed ? 'w-9 h-9' : 'w-10 h-10'} rounded-full object-cover border-2 ${
                 isAdminMode ? 'border-emerald-500' : 'border-[#E8B84B]'

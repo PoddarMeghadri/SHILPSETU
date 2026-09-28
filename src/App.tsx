@@ -36,6 +36,8 @@ export function App() {
   const { language, setLanguage } = useLanguage();
   const { isAdminMode, exitAdminMode, setIsAdminSessionActive } = useAdminMode();
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    if (localStorage.getItem('shilpsetu_onboarding_in_progress') === 'true') return false;
     return localStorage.getItem('shilpsetu_auth_done') === 'true';
   });
 
@@ -102,7 +104,11 @@ export function App() {
           p1Obj?.avatarUrl ||
           DEFAULT_ARTISAN_AVATAR
         );
-        const isOldUnsplash = typeof rawAvatar === 'string' && rawAvatar.includes('photo-1544005313-94ddf0286df2');
+        const isOldUnsplash = typeof rawAvatar === 'string' && (
+          rawAvatar.includes('images.unsplash.com') ||
+          rawAvatar.includes('photo-1544005313') ||
+          rawAvatar.includes('photo-1534528741')
+        );
         const finalAvatar = isOldUnsplash || !rawAvatar ? DEFAULT_ARTISAN_AVATAR : rawAvatar;
 
         const savedEmail = p2Obj?.email !== undefined 
@@ -231,7 +237,13 @@ export function App() {
           const preservedCity = (prev.city && prev.city !== 'Varanasi') ? prev.city : (serverProfile.city || prev.city);
           const preservedState = (prev.state && prev.state !== 'Uttar Pradesh') ? prev.state : (serverProfile.state || prev.state);
           const preservedLoc = (prev.location && prev.location !== 'Varanasi, Uttar Pradesh') ? prev.location : (serverProfile.location || prev.location);
-          const preservedAvatar = (prev.avatarUrl && prev.avatarUrl !== DEFAULT_ARTISAN_AVATAR) ? prev.avatarUrl : (serverProfile.avatarUrl || prev.avatarUrl);
+          const isPrevUnsplash = typeof prev.avatarUrl === 'string' && prev.avatarUrl.includes('images.unsplash.com');
+          const isServerUnsplash = typeof serverProfile.avatarUrl === 'string' && serverProfile.avatarUrl.includes('images.unsplash.com');
+          const preservedAvatar = (prev.avatarUrl && prev.avatarUrl !== DEFAULT_ARTISAN_AVATAR && !isPrevUnsplash) 
+            ? prev.avatarUrl 
+            : (serverProfile.avatarUrl && serverProfile.avatarUrl !== DEFAULT_ARTISAN_AVATAR && !isServerUnsplash 
+                ? serverProfile.avatarUrl 
+                : DEFAULT_ARTISAN_AVATAR);
           const preservedMobile = prev.mobile !== undefined ? prev.mobile : (serverProfile.mobile ?? '');
           const preservedEmail = prev.email !== undefined ? prev.email : (serverProfile.email ?? '');
 
@@ -258,10 +270,12 @@ export function App() {
       const syncProfileFromSession = async (session: any) => {
         if (!session?.user) return;
         if (localStorage.getItem('shilpsetu_pending_signin_otp') === 'true') return;
+        // Do NOT bypass onboarding while user is actively going through signup steps (1->2->3->4)
+        if (localStorage.getItem('shilpsetu_onboarding_in_progress') === 'true') return;
+        if (localStorage.getItem('shilpsetu_auth_done') !== 'true') return;
         if (session.access_token) {
           localStorage.setItem('shilpsetu_token', session.access_token);
         }
-        localStorage.setItem('shilpsetu_auth_done', 'true');
         setHasCompletedOnboarding(true);
 
         try {
@@ -349,14 +363,13 @@ export function App() {
               'Varanasi, Uttar Pradesh'
             ).trim();
 
-            const isProfAvatarDefault = !prof?.avatar_url || prof?.avatar_url === DEFAULT_ARTISAN_AVATAR;
-            const hasCustomLocalAvatar = Boolean(localAvatar && localAvatar !== DEFAULT_ARTISAN_AVATAR);
+            const isProfAvatarDefault = !prof?.avatar_url || prof?.avatar_url === DEFAULT_ARTISAN_AVATAR || prof?.avatar_url?.includes('images.unsplash.com');
+            const hasCustomLocalAvatar = Boolean(localAvatar && localAvatar !== DEFAULT_ARTISAN_AVATAR && !localAvatar.includes('images.unsplash.com'));
             const avatarUrl = (
               (hasCustomLocalAvatar && isProfAvatarDefault ? localAvatar : null) ||
-              prof?.avatar_url ||
-              meta.avatar_url ||
-              localAvatar ||
-              prev.avatarUrl ||
+              (!isProfAvatarDefault ? prof?.avatar_url : null) ||
+              (meta.avatar_url && !meta.avatar_url.includes('images.unsplash.com') && meta.avatar_url !== DEFAULT_ARTISAN_AVATAR ? meta.avatar_url : null) ||
+              (hasCustomLocalAvatar ? localAvatar : null) ||
               DEFAULT_ARTISAN_AVATAR
             );
 
@@ -425,6 +438,8 @@ export function App() {
 
       const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
         if ((event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') && session?.user) {
+          if (localStorage.getItem('shilpsetu_onboarding_in_progress') === 'true') return;
+          if (localStorage.getItem('shilpsetu_auth_done') !== 'true') return;
           syncProfileFromSession(session);
         }
       });
@@ -692,23 +707,31 @@ export function App() {
         ? artisan.name
         : 'Master Artisan');
 
-    // Check if an existing avatar was already saved for this user
-    let existingAvatar = artisan.avatarUrl;
+    // Default profile picture strictly matching the blank DP (DEFAULT_ARTISAN_AVATAR)
+    // for all newly created accounts
+    let existingAvatar = DEFAULT_ARTISAN_AVATAR;
     try {
       const stored = localStorage.getItem('shilpsetu_artisan');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.avatarUrl && parsed.avatarUrl !== DEFAULT_ARTISAN_AVATAR) {
+        if (parsed.avatarUrl && parsed.avatarUrl !== DEFAULT_ARTISAN_AVATAR && !parsed.avatarUrl.includes('images.unsplash.com')) {
           existingAvatar = parsed.avatarUrl;
         }
       }
     } catch (_) {}
 
+    const isUnsplash = typeof existingAvatar === 'string' && existingAvatar.includes('images.unsplash.com');
+    const finalAvatar = isUnsplash || !existingAvatar ? DEFAULT_ARTISAN_AVATAR : existingAvatar;
+
+    // Reset uploaded portraits gallery for the fresh account
+    localStorage.removeItem('shilpsetu_uploaded_portraits');
+    localStorage.removeItem('shilpsetu_recent_photos');
+
     const updatedArtisan: ArtisanProfile = {
       ...artisan,
       name: registeredName,
       gender: data.gender || 'male',
-      avatarUrl: existingAvatar || DEFAULT_ARTISAN_AVATAR,
+      avatarUrl: finalAvatar,
       city: data.city?.trim() || artisan.city,
       state: data.state?.trim() || artisan.state,
       location: userLocation || (isAdminMode ? 'New Delhi, Delhi' : artisan.location),
@@ -716,6 +739,7 @@ export function App() {
       email: data.email?.trim() ? data.email.trim() : (isAdminMode ? 'admin@shilpsetu.in' : undefined),
       craft: isAdminMode ? 'Heritage Craft Curation & Governance' : craftInfo.craft,
       title: isAdminMode ? 'System Administrator & Master Curator' : craftInfo.title,
+      recentPhotos: [],
     };
 
     handleUpdateArtisan(updatedArtisan);
