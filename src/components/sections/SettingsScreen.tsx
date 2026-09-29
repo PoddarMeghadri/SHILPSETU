@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { MessageSquarePlus, Github, ExternalLink } from 'lucide-react';
 import { LanguageCode, ScreenId } from '../../types';
 import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
 import { useAdminMode, ADMIN_COLOR_PRESETS } from '../../context/AdminModeContext';
-import { validatePassword, passwordsMatch, passwordStrength, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from '../../services/passwordValidation';
-import { updateSupabasePassword } from '../../services/supabase';
+import { ChangePasswordModal } from '../settings/ChangePasswordModal';
 
 interface SettingsScreenProps {
   isOffline: boolean;
@@ -15,6 +15,74 @@ interface SettingsScreenProps {
   language?: LanguageCode;
   onLogout?: () => void;
 }
+
+export const AdminSettingsFeedbackSection: React.FC = () => {
+  const handleFeedbackClick = () => {
+    sound.playTap();
+    const recipient = 'shilpsetu210@gmail.com';
+    const subject = encodeURIComponent('ShilpSetu Admin Feedback & Suggestions');
+    const body = encodeURIComponent(
+      'Hello ShilpSetu Team,\n\nHere is my feedback regarding the admin platform:\n\n'
+    );
+    window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
+  };
+
+  return (
+    <div className="space-y-3 mb-6">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-400/80 px-1">
+        Community & Support
+      </h3>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Option 1: Give Us Feedback */}
+        <button
+          type="button"
+          onClick={handleFeedbackClick}
+          className="flex items-center justify-between p-4 rounded-xl bg-[#131E18] border border-[#233C2E] hover:border-emerald-500/50 hover:bg-[#182921] transition-all group text-left shadow-sm cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform shrink-0">
+              <MessageSquarePlus className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white group-hover:text-emerald-300 transition-colors">
+                Give us feedback
+              </p>
+              <p className="text-xs text-[#8BA496]">
+                Share thoughts or report issues via email
+              </p>
+            </div>
+          </div>
+          <ExternalLink className="w-4 h-4 text-[#8BA496] group-hover:text-emerald-400 transition-colors shrink-0" />
+        </button>
+
+        {/* Option 2: Check out the GitHub Repository */}
+        <a
+          href="https://github.com/PoddarMeghadri/SHILPSETU"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => sound.playTap()}
+          className="flex items-center justify-between p-4 rounded-xl bg-[#131E18] border border-[#233C2E] hover:border-emerald-500/50 hover:bg-[#182921] transition-all group text-left shadow-sm cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform shrink-0">
+              <Github className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white group-hover:text-emerald-300 transition-colors">
+                Check out the GitHub repository
+              </p>
+              <p className="text-xs text-[#8BA496]">
+                Explore code, docs & releases on GitHub
+              </p>
+            </div>
+          </div>
+          <ExternalLink className="w-4 h-4 text-[#8BA496] group-hover:text-emerald-400 transition-colors shrink-0" />
+        </a>
+      </div>
+    </div>
+  );
+};
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   isOffline,
@@ -34,14 +102,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   } = useAdminMode();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
-  const [isSavingPassword, setIsSavingPassword] = useState(false);
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
   const panelClass = `rounded-3xl p-5 border shadow-xs space-y-3 ${
     isDark
       ? 'bg-[#1C221A] border-[#2D3A2B] text-[#F4ECDE]'
@@ -263,11 +331,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </div>
       </div>
 
+      {/* Admin Mode Community & Feedback Section (Placed immediately before Account Settings) */}
+      {isAdminMode && <AdminSettingsFeedbackSection />}
+
       <div className={panelClass}>
         <h4 className="font-serif font-bold text-base">{t('account_settings', 'Account Settings')}</h4>
         {!isAdminMode && (
-          <button type="button" onClick={() => { sound.playTap(); setPasswordMessage(''); setShowPasswordModal(true); }}
-            className={`${rowClass} w-full p-3.5 flex items-center justify-between text-left hover:bg-black/5`}>
+          <button type="button" onClick={() => { sound.playTap(); setShowPasswordModal(true); }}
+            className={`${rowClass} w-full p-3.5 flex items-center justify-between text-left hover:bg-black/5 cursor-pointer`}>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-[#B5451B] text-white flex items-center justify-center"><span className="material-symbols-outlined text-lg">lock_reset</span></div>
               <div><p className="font-serif font-bold text-xs">{t('change_password', 'Change password')}</p><p className="text-[10px] opacity-75">{t('change_password_sub', 'Use a strong password for your account')}</p></div>
@@ -276,7 +347,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </button>
         )}
         <button type="button" onClick={() => { sound.playTap(); setShowLogoutModal(true); }}
-          className={`w-full ${rowClass} p-3.5 flex items-center justify-between text-left ${
+          className={`w-full ${rowClass} p-3.5 flex items-center justify-between text-left cursor-pointer ${
             isDark ? 'text-red-300 hover:bg-red-950/40' : 'text-red-700 hover:bg-red-100/90'
           }`}>
           <div className="flex items-center gap-3">
@@ -290,35 +361,33 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </button>
       </div>
 
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <form onSubmit={async (event) => {
-            event.preventDefault();
-            const validation = validatePassword(newPassword);
-            if (validation) { setPasswordMessage(validation); return; }
-            if (!passwordsMatch(newPassword, passwordConfirmation)) { setPasswordMessage(t('password_mismatch', 'Passwords do not match.')); return; }
-            setIsSavingPassword(true);
-            try {
-              const result = await updateSupabasePassword(newPassword);
-              if (!result.updated) throw new Error(result.error || t('unable_update_password', 'Unable to update password.'));
-              setPasswordMessage(t('password_updated', 'Password updated successfully.'));
-              setCurrentPassword(''); setNewPassword(''); setPasswordConfirmation('');
-              setTimeout(() => setShowPasswordModal(false), 900);
-            } catch (error: any) { setPasswordMessage(error?.message || t('unable_update_password', 'Unable to update password.')); }
-            finally { setIsSavingPassword(false); }
-          }} className={`w-full max-w-sm rounded-3xl p-6 border shadow-2xl space-y-3 ${isDark ? 'bg-[#1C221A] border-[#2D3A2B] text-[#F4ECDE]' : 'bg-[#F4ECDE] border-[#22331E]/20 text-[#1A1815]'}`}>
-            <h4 className="font-serif font-bold text-lg">{t('change_password', 'Change password')}</h4>
-            <div className="relative"><input aria-label={t('current_password', 'Current password')} type={showCurrentPassword ? 'text' : 'password'} required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder={t('current_password', 'Current password')} className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label={t('toggle_password', 'Toggle password')} onClick={() => setShowCurrentPassword((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showCurrentPassword ? 'visibility_off' : 'visibility'}</span></button></div>
-            <div className="relative"><input aria-label={t('new_password', 'New password')} type={showNewPassword ? 'text' : 'password'} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('new_password', 'New password')} className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label={t('toggle_password', 'Toggle password')} onClick={() => setShowNewPassword((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showNewPassword ? 'visibility_off' : 'visibility'}</span></button></div>
-            <div className="flex gap-1" aria-label="Password strength meter">{[1, 2, 3, 4, 5].map((level) => <span key={level} className={`h-1.5 flex-1 rounded-full ${passwordStrength(newPassword) >= level ? 'bg-[#B5451B]' : 'bg-black/10 dark:bg-white/10'}`} />)}</div>
-            <ul className="text-[10px] opacity-70 space-y-0.5"><li>{newPassword.length >= PASSWORD_MIN_LENGTH && newPassword.length <= PASSWORD_MAX_LENGTH ? '✓' : '○'} 8–16 characters</li><li>{/[A-Z]/.test(newPassword) && /[a-z]/.test(newPassword) ? '✓' : '○'} Uppercase and lowercase</li><li>{/\d/.test(newPassword) ? '✓' : '○'} Number</li><li>{/[!@#$%^&*(),.?":{}|<>]/.test(newPassword) ? '✓' : '○'} Special character</li></ul>
-            <div className="relative"><input aria-label={t('confirm_new_password', 'Confirm new password')} type={showPasswordConfirmation ? 'text' : 'password'} required value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} placeholder={t('confirm_new_password', 'Confirm new password')} className="w-full rounded-xl border p-2.5 pr-10 bg-transparent text-sm" /><button type="button" aria-label={t('toggle_password', 'Toggle password')} onClick={() => setShowPasswordConfirmation((value) => !value)} className="absolute right-2 top-2"><span className="material-symbols-outlined text-sm">{showPasswordConfirmation ? 'visibility_off' : 'visibility'}</span></button></div>
-            {passwordMessage && <p role="status" className="text-xs text-[#B5451B]">{passwordMessage}</p>}
-            <div className="flex gap-2 pt-2">
-              <button type="button" onClick={() => setShowPasswordModal(false)} className="flex-1 py-2.5 rounded-2xl border text-xs font-bold">{t('cancel', 'Cancel')}</button>
-              <button disabled={isSavingPassword} type="submit" className="flex-1 py-2.5 rounded-2xl bg-[#B5451B] text-white text-xs font-bold">{isSavingPassword ? t('saving', 'Saving…') : t('update_password', 'Update password')}</button>
-            </div>
-          </form>
+      {/* 6-Digit Cascading OTP Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        language={language}
+        onSuccess={(msg) => {
+          setToastMessage(msg || 'Password updated successfully');
+        }}
+      />
+
+      {/* Floating Password Update Confirmation Toast */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-[120] flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#1C1714] text-[#EDE8E3] border border-[#3A2D27] shadow-2xl backdrop-blur-md">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-lg">check_circle</span>
+          </div>
+          <div>
+            <p className="text-xs font-serif font-bold text-white">{toastMessage}</p>
+            <p className="text-[10px] text-[#A89F91]">Your credentials & account security have been updated.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="text-[#A89F91] hover:text-white p-1 rounded-full cursor-pointer ml-1"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
         </div>
       )}
 
