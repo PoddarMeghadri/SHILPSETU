@@ -145,6 +145,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     targetEmail?: string;
   } | null>(null);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const isSwitchingChannelRef = useRef(false);
+  const isSendingOtpRef = useRef(false);
+  const hasDispatchedEmailOtpRef = useRef(false);
 
   // Listen for Supabase authenticated session (e.g., if user clicked an email link)
   useEffect(() => {
@@ -213,7 +216,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     targetPhone: string,
     targetEmail: string,
     artisanName?: string,
-    isSignUp = false
+    isSignUp = false,
+    forceResend = false
   ): Promise<{
     channel: 'sms' | 'whatsapp' | 'email';
     confirmation?: any;
@@ -279,9 +283,16 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     // Tier 3: Final Fallback - Supabase Email OTP
     // ==========================================
     if (hasValidEmail) {
+      if (hasDispatchedEmailOtpRef.current && !forceResend) {
+        return {
+          channel: 'email',
+          notice: `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`,
+        };
+      }
       try {
-        const emailResult = await sendSupabaseOtp(cleanEmail, isSignUp);
+        const emailResult = await sendSupabaseOtp(cleanEmail, isSignUp, { force: forceResend });
         if (emailResult.sent) {
+          hasDispatchedEmailOtpRef.current = true;
           return {
             channel: 'email',
             notice: `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`,
@@ -334,6 +345,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         const targetEmail = String(profile.email || (identifier.includes('@') ? identifier : '')).toLowerCase();
         const registeredMobile = profile.mobile_number || (!identifier.includes('@') ? identifier : '');
 
+        hasDispatchedEmailOtpRef.current = false;
         const cascade = await dispatchCascadingOtp(
           registeredMobile,
           targetEmail,
@@ -450,6 +462,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           '';
 
         // 3. 3-TIER CASCADE: Phone SMS -> WhatsApp OTP -> Email OTP
+        hasDispatchedEmailOtpRef.current = false;
         const cascade = await dispatchCascadingOtp(
           registeredMobile || artisanMobile,
           targetEmail,
@@ -597,6 +610,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       return;
     }
 
+    hasDispatchedEmailOtpRef.current = false;
     const cascade = await dispatchCascadingOtp(
       cleanMobile,
       cleanEmail,
@@ -624,39 +638,89 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   };
 
   const switchOtpChannel = async () => {
-    if (isSendingOtp) return;
+    if (isSendingOtp || isSwitchingChannelRef.current) return;
+    isSwitchingChannelRef.current = true;
     setIsSendingOtp(true);
     setOtpError('');
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanMobile = mobile.replace(/\D/g, '');
 
-    // Strict 3-channel cycle: sms -> whatsapp -> email -> sms
-    let nextChannel: 'sms' | 'whatsapp' | 'email' = 'sms';
-    if (otpChannel === 'sms') {
-      nextChannel = 'whatsapp';
-    } else if (otpChannel === 'whatsapp') {
-      nextChannel = 'email';
-    } else {
-      nextChannel = 'sms';
-    }
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanMobile = mobile.replace(/\D/g, '');
 
-    let success = false;
-    let notice = '';
-    let error = '';
-
-    if (nextChannel === 'sms') {
-      clearPhoneRecaptcha();
-      const smsResult = await sendFirebasePhoneOtp(cleanMobile || mobile);
-      if (smsResult.sent && smsResult.confirmation) {
-        setPhoneConfirmation(smsResult.confirmation);
-        setWhatsappOtpCode(null);
-        success = true;
-        notice = `Verification code sent via SMS to ${maskPhone(cleanMobile || mobile)}`;
+      // Strict 3-channel cycle: sms -> whatsapp -> email -> sms
+      let nextChannel: 'sms' | 'whatsapp' | 'email' = 'sms';
+      if (otpChannel === 'sms') {
+        nextChannel = 'whatsapp';
+      } else if (otpChannel === 'whatsapp') {
+        nextChannel = 'email';
       } else {
-        console.warn('SMS failed, attempting WhatsApp fallback:', smsResult.error);
-        // Cascading attempt to WhatsApp
+        nextChannel = 'sms';
+      }
+
+      let success = false;
+      let notice = '';
+      let error = '';
+
+      if (nextChannel === 'sms') {
+        clearPhoneRecaptcha();
+        const smsResult = await sendFirebasePhoneOtp(cleanMobile || mobile);
+        if (smsResult.sent && smsResult.confirmation) {
+          setPhoneConfirmation(smsResult.confirmation);
+          setWhatsappOtpCode(null);
+          success = true;
+          notice = `Verification code sent via SMS to ${maskPhone(cleanMobile || mobile)}`;
+        } else {
+          console.warn('SMS failed, attempting WhatsApp delivery:', smsResult.error);
+          // Cascading attempt to WhatsApp
+          const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+          let waOk = false;
+          try {
+            const res = await fetch('/api/send-whatsapp-otp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                phone: formatToE164(cleanMobile || mobile),
+                otpCode: randomCode,
+                artisanName: fullName || 'Artisan',
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success && data.hasWhatsApp !== false) {
+              waOk = true;
+              nextChannel = 'whatsapp';
+              setWhatsappOtpCode(randomCode);
+              setPhoneConfirmation(null);
+              success = true;
+              notice = `SMS unavailable. Sent verification code to your WhatsApp at ${maskPhone(cleanMobile || mobile)}`;
+            }
+          } catch (_) {}
+
+          // If WhatsApp also failed, immediately cascade to Email OTP (single dispatch)
+          if (!waOk) {
+            if (hasDispatchedEmailOtpRef.current) {
+              nextChannel = 'email';
+              setPhoneConfirmation(null);
+              setWhatsappOtpCode(null);
+              success = true;
+              notice = `Unable to reach your mobile via WhatsApp. Sent verification code to your email at ${maskEmail(cleanEmail)}`;
+            } else {
+              const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
+              if (emailResult.sent) {
+                hasDispatchedEmailOtpRef.current = true;
+                nextChannel = 'email';
+                setPhoneConfirmation(null);
+                setWhatsappOtpCode(null);
+                success = true;
+                notice = `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`;
+              } else {
+                error = emailResult.error || 'Unable to send verification code to your email.';
+              }
+            }
+          }
+        }
+      } else if (nextChannel === 'whatsapp') {
         const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
-        let waOk = false;
+        let whatsappSuccess = false;
         try {
           const res = await fetch('/api/send-whatsapp-otp', {
             method: 'POST',
@@ -669,20 +733,53 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           });
           const data = await res.json().catch(() => ({}));
           if (res.ok && data.success && data.hasWhatsApp !== false) {
-            waOk = true;
-            nextChannel = 'whatsapp';
+            whatsappSuccess = true;
             setWhatsappOtpCode(randomCode);
             setPhoneConfirmation(null);
             success = true;
-            notice = `SMS failed. Sent verification code to your WhatsApp at ${maskPhone(cleanMobile || mobile)}`;
+            nextChannel = 'whatsapp';
+            notice = `SMS unavailable. Sent verification code to your WhatsApp at ${maskPhone(cleanMobile || mobile)}`;
+          } else {
+            console.warn('WhatsApp delivery restricted or unavailable. Switching to Email verification:', data);
           }
-        } catch (_) {}
+        } catch (err: any) {
+          console.warn('WhatsApp dispatch exception. Switching to Email verification:', err);
+        }
 
-        // If WhatsApp also failed, immediately cascade to Email OTP
-        if (!waOk) {
+        // During WhatsApp error or restriction, switch to Email OTP strictly once without duplicate dispatch
+        if (!whatsappSuccess) {
+          if (hasDispatchedEmailOtpRef.current) {
+            nextChannel = 'email';
+            setPhoneConfirmation(null);
+            setWhatsappOtpCode(null);
+            success = true;
+            notice = `Unable to reach your mobile via WhatsApp. Sent verification code to your email at ${maskEmail(cleanEmail)}`;
+            setOtpError('');
+          } else {
+            const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
+            if (emailResult.sent) {
+              hasDispatchedEmailOtpRef.current = true;
+              nextChannel = 'email';
+              setPhoneConfirmation(null);
+              setWhatsappOtpCode(null);
+              success = true;
+              notice = `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`;
+              setOtpError('');
+            } else {
+              error = emailResult.error || 'Unable to send verification code to your email.';
+            }
+          }
+        }
+      } else {
+        if (hasDispatchedEmailOtpRef.current) {
+          setPhoneConfirmation(null);
+          setWhatsappOtpCode(null);
+          success = true;
+          notice = `Verification code was sent to your email at ${maskEmail(cleanEmail)}`;
+        } else {
           const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
           if (emailResult.sent) {
-            nextChannel = 'email';
+            hasDispatchedEmailOtpRef.current = true;
             setPhoneConfirmation(null);
             setWhatsappOtpCode(null);
             success = true;
@@ -692,104 +789,62 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           }
         }
       }
-    } else if (nextChannel === 'whatsapp') {
-      const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
-      let whatsappSuccess = false;
-      try {
-        const res = await fetch('/api/send-whatsapp-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: formatToE164(cleanMobile || mobile),
-            otpCode: randomCode,
-            artisanName: fullName || 'Artisan',
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data.success && data.hasWhatsApp !== false) {
-          whatsappSuccess = true;
-          setWhatsappOtpCode(randomCode);
-          setPhoneConfirmation(null);
-          success = true;
-          nextChannel = 'whatsapp';
-          notice = `SMS failed. Sent verification code to your WhatsApp at ${maskPhone(cleanMobile || mobile)}`;
-        } else {
-          console.warn('WhatsApp delivery restricted or unavailable (e.g. 131030). Cascading directly to Email OTP:', data);
-        }
-      } catch (err: any) {
-        console.warn('WhatsApp dispatch exception. Cascading to Email OTP:', err);
-      }
 
-      // During WhatsApp error or restriction (e.g. 131030), automatically switch to Email OTP
-      if (!whatsappSuccess) {
-        const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
-        if (emailResult.sent) {
-          nextChannel = 'email';
-          setPhoneConfirmation(null);
-          setWhatsappOtpCode(null);
-          success = true;
-          notice = `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`;
-          setOtpError('');
-        } else {
-          error = emailResult.error || 'Unable to send verification code to your email.';
-        }
+      if (!success) {
+        setOtpError(error || 'Unable to switch verification channel.');
+        return;
       }
-    } else {
-      const emailResult = await sendSupabaseOtp(cleanEmail, authFlowMode === 'sign_up');
-      if (emailResult.sent) {
-        setPhoneConfirmation(null);
-        setWhatsappOtpCode(null);
-        success = true;
-        notice = `Unable to reach your mobile. Sent verification code to your email at ${maskEmail(cleanEmail)}`;
-      } else {
-        error = emailResult.error || 'Unable to send verification code to your email.';
-      }
+      setOtpChannel(nextChannel);
+      setOtpDigits(['', '', '', '', '', '']);
+      setResendCooldown(30);
+      setResendNotice(notice);
+    } finally {
+      setIsSendingOtp(false);
+      isSwitchingChannelRef.current = false;
     }
-
-    setIsSendingOtp(false);
-    if (!success) {
-      setOtpError(error || 'Unable to switch verification channel.');
-      return;
-    }
-    setOtpChannel(nextChannel);
-    setOtpDigits(['', '', '', '', '', '']);
-    setResendCooldown(30);
-    setResendNotice(notice);
   };
 
-  // Resend verification code with cooldown protection
+  // Resend verification code with cooldown protection and concurrency guard
   const handleResendOtp = async () => {
-    if (resendCooldown > 0 || isSendingOtp) return;
+    if (resendCooldown > 0 || isSendingOtp || isSendingOtpRef.current) return;
     if (isAdminMode) {
       setResendCooldown(30);
       setResendNotice('Admin Mode: Network calls bypassed.');
       setOtpDigits(['', '', '', '', '', '']);
       return;
     }
+    isSendingOtpRef.current = true;
     setIsSendingOtp(true);
     setOtpError('');
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanMobile = mobile.replace(/\D/g, '');
 
-    const cascade = await dispatchCascadingOtp(
-      cleanMobile,
-      cleanEmail,
-      fullName || 'Artisan',
-      authFlowMode === 'sign_up'
-    );
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanMobile = mobile.replace(/\D/g, '');
 
-    setIsSendingOtp(false);
-    if (cascade.error) {
-      setOtpError(cascade.error || 'Unable to resend your verification code.');
-      return;
+      hasDispatchedEmailOtpRef.current = false;
+      const cascade = await dispatchCascadingOtp(
+        cleanMobile,
+        cleanEmail,
+        fullName || 'Artisan',
+        authFlowMode === 'sign_up',
+        true
+      );
+
+      if (cascade.error) {
+        setOtpError(cascade.error || 'Unable to resend your verification code.');
+        return;
+      }
+
+      setOtpChannel(cascade.channel);
+      setPhoneConfirmation(cascade.confirmation || null);
+      setWhatsappOtpCode(cascade.whatsappCode || null);
+      setResendCooldown(30);
+      setResendNotice(cascade.notice);
+      setOtpDigits(['', '', '', '', '', '']);
+    } finally {
+      setIsSendingOtp(false);
+      isSendingOtpRef.current = false;
     }
-
-    setOtpChannel(cascade.channel);
-    setPhoneConfirmation(cascade.confirmation || null);
-    setWhatsappOtpCode(cascade.whatsappCode || null);
-    setResendCooldown(30);
-    setResendNotice(cascade.notice);
-    setOtpDigits(['', '', '', '', '', '']);
   };
 
   // Handle OTP digit changes for strictly 6 digits
@@ -2333,9 +2388,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   <div className="text-center pt-2">
                     <button
                       type="button"
-                      disabled={isSendingOtp}
+                      disabled={isSendingOtp || isSwitchingChannelRef.current}
                       onClick={switchOtpChannel}
-                      className="text-xs font-semibold text-[#B5451B] hover:underline disabled:opacity-50 cursor-pointer"
+                      className="text-xs font-semibold text-[#B5451B] hover:underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline cursor-pointer"
                     >
                       {otpChannel === 'sms'
                         ? "Didn't receive SMS? Try WhatsApp or Email instead"

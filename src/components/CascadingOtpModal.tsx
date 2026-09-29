@@ -39,6 +39,9 @@ export const CascadingOtpModal: React.FC<CascadingOtpProps> = ({
   const [generatedBackendOtp, setGeneratedBackendOtp] = useState<string | null>(null);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const inFlightDispatchRef = useRef(false);
+  const hasInitializedRef = useRef(false);
+  const hasDispatchedEmailOtpRef = useRef(false);
 
   // 30-second cooldown timer
   useEffect(() => {
@@ -172,13 +175,23 @@ export const CascadingOtpModal: React.FC<CascadingOtpProps> = ({
     return false;
   };
 
-  const dispatchEmailFallback = async (): Promise<boolean> => {
+  const dispatchEmailFallback = async (forceResend = false): Promise<boolean> => {
     const fallbackTarget = (existingEmail || email || '').trim().toLowerCase();
     if (!fallbackTarget || !fallbackTarget.includes('@')) return false;
 
+    // If an email OTP was already dispatched in this modal session and this is a fallback transition,
+    // preserve the existing OTP without generating and sending a duplicate email.
+    if (hasDispatchedEmailOtpRef.current && !forceResend) {
+      console.info('[Email Fallback]: Preserving existing single email OTP for', fallbackTarget);
+      setStatusMessage(`Unable to reach your mobile via WhatsApp. Sent verification code to your email at ${maskEmail(fallbackTarget)}`);
+      setActiveChannel('email');
+      return true;
+    }
+
     try {
-      const emailResult = await sendSupabaseOtp(fallbackTarget, true);
+      const emailResult = await sendSupabaseOtp(fallbackTarget, true, { force: forceResend });
       if (emailResult.sent) {
+        hasDispatchedEmailOtpRef.current = true;
         setStatusMessage(`Unable to reach your mobile. Sent verification code to your email at ${maskEmail(fallbackTarget)}`);
         setActiveChannel('email');
         setCooldown(30);
@@ -191,61 +204,58 @@ export const CascadingOtpModal: React.FC<CascadingOtpProps> = ({
     return false;
   };
 
-  // Master Mobile Cascade (SMS -> WhatsApp -> Fallback Email)
-  const startCascadingOtp = async () => {
+  // Master Mobile Cascade (SMS -> WhatsApp -> Email)
+  const startCascadingOtp = async (forceResend = false) => {
+    if (inFlightDispatchRef.current) return;
+    inFlightDispatchRef.current = true;
     setLoading(true);
     setErrorMessage(null);
     setOtp(['', '', '', '', '', '']);
 
-    const cleanDigits = (phone || '').replace(/\D/g, '');
-    if (cleanDigits.length < 10) {
-      setErrorMessage('Please provide a valid 10-digit mobile number.');
-      setLoading(false);
-      return;
-    }
+    try {
+      const cleanDigits = (phone || '').replace(/\D/g, '');
+      if (cleanDigits.length < 10) {
+        setErrorMessage('Please provide a valid 10-digit mobile number.');
+        return;
+      }
 
-    // Tier 1: Primary SMS
-    const smsOk = await dispatchSms();
-    if (smsOk) {
-      setLoading(false);
-      return;
-    }
+      // Tier 1: Primary SMS
+      const smsOk = await dispatchSms();
+      if (smsOk) return;
 
-    // Tier 2: WhatsApp
-    const waOk = await dispatchWhatsApp();
-    if (waOk) {
-      setLoading(false);
-      return;
-    }
+      // Tier 2: WhatsApp
+      const waOk = await dispatchWhatsApp();
+      if (waOk) return;
 
-    // Tier 3: Supabase Email Fallback
-    const emOk = await dispatchEmailFallback();
-    if (emOk) {
-      setLoading(false);
-      return;
-    }
+      // Tier 3: Supabase Email
+      const emOk = await dispatchEmailFallback(forceResend);
+      if (emOk) return;
 
-    setLoading(false);
-    setErrorMessage('Unable to dispatch verification code to your mobile or email. Please try again.');
+      setErrorMessage('Unable to dispatch verification code to your mobile or email. Please try again.');
+    } finally {
+      setLoading(false);
+      inFlightDispatchRef.current = false;
+    }
   };
 
   // ==========================================
   // SINGLE-CHANNEL EMAIL VERIFICATION (STRICT NO-FALLBACK)
   // ==========================================
   const startEmailVerification = async () => {
+    if (inFlightDispatchRef.current) return;
+    inFlightDispatchRef.current = true;
     setLoading(true);
     setErrorMessage(null);
     setOtp(['', '', '', '', '', '']);
     setActiveChannel('email');
 
-    const cleanEmail = (email || '').trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMessage('Please enter a valid email address.');
-      setLoading(false);
-      return;
-    }
-
     try {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        setErrorMessage('Please enter a valid email address.');
+        return;
+      }
+
       const result = await sendSupabaseOtp(cleanEmail, false);
       if (result.sent) {
         setStatusMessage(`Verification code sent strictly to your new email at ${maskEmail(cleanEmail)}`);
@@ -257,42 +267,60 @@ export const CascadingOtpModal: React.FC<CascadingOtpProps> = ({
       setErrorMessage(cleanError(err));
     } finally {
       setLoading(false);
+      inFlightDispatchRef.current = false;
     }
   };
 
-  // Manual Channel Switcher for Mobile flow
+  // Manual Channel Switcher for Mobile flow with single-dispatch cascade
   const switchChannel = async (targetChannel: 'phone_sms' | 'whatsapp' | 'email') => {
-    if (loading) return;
+    if (loading || inFlightDispatchRef.current) return;
+    inFlightDispatchRef.current = true;
     setLoading(true);
     setErrorMessage(null);
     setOtp(['', '', '', '', '', '']);
 
-    let ok = false;
-    if (targetChannel === 'phone_sms') {
-      ok = await dispatchSms();
-    } else if (targetChannel === 'whatsapp') {
-      ok = await dispatchWhatsApp();
-    } else if (targetChannel === 'email') {
-      ok = await dispatchEmailFallback();
-    }
+    try {
+      let ok = false;
+      if (targetChannel === 'phone_sms') {
+        ok = await dispatchSms();
+      } else if (targetChannel === 'whatsapp') {
+        ok = await dispatchWhatsApp();
+        if (!ok) {
+          // When WhatsApp delivery is restricted or fails, cleanly switch to email verification without sending duplicate OTP
+          console.info('[Channel Switcher]: WhatsApp delivery failed, switching to Email verification...');
+          ok = await dispatchEmailFallback(false);
+        }
+      } else if (targetChannel === 'email') {
+        ok = await dispatchEmailFallback(false);
+      }
 
-    setLoading(false);
-    if (!ok) {
-      setErrorMessage(`Unable to dispatch code via ${targetChannel === 'phone_sms' ? 'SMS' : targetChannel === 'whatsapp' ? 'WhatsApp' : 'Email'}.`);
+      if (!ok) {
+        setErrorMessage(`Unable to dispatch verification code via ${targetChannel === 'phone_sms' ? 'SMS' : targetChannel === 'whatsapp' ? 'WhatsApp or Email' : 'Email'}.`);
+      }
+    } finally {
+      setLoading(false);
+      inFlightDispatchRef.current = false;
     }
   };
 
-  // Master Initializer on Open
+  // Master Initializer on Open - Strictly run once per modal open
   useEffect(() => {
     if (isOpen) {
-      if (verificationType === 'email') {
-        startEmailVerification();
-      } else {
-        startCascadingOtp();
+      if (!hasInitializedRef.current) {
+        hasInitializedRef.current = true;
+        hasDispatchedEmailOtpRef.current = false;
+        if (verificationType === 'email') {
+          startEmailVerification();
+        } else {
+          startCascadingOtp(false);
+        }
+        setTimeout(() => {
+          inputRefs.current[0]?.focus();
+        }, 200);
       }
-      setTimeout(() => {
-        inputRefs.current[0]?.focus();
-      }, 200);
+    } else {
+      hasInitializedRef.current = false;
+      hasDispatchedEmailOtpRef.current = false;
     }
   }, [isOpen, verificationType, phone, email]);
 
@@ -509,16 +537,18 @@ export const CascadingOtpModal: React.FC<CascadingOtpProps> = ({
           <span>Didn't receive code?</span>
           <button
             type="button"
-            disabled={cooldown > 0 || loading}
+            disabled={cooldown > 0 || loading || inFlightDispatchRef.current}
             onClick={() => {
+              if (cooldown > 0 || loading || inFlightDispatchRef.current) return;
+              hasDispatchedEmailOtpRef.current = false;
               if (verificationType === 'email') {
                 startEmailVerification();
               } else {
-                startCascadingOtp();
+                startCascadingOtp(true);
               }
             }}
             className={`font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
-              cooldown > 0 ? 'text-[#6C635B] cursor-not-allowed' : 'text-[#B5451B] hover:underline'
+              cooldown > 0 || loading ? 'text-[#6C635B] cursor-not-allowed' : 'text-[#B5451B] hover:underline'
             }`}
           >
             {cooldown > 0 ? (
@@ -542,9 +572,9 @@ export const CascadingOtpModal: React.FC<CascadingOtpProps> = ({
             {activeChannel !== 'whatsapp' && (
               <button
                 type="button"
-                disabled={loading}
+                disabled={loading || inFlightDispatchRef.current}
                 onClick={() => switchChannel('whatsapp')}
-                className="text-[#E05326] hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                className="text-[#E05326] hover:underline font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
               >
                 <span className="material-symbols-outlined text-sm">chat</span>
                 <span>Try WhatsApp</span>
@@ -553,9 +583,9 @@ export const CascadingOtpModal: React.FC<CascadingOtpProps> = ({
             {activeChannel !== 'email' && (existingEmail || email) && (
               <button
                 type="button"
-                disabled={loading}
+                disabled={loading || inFlightDispatchRef.current}
                 onClick={() => switchChannel('email')}
-                className="text-[#E05326] hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                className="text-[#E05326] hover:underline font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
               >
                 <span className="material-symbols-outlined text-sm">mail</span>
                 <span>Try Email</span>
@@ -564,9 +594,9 @@ export const CascadingOtpModal: React.FC<CascadingOtpProps> = ({
             {activeChannel !== 'phone_sms' && (
               <button
                 type="button"
-                disabled={loading}
+                disabled={loading || inFlightDispatchRef.current}
                 onClick={() => switchChannel('phone_sms')}
-                className="text-[#E05326] hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                className="text-[#E05326] hover:underline font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
               >
                 <span className="material-symbols-outlined text-sm">sms</span>
                 <span>Try SMS</span>

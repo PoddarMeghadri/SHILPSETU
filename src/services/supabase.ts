@@ -92,20 +92,56 @@ export function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-/** Send a numeric email OTP through Supabase Auth. */
-export async function sendSupabaseOtp(email: string, shouldCreateUser = true) {
+// In-flight request tracker and timestamp cache to prevent duplicate email OTP dispatches
+const inFlightOtpRequests = new Map<string, Promise<{ sent: boolean; error?: string }>>();
+const recentOtpTimestamps = new Map<string, number>();
+const OTP_DEDUPE_WINDOW_MS = 25000; // 25-second deduplication guard window per email address
+
+/** Send a numeric email OTP through Supabase Auth with strict duplicate-dispatch prevention. */
+export async function sendSupabaseOtp(
+  email: string,
+  shouldCreateUser = true,
+  options?: { force?: boolean }
+) {
   if (!isSupabaseConfigured()) return { sent: false, error: SUPABASE_CONFIGURATION_ERROR };
   const cleanEmail = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return { sent: false, error: 'A valid email address is required.' };
-  try {
-    const { error } = await withAuthTimeout(
-      supabase.auth.signInWithOtp({ email: cleanEmail, options: { shouldCreateUser } }),
-      'Sending your verification code'
-    );
-    return error ? { sent: false, error: error.message } : { sent: true };
-  } catch (error) {
-    return { sent: false, error: error instanceof Error ? error.message : 'Unable to send verification code.' };
+
+  // If a request for this exact email is already in-flight, reuse it rather than spawning a duplicate
+  const existingInFlight = inFlightOtpRequests.get(cleanEmail);
+  if (existingInFlight) {
+    console.info(`[Supabase OTP]: Reusing in-flight verification code request for ${cleanEmail}`);
+    return existingInFlight;
   }
+
+  // If an OTP was successfully dispatched to this email within the dedupe window, suppress duplicate send unless explicitly forced
+  const lastSentTime = recentOtpTimestamps.get(cleanEmail) || 0;
+  const timeSinceLastSent = Date.now() - lastSentTime;
+  if (!options?.force && timeSinceLastSent < OTP_DEDUPE_WINDOW_MS) {
+    console.info(`[Supabase OTP]: Suppressed duplicate verification code dispatch within ${timeSinceLastSent}ms for ${cleanEmail}`);
+    return { sent: true };
+  }
+
+  const dispatchPromise = (async () => {
+    try {
+      const { error } = await withAuthTimeout(
+        supabase.auth.signInWithOtp({ email: cleanEmail, options: { shouldCreateUser } }),
+        'Sending your verification code'
+      );
+      if (error) {
+        return { sent: false, error: error.message };
+      }
+      recentOtpTimestamps.set(cleanEmail, Date.now());
+      return { sent: true };
+    } catch (error) {
+      return { sent: false, error: error instanceof Error ? error.message : 'Unable to send verification code.' };
+    } finally {
+      inFlightOtpRequests.delete(cleanEmail);
+    }
+  })();
+
+  inFlightOtpRequests.set(cleanEmail, dispatchPromise);
+  return dispatchPromise;
 }
 
 export async function verifySupabaseOtp(
