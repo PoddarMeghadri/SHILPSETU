@@ -7,6 +7,7 @@ import { useTranslation } from '../../services/translations';
 import { useNotifications } from '../../context/NotificationContext';
 import { useAdminMode } from '../../context/AdminModeContext';
 import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
+import { AvatarImage } from '../common/AvatarImage';
 
 interface DesktopSidebarProps {
   currentScreen: ScreenId;
@@ -457,8 +458,8 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           title={isCollapsed ? `${artisan.name} (${artisan.trustScore ?? 98}★ Trust Score)` : t('view_artisan_profile', 'View Artisan Profile')}
         >
           <div className="relative shrink-0 mx-auto">
-            <img
-              src={artisan.avatarUrl || DEFAULT_ARTISAN_AVATAR}
+            <AvatarImage
+              src={artisan.avatarUrl}
               alt={artisan.name}
               className={`${isCollapsed ? 'w-9 h-9' : 'w-10 h-10'} rounded-full object-cover border-2 ${
                 isAdminMode ? 'border-emerald-500' : 'border-[#E8B84B]'

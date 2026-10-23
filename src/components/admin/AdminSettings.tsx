@@ -6,6 +6,7 @@ import { ImageCropModal, validateAvatarFile } from '../profile/ImageCropModal';
 import { AdminSettingsFeedbackSection } from '../sections/SettingsScreen';
 import { Camera, Check, AlertCircle, Palette, RotateCcw } from 'lucide-react';
 import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
+import { AvatarImage } from '../common/AvatarImage';
 
 interface AdminSettingsProps {
   isDark?: boolean;
@@ -113,7 +114,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
         <div className="flex flex-col sm:flex-row items-center gap-5">
           <div className="relative shrink-0">
             <div className="w-20 h-20 rounded-full p-1 bg-gradient-to-tr from-emerald-600 via-teal-400 to-emerald-800 shadow-md overflow-hidden relative">
-              <img
+              <AvatarImage
                 src={avatarUrl}
                 alt="Admin avatar"
                 className="w-full h-full rounded-full object-cover border-2 border-[#131E18]"

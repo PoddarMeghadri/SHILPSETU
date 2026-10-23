@@ -11,6 +11,7 @@ import { formatToE164 } from '../../utils/phoneUtils';
 import { ImageCropModal, validateAvatarFile } from './ImageCropModal';
 import { useAdminMode } from '../../context/AdminModeContext';
 import { AlertCircle } from 'lucide-react';
+import { AvatarImage, cleanseAvatarUrl, isInvalidAvatarUrl } from '../common/AvatarImage';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -114,12 +115,18 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const cleaned = parsed.filter((p) => !isInvalidAvatarUrl(p));
+          if (cleaned.length > 0) return cleaned;
+        }
       } catch (_) {}
     }
-    return [artisan.avatarUrl || DEFAULT_AVATAR];
+    const safeAvatar = cleanseAvatarUrl(artisan.avatarUrl);
+    return [safeAvatar];
   });
-  const [selectedPortraitForDelete, setSelectedPortraitForDelete] = useState<string | null>(artisan.avatarUrl || null);
+  const [selectedPortraitForDelete, setSelectedPortraitForDelete] = useState<string | null>(() => {
+    return isInvalidAvatarUrl(artisan.avatarUrl) ? null : artisan.avatarUrl;
+  });
 
   const [recentPhotos, setRecentPhotos] = useState<string[]>(() => {
     const saved = localStorage.getItem('shilpsetu_recent_photos');
@@ -234,6 +241,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       setIsEmailVerified(false);
       setVerifiedEmailAddress(null);
       setOtpModalConfig({ isOpen: false, type: 'mobile', targetPhone: '', targetEmail: '' });
+      const safeAvatar = cleanseAvatarUrl(artisan.avatarUrl);
       setFormData({
         ...artisan,
         name: artisan.name || '',
@@ -243,19 +251,19 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         mobile: artisan.mobile !== undefined ? artisan.mobile : '',
         email: artisan.email || '',
         udyamNumber: artisan.udyamNumber || '',
-        avatarUrl: (artisan.avatarUrl && !artisan.avatarUrl.includes('images.unsplash.com')) ? artisan.avatarUrl : DEFAULT_AVATAR,
+        avatarUrl: safeAvatar,
       });
       const parsed = parseLocationString(artisan.location);
       setSelectedState(artisan.state || parsed.state || 'Uttar Pradesh');
       setSelectedCity(artisan.city || parsed.city || 'Varanasi');
-      const safeAvatar = (artisan.avatarUrl && !artisan.avatarUrl.includes('images.unsplash.com')) ? artisan.avatarUrl : DEFAULT_AVATAR;
       setSelectedPortraitForDelete(safeAvatar !== DEFAULT_AVATAR ? safeAvatar : null);
 
       // Ensure uploadedPortraits contains current avatar if custom
-      if (safeAvatar && safeAvatar !== DEFAULT_AVATAR && !safeAvatar.includes('images.unsplash.com')) {
+      if (safeAvatar && safeAvatar !== DEFAULT_AVATAR && !isInvalidAvatarUrl(safeAvatar)) {
         setUploadedPortraits((prev) => {
-          if (prev.includes(safeAvatar)) return prev;
-          const merged = [safeAvatar, ...prev].slice(0, 8);
+          const cleanedPrev = prev.filter((p) => !isInvalidAvatarUrl(p));
+          if (cleanedPrev.includes(safeAvatar)) return cleanedPrev;
+          const merged = [safeAvatar, ...cleanedPrev].slice(0, 8);
           safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(merged));
           return merged;
         });
@@ -623,7 +631,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               <div className="flex items-center gap-3 pt-1">
                 {/* Active Main Avatar Preview */}
                 <div className="relative shrink-0">
-                  <img
+                  <AvatarImage
                     src={formData.avatarUrl}
                     alt={formData.name}
                     className="w-16 h-16 rounded-full object-cover border-2 border-[#E8B84B] shadow-md shrink-0"
@@ -671,7 +679,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                             }`}
                             title={t('click_to_select_portrait', 'Click to select this portrait')}
                           >
-                            <img
+                            <AvatarImage
                               src={portrait}
                               alt={`Uploaded Portrait ${idx + 1}`}
                               className="w-full h-full object-cover"

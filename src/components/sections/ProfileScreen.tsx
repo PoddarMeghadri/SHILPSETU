@@ -11,6 +11,7 @@ import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
 import { useAdminMode } from '../../context/AdminModeContext';
 import { ImageCropModal, validateAvatarFile } from '../profile/ImageCropModal';
 import { uploadAvatarToSupabase, upsertSupabaseProfile } from '../../services/supabase';
+import { AvatarImage } from '../common/AvatarImage';
 
 const DEFAULT_AVATAR = DEFAULT_ARTISAN_AVATAR;
 
@@ -141,8 +142,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-[#B5451B] via-[#E8B84B] to-[#2E4638] shadow-md relative overflow-hidden block cursor-pointer group focus:outline-hidden"
               title={t('upload_photo', 'Click to change profile photo')}
             >
-              <img
-                src={artisan.avatarUrl || DEFAULT_AVATAR}
+              <AvatarImage
+                src={artisan.avatarUrl}
                 alt={artisan.name}
                 className="w-full h-full rounded-full object-cover border-2 border-[#F5EFE3] group-hover:opacity-90 transition-opacity"
               />

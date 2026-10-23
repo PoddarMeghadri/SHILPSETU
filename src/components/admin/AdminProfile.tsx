@@ -5,6 +5,7 @@ import { uploadAvatarToSupabase, upsertSupabaseProfile } from '../../services/su
 import { ImageCropModal, validateAvatarFile } from '../profile/ImageCropModal';
 import { ShieldCheck, Camera, Check, AlertCircle } from 'lucide-react';
 import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
+import { AvatarImage } from '../common/AvatarImage';
 
 interface AdminProfileProps {
   admin?: Partial<ArtisanProfile>;
@@ -116,8 +117,8 @@ export const AdminProfile: React.FC<AdminProfileProps> = ({
           {/* Avatar with Circular Mask and Quick Upload Button */}
           <div className="relative shrink-0">
             <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-emerald-600 via-teal-400 to-emerald-800 shadow-lg relative overflow-hidden">
-              <img
-                src={adminState.avatarUrl || DEFAULT_ARTISAN_AVATAR}
+              <AvatarImage
+                src={adminState.avatarUrl}
                 alt={adminState.name || 'Admin'}
                 className="w-full h-full rounded-full object-cover border-2 border-[#131E18]"
               />

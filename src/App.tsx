@@ -31,6 +31,7 @@ import {
   saveCraftToSupabase,
   fetchUserCraftsFromSupabase,
 } from './services/supabase';
+import { repairStoredAvatars, cleanseAvatarUrl } from './components/common/AvatarImage';
 
 export function App() {
   const { language, setLanguage } = useLanguage();
@@ -54,6 +55,9 @@ export function App() {
 
   // App State with localStorage persistence
   const [artisan, setArtisan] = useState<ArtisanProfile>(() => {
+    // Repair any corrupted or invalid stored avatars on boot
+    repairStoredAvatars();
+
     let p1Obj: any = null;
     let p2Obj: any = null;
     try {
@@ -96,7 +100,7 @@ export function App() {
           'Varanasi, Uttar Pradesh'
         ).trim();
 
-        const rawAvatar = (
+        const candidateAvatar = (
           (p2Obj?.avatarUrl && p2Obj.avatarUrl !== DEFAULT_ARTISAN_AVATAR ? p2Obj.avatarUrl : null) ||
           (p1Obj?.avatar_url && p1Obj.avatar_url !== DEFAULT_ARTISAN_AVATAR ? p1Obj.avatar_url : null) ||
           p2Obj?.avatarUrl ||
@@ -104,12 +108,7 @@ export function App() {
           p1Obj?.avatarUrl ||
           DEFAULT_ARTISAN_AVATAR
         );
-        const isOldUnsplash = typeof rawAvatar === 'string' && (
-          rawAvatar.includes('images.unsplash.com') ||
-          rawAvatar.includes('photo-1544005313') ||
-          rawAvatar.includes('photo-1534528741')
-        );
-        const finalAvatar = isOldUnsplash || !rawAvatar ? DEFAULT_ARTISAN_AVATAR : rawAvatar;
+        const finalAvatar = cleanseAvatarUrl(candidateAvatar);
 
         const savedEmail = p2Obj?.email !== undefined 
           ? p2Obj.email 

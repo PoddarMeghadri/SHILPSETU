@@ -712,7 +712,18 @@ export async function uploadAvatarToSupabase(
         if (!uploadError) {
           const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
           if (data?.publicUrl) {
-            resolvedUrl = data.publicUrl;
+            try {
+              // Verify the public URL actually returns HTTP 200 before trusting it
+              const probe = await fetch(data.publicUrl, { method: 'HEAD' });
+              if (probe.ok) {
+                resolvedUrl = data.publicUrl;
+              } else {
+                console.warn('[Supabase Storage avatar]: Public URL returned non-OK status', probe.status);
+              }
+            } catch {
+              // If fetch failed (CORS or network), do not risk saving a broken URL
+              console.warn('[Supabase Storage avatar]: Could not verify public URL connectivity');
+            }
           }
         } else {
           const isNetworkError =

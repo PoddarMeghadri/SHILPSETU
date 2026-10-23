@@ -6,6 +6,7 @@ import { BlueVerifiedBadge } from '../common/SocialIcons';
 import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
 import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
+import { AvatarImage } from '../common/AvatarImage';
 
 interface HomeScreenProps {
   artisan: ArtisanProfile;
@@ -48,8 +49,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           className="relative shrink-0 cursor-pointer focus:outline-hidden group"
           title={t('view_artisan_profile', 'View Artisan Profile')}
         >
-          <img
-            src={artisan.avatarUrl || DEFAULT_ARTISAN_AVATAR}
+          <AvatarImage
+            src={artisan.avatarUrl}
             alt={artisan.name}
             className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-[#E8B84B] shadow-xs group-hover:scale-105 transition-transform"
           />
