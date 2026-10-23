@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C94A1E" />
+      <stop offset="50%" stop-color="#B5451B" />
+      <stop offset="100%" stop-color="#872E0D" />
+    </linearGradient>
+    <linearGradient id="goldGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCE192" />
+      <stop offset="60%" stop-color="#E8B84B" />
+      <stop offset="100%" stop-color="#C29026" />
+    </linearGradient>
+  </defs>
+
+  <!-- Full-bleed background for Android maskable icon -->
+  <rect width="512" height="512" fill="url(#bgGradMask)" />
+
+  <!-- Inner safe zone (scaled to 80% around center 256, 256) -->
+  <g transform="translate(51.2, 51.2) scale(0.8)">
+    <!-- Outer Traditional Ring -->
+    <circle cx="256" cy="256" r="216" fill="none" stroke="url(#goldGradMask)" stroke-width="5" stroke-dasharray="8 6" opacity="0.6" />
+    <circle cx="256" cy="256" r="202" fill="none" stroke="url(#goldGradMask)" stroke-width="2.5" opacity="0.9" />
+
+    <!-- Inner Medallion -->
+    <circle cx="256" cy="256" r="180" fill="#1C1714" opacity="0.45" />
+
+    <!-- Sun Halo -->
+    <circle cx="256" cy="190" r="46" fill="url(#goldGradMask)" />
+
+    <!-- Radiant Rays -->
+    <line x1="256" y1="120" x2="256" y2="134" stroke="url(#goldGradMask)" stroke-width="4" stroke-linecap="round" />
+    <line x1="256" y1="246" x2="256" y2="260" stroke="url(#goldGradMask)" stroke-width="4" stroke-linecap="round" />
+    <line x1="186" y1="190" x2="200" y2="190" stroke="url(#goldGradMask)" stroke-width="4" stroke-linecap="round" />
+    <line x1="312" y1="190" x2="326" y2="190" stroke="url(#goldGradMask)" stroke-width="4" stroke-linecap="round" />
+
+    <!-- Sacred Kalash / Earthen Vessel Shape -->
+    <path d="M 216 230 C 216 210, 296 210, 296 230 C 316 250, 328 290, 296 330 C 276 355, 236 355, 216 330 C 184 290, 196 250, 216 230 Z" fill="url(#goldGradMask)" />
+    <path d="M 226 345 L 286 345 C 292 355, 280 365, 256 365 C 232 365, 220 355, 226 345 Z" fill="#F4ECDE" opacity="0.95" />
+
+    <!-- Supporting Hands -->
+    <path d="M 120 295 C 130 260, 170 240, 205 270 C 190 285, 175 310, 185 340 C 150 340, 128 320, 120 295 Z" fill="#F5EFE3" opacity="0.95" />
+    <path d="M 392 295 C 382 260, 342 240, 307 270 C 322 285, 337 310, 327 340 C 362 340, 384 320, 392 295 Z" fill="#F5EFE3" opacity="0.95" />
+    <path d="M 256 252 C 262 275, 276 295, 256 320 C 236 295, 250 275, 256 252 Z" fill="#B5451B" />
+
+    <!-- Typography -->
+    <text x="256" y="420" font-family="'Literata', 'Georgia', serif" font-size="34" font-weight="900" letter-spacing="4" fill="#FFFFFF" text-anchor="middle">
+      SHILPSETU
+    </text>
+    <text x="256" y="445" font-family="'Literata', 'Georgia', serif" font-style="italic" font-size="16" fill="#FCE192" opacity="0.9" text-anchor="middle">
+      BRIDGE OF CRAFT
+    </text>
+  </g>
+</svg>

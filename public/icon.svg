@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C94A1E" />
+      <stop offset="50%" stop-color="#B5451B" />
+      <stop offset="100%" stop-color="#872E0D" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCE192" />
+      <stop offset="60%" stop-color="#E8B84B" />
+      <stop offset="100%" stop-color="#C29026" />
+    </linearGradient>
+    <linearGradient id="sageGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1E3326" />
+      <stop offset="100%" stop-color="#3D5C4A" />
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-opacity="0.3" flood-color="#000000" />
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Outer Traditional Ring -->
+  <circle cx="256" cy="256" r="216" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-dasharray="8 6" opacity="0.6" />
+  <circle cx="256" cy="256" r="202" fill="none" stroke="url(#goldGrad)" stroke-width="2" opacity="0.9" />
+
+  <!-- Inner Medallion -->
+  <circle cx="256" cy="256" r="180" fill="#1C1714" opacity="0.45" />
+
+  <!-- Artisan Hands & Kalash / Pottery Silhouette -->
+  <g filter="url(#dropShadow)">
+    <!-- Decorative Sun Rays / Heritage Halo -->
+    <g opacity="0.85">
+      <circle cx="256" cy="190" r="48" fill="url(#goldGrad)" />
+      <!-- Radiant Rays -->
+      <line x1="256" y1="118" x2="256" y2="132" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round" />
+      <line x1="256" y1="248" x2="256" y2="262" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round" />
+      <line x1="184" y1="190" x2="198" y2="190" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round" />
+      <line x1="314" y1="190" x2="328" y2="190" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round" />
+      <line x1="205" y1="139" x2="215" y2="149" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round" />
+      <line x1="297" y1="231" x2="307" y2="241" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round" />
+      <line x1="307" y1="139" x2="297" y2="149" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round" />
+      <line x1="215" y1="231" x2="205" y2="241" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round" />
+    </g>
+
+    <!-- Sacred Kalash / Earthen Vessel Shape -->
+    <path d="M 216 230 C 216 210, 296 210, 296 230 C 316 250, 328 290, 296 330 C 276 355, 236 355, 216 330 C 184 290, 196 250, 216 230 Z" fill="url(#goldGrad)" />
+
+    <!-- Clay Base Stand -->
+    <path d="M 226 345 L 286 345 C 292 355, 280 365, 256 365 C 232 365, 220 355, 226 345 Z" fill="#F4ECDE" opacity="0.95" />
+
+    <!-- Supporting Artisan Left Hand (Curving Inwards) -->
+    <path d="M 120 295 C 130 260, 170 240, 205 270 C 190 285, 175 310, 185 340 C 150 340, 128 320, 120 295 Z" fill="#F5EFE3" opacity="0.95" />
+
+    <!-- Supporting Artisan Right Hand (Curving Inwards) -->
+    <path d="M 392 295 C 382 260, 342 240, 307 270 C 322 285, 337 310, 327 340 C 362 340, 384 320, 392 295 Z" fill="#F5EFE3" opacity="0.95" />
+
+    <!-- Central Lotus Petal Motif -->
+    <path d="M 256 252 C 262 275, 276 295, 256 320 C 236 295, 250 275, 256 252 Z" fill="#B5451B" />
+  </g>
+
+  <!-- ShilpSetu Banner Text -->
+  <text x="256" y="420" font-family="'Literata', 'Georgia', serif" font-size="34" font-weight="900" letter-spacing="4" fill="#FFFFFF" text-anchor="middle">
+    SHILPSETU
+  </text>
+  <text x="256" y="445" font-family="'Literata', 'Georgia', serif" font-style="italic" font-size="16" fill="#FCE192" opacity="0.9" text-anchor="middle">
+    BRIDGE OF CRAFT
+  </text>
+</svg>

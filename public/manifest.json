@@ -1,0 +1,58 @@
+{
+  "id": "/",
+  "name": "SHILPSETU — Bridge of Craft",
+  "short_name": "ShilpSetu",
+  "description": "AI-powered mobile platform for Indian artisans to photograph, auto-catalog in native languages, dynamically price, and sell handcrafted creations.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "theme_color": "#B5451B",
+  "background_color": "#F4ECDE",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["shopping", "business", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "AI Craft Studio",
+      "short_name": "Studio",
+      "description": "Snap and enhance your craft photos with AI studio lighting",
+      "url": "/?screen=studio",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "B2B Marketplace",
+      "short_name": "Sell",
+      "description": "Manage GeM listings and buyer orders",
+      "url": "/?screen=b2b",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
