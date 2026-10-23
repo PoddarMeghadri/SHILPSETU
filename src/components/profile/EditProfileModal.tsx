@@ -8,6 +8,9 @@ import { DEFAULT_ARTISAN_AVATAR } from '../../data/mockData';
 import { uploadAvatarToSupabase, upsertSupabaseProfile, supabase, isSupabaseConfigured } from '../../services/supabase';
 import { CascadingOtpModal } from '../CascadingOtpModal';
 import { formatToE164 } from '../../utils/phoneUtils';
+import { ImageCropModal, validateAvatarFile } from './ImageCropModal';
+import { useAdminMode } from '../../context/AdminModeContext';
+import { AlertCircle } from 'lucide-react';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -132,6 +135,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     const currentAvatar = artisan.avatarUrl;
     return list.filter((p) => p !== currentAvatar);
   });
+  const { isAdminMode } = useAdminMode();
+  const [cropModalSrc, setCropModalSrc] = useState<string | null>(null);
+  const [avatarValidationError, setAvatarValidationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
@@ -280,46 +286,59 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     setFormData((prev) => ({ ...prev, location: combinedLocation }));
   };
 
-  // Handle avatar upload to Supabase Storage 'avatars' bucket
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Intercept avatar file selection, validate .jpg/.jpeg/.png/.webp & 5MB limit, and open 1:1 circular crop modal
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      sound.playTap();
-      setIsUploadingAvatar(true);
+    if (!file) return;
+
+    if (e.target) {
+      e.target.value = '';
+    }
+
+    const validation = validateAvatarFile(file);
+    if (!validation.valid) {
+      sound.playError();
+      setAvatarValidationError(validation.error || 'Invalid image file.');
+      return;
+    }
+
+    setAvatarValidationError(null);
+    sound.playTap();
+    const objectUrl = URL.createObjectURL(file);
+    setCropModalSrc(objectUrl);
+  };
+
+  // Canvas Export & Cloud Storage Sync after 1:1 circular cropping
+  const handleCropComplete = async (croppedBlob: Blob, croppedDataUrl: string) => {
+    setIsUploadingAvatar(true);
+    try {
+      const uploadResult = await uploadAvatarToSupabase(croppedBlob, artisan.id);
+      const finalUrl = uploadResult.publicUrl || croppedDataUrl;
+
+      setFormData((prev) => ({ ...prev, avatarUrl: finalUrl }));
+      setSelectedPortraitForDelete(finalUrl);
+      const updatedPortraits = [finalUrl, ...uploadedPortraits.filter((p) => p !== finalUrl)].slice(0, 8);
+      setUploadedPortraits(updatedPortraits);
+      safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(updatedPortraits));
+
       try {
-        const uploadResult = await uploadAvatarToSupabase(file, artisan.id);
-        let finalUrl = uploadResult.publicUrl;
+        await upsertSupabaseProfile({
+          userId: artisan.id,
+          fullName: formData.name || artisan.name || 'Master Artisan',
+          avatarUrl: finalUrl,
+        });
+      } catch (_) {}
 
-        if (!finalUrl) {
-          // Robust client compression fallback if upload failed or returned empty
-          const rawUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (event) => resolve((event.target?.result as string) || '');
-            reader.onerror = () => resolve('');
-            reader.readAsDataURL(file);
-          });
-          if (rawUrl) {
-            finalUrl = await compressImage(rawUrl, 400, 400, 0.82);
-          }
-        }
-
-        if (finalUrl) {
-          setFormData((prev) => ({ ...prev, avatarUrl: finalUrl }));
-          setSelectedPortraitForDelete(finalUrl);
-          const updatedPortraits = [finalUrl, ...uploadedPortraits.filter((p) => p !== finalUrl)].slice(0, 8);
-          setUploadedPortraits(updatedPortraits);
-          safeLocalStorageSet('shilpsetu_uploaded_portraits', JSON.stringify(updatedPortraits));
-          sound.playSuccess();
-        }
-      } catch (err) {
-        console.warn('[Avatar upload error]:', err);
-      } finally {
-        setIsUploadingAvatar(false);
-        // Reset file input so selecting the same file again triggers onChange
-        if (e.target) {
-          e.target.value = '';
-        }
+      sound.playSuccess();
+    } catch (err) {
+      console.warn('[Avatar upload error]:', err);
+      setFormData((prev) => ({ ...prev, avatarUrl: croppedDataUrl }));
+    } finally {
+      setIsUploadingAvatar(false);
+      if (cropModalSrc) {
+        URL.revokeObjectURL(cropModalSrc);
       }
+      setCropModalSrc(null);
     }
   };
 
@@ -588,11 +607,18 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                 onChange={handleAvatarUpload}
                 className="hidden"
                 id="artisan-avatar-upload"
               />
+
+              {avatarValidationError && (
+                <div className="mb-2 p-2 rounded-xl bg-red-950/60 border border-red-500/40 text-red-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{avatarValidationError}</span>
+                </div>
+              )}
 
               <div className="flex items-center gap-3 pt-1">
                 {/* Active Main Avatar Preview */}
@@ -1170,6 +1196,21 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           </form>
         </motion.div>
       </div>
+
+      {/* Dedicated 1:1 Aspect Ratio Circular Image Crop Modal */}
+      {cropModalSrc && (
+        <ImageCropModal
+          isOpen={Boolean(cropModalSrc)}
+          imageSrc={cropModalSrc}
+          mode={isAdminMode ? 'admin' : 'user'}
+          onClose={() => {
+            if (cropModalSrc) URL.revokeObjectURL(cropModalSrc);
+            setCropModalSrc(null);
+          }}
+          onCropComplete={handleCropComplete}
+          isProcessing={isUploadingAvatar}
+        />
+      )}
 
       {/* Cascading OTP Verification Modal for Mobile & Email Changes */}
       {otpModalConfig.isOpen && (

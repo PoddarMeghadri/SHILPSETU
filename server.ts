@@ -27,7 +27,7 @@ import {
   generateSocialCaption,
 } from './server/ai.js';
 import { uploadMiddleware, saveBase64Image } from './server/storage.js';
-import { getSupabaseAdmin } from './server/supabase.js';
+import { getSupabaseAdmin, markSupabaseUnavailable, isFetchOrNetworkError } from './server/supabase.js';
 
 dotenv.config();
 
@@ -189,8 +189,12 @@ app.post('/api/auth/check-identity', async (req, res) => {
             }
           }
         }
-      } catch (authErr) {
-        console.warn('[Check Identity Supabase Auth Users Error]:', authErr);
+      } catch (authErr: any) {
+        if (isFetchOrNetworkError(authErr)) {
+          markSupabaseUnavailable();
+        } else {
+          console.warn('[Check Identity Supabase Auth Users Error]:', authErr);
+        }
       }
 
       // Check Supabase profiles table
@@ -232,8 +236,12 @@ app.post('/api/auth/check-identity', async (req, res) => {
             }
           }
         }
-      } catch (profErr) {
-        console.warn('[Check Identity Supabase Profiles Error]:', profErr);
+      } catch (profErr: any) {
+        if (isFetchOrNetworkError(profErr)) {
+          markSupabaseUnavailable();
+        } else {
+          console.warn('[Check Identity Supabase Profiles Error]:', profErr);
+        }
       }
     }
 
@@ -930,21 +938,31 @@ app.post('/api/storage/avatar', uploadMiddleware.single('image'), async (req, re
 
     if (sbAdmin) {
       try {
-        await sbAdmin.storage.createBucket('avatars', { public: true });
-      } catch (_) {}
+        await sbAdmin.storage.createBucket('avatars', { public: true }).catch(() => {});
 
-      const { error: uploadError } = await sbAdmin.storage
-        .from('avatars')
-        .upload(filePath, fileBuffer, {
-          contentType: mimeType,
-          upsert: true,
-        });
+        const { error: uploadError } = await sbAdmin.storage
+          .from('avatars')
+          .upload(filePath, fileBuffer, {
+            contentType: mimeType,
+            upsert: true,
+          });
 
-      if (!uploadError) {
-        const { data } = sbAdmin.storage.from('avatars').getPublicUrl(filePath);
-        publicUrl = data?.publicUrl || '';
-      } else {
-        console.warn('[Supabase Avatar Upload Warning]:', uploadError);
+        if (!uploadError) {
+          const { data } = sbAdmin.storage.from('avatars').getPublicUrl(filePath);
+          publicUrl = data?.publicUrl || '';
+        } else {
+          if (isFetchOrNetworkError(uploadError)) {
+            markSupabaseUnavailable();
+          } else {
+            console.warn('[Supabase Avatar Upload Warning]:', uploadError.message || uploadError);
+          }
+        }
+      } catch (storageErr: any) {
+        if (isFetchOrNetworkError(storageErr)) {
+          markSupabaseUnavailable();
+        } else {
+          console.warn('[Supabase Avatar Upload Warning]:', storageErr.message || storageErr);
+        }
       }
 
       if (publicUrl && userId && userId !== 'artisan_demo') {
@@ -1016,21 +1034,31 @@ app.post('/api/storage/craft', uploadMiddleware.single('image'), async (req, res
 
     if (sbAdmin) {
       try {
-        await sbAdmin.storage.createBucket('crafts', { public: true });
-      } catch (_) {}
+        await sbAdmin.storage.createBucket('crafts', { public: true }).catch(() => {});
 
-      const { error: uploadError } = await sbAdmin.storage
-        .from('crafts')
-        .upload(filePath, fileBuffer, {
-          contentType: mimeType,
-          upsert: true,
-        });
+        const { error: uploadError } = await sbAdmin.storage
+          .from('crafts')
+          .upload(filePath, fileBuffer, {
+            contentType: mimeType,
+            upsert: true,
+          });
 
-      if (!uploadError) {
-        const { data } = sbAdmin.storage.from('crafts').getPublicUrl(filePath);
-        publicUrl = data?.publicUrl || '';
-      } else {
-        console.warn('[Supabase Craft Upload Warning]:', uploadError);
+        if (!uploadError) {
+          const { data } = sbAdmin.storage.from('crafts').getPublicUrl(filePath);
+          publicUrl = data?.publicUrl || '';
+        } else {
+          if (isFetchOrNetworkError(uploadError)) {
+            markSupabaseUnavailable();
+          } else {
+            console.warn('[Supabase Craft Upload Warning]:', uploadError.message || uploadError);
+          }
+        }
+      } catch (storageErr: any) {
+        if (isFetchOrNetworkError(storageErr)) {
+          markSupabaseUnavailable();
+        } else {
+          console.warn('[Supabase Craft Upload Warning]:', storageErr.message || storageErr);
+        }
       }
     }
 
@@ -1103,8 +1131,12 @@ app.post('/api/crafts', async (req, res) => {
           savedInSupabase = true;
           record = data;
         }
-      } catch (err) {
-        console.warn('[Supabase Craft Insert Exception]:', err);
+      } catch (err: any) {
+        if (isFetchOrNetworkError(err)) {
+          markSupabaseUnavailable();
+        } else {
+          console.warn('[Supabase Craft Insert Exception]:', err.message || err);
+        }
       }
     }
 

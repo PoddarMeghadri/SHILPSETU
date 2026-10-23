@@ -715,10 +715,22 @@ export async function uploadAvatarToSupabase(
             resolvedUrl = data.publicUrl;
           }
         } else {
-          console.warn('[Supabase Storage avatar notice]:', uploadError.message);
+          const isNetworkError =
+            uploadError.message?.toLowerCase().includes('fetch failed') ||
+            uploadError.name === 'StorageUnknownError' ||
+            (uploadError as any).__isStorageError;
+          if (!isNetworkError) {
+            console.warn('[Supabase Storage avatar notice]:', uploadError.message);
+          }
         }
-      } catch (storageErr) {
-        console.warn('[Supabase Storage avatar exception]:', storageErr);
+      } catch (storageErr: any) {
+        const isNetworkError =
+          storageErr?.message?.toLowerCase().includes('fetch failed') ||
+          storageErr?.name === 'StorageUnknownError' ||
+          storageErr?.__isStorageError;
+        if (!isNetworkError) {
+          console.warn('[Supabase Storage avatar exception]:', storageErr);
+        }
       }
     }
 
