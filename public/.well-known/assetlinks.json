@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.shilpsetu.app",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:7D:0F:52:AB:E0:72:E4:63:75:11:A7:24:D3:5F:56:56:45:90:90:48:84:56:89:00:26:40:91:21:40"
+      ]
+    }
+  }
+]

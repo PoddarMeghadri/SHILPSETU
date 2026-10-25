@@ -66,6 +66,14 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 // Static uploads serving
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// Serve .well-known for Digital Asset Links (TWA Android Verification)
+app.use('/.well-known', express.static(path.join(process.cwd(), 'public', '.well-known'), {
+  setHeaders: (res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  },
+}));
+
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({
