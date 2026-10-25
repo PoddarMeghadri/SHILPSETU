@@ -883,8 +883,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   };
 
   // Verify Email OTP with Clerk, Supabase, and Backend
-  const handleVerifyOtp = async () => {
-    const fullOtp = otpDigits.join('');
+  const handleVerifyOtp = async (overrideDigits?: string[]) => {
+    const fullOtp = (overrideDigits || otpDigits).join('');
     if (fullOtp.length < otpLength) {
       setOtpError(`Please enter all ${otpLength} digits of your verification code`);
       return;
@@ -1388,6 +1388,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   id="btn-login-get-started"
                   onClick={() => {
                     sound.playTap();
+                    setAuthFlowMode('sign_in');
                     setCurrentStep(1);
                   }}
                   className="w-full py-4 bg-[#059669] hover:bg-[#047857] text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 group cursor-pointer"
@@ -2270,6 +2271,28 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   </button>
                 </div>
 
+                {/* Admin Mode Helper Banner */}
+                {isAdminMode && (
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/60 rounded-xl p-3 text-center space-y-2 max-w-sm mx-auto shadow-xs">
+                    <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                      <span className="material-symbols-outlined text-base">science</span>
+                      <span>🧪 Admin Bypass Mode: Use verification code 000000</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sound.playTap();
+                        const testOtp = ['0', '0', '0', '0', '0', '0'];
+                        setOtpDigits(testOtp);
+                        handleVerifyOtp(testOtp);
+                      }}
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-mono text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                    >
+                      [ Autofill Test OTP (000000) ]
+                    </button>
+                  </div>
+                )}
+
                 {/* Delivery Notice Banner */}
                 {isAdminMode ? null : (
                   <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl p-3 text-center space-y-1.5 max-w-sm mx-auto shadow-xs">
@@ -2308,6 +2331,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       inputMode="numeric"
                       pattern="[0-9]*"
                       maxLength={1}
+                      aria-label={`Digit ${idx + 1} of 6`}
                       value={digit}
                       onChange={(e) => handleOtpChange(idx, e.target.value)}
                       onKeyDown={(e) => {

@@ -841,10 +841,7 @@ export const AutoCatalogerScreen: React.FC<AutoCatalogerProps> = ({
         craftTitle={activeTab === 'native' ? title : englishTitle || title}
         category={category}
         price={price}
-        artisanName="Rameshwar Prasad"
-        artisanLocation="Jaipur, Rajasthan"
         materials={materials}
-        craftId="craft-terracotta-vase-98"
         isDark={isDark}
       />
     </div>

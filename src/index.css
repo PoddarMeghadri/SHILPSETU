@@ -27,6 +27,19 @@
   h1, h2, h3, .font-serif-heading {
     font-family: var(--font-serif);
   }
+
+  /* High contrast input placeholders for WCAG AA compliance */
+  input::placeholder,
+  textarea::placeholder {
+    color: #6b7280;
+    opacity: 0.85;
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #a3a3a3 !important;
+    opacity: 0.95 !important;
+  }
 }
 
 /* Enforced Dark Artisan Theme Components (Decoupled from OS mode) */

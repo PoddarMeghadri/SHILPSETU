@@ -1,16 +1,19 @@
 // ShilpSetu Progressive Web App Service Worker
-const CACHE_NAME = 'shilpsetucache-v2';
+const CACHE_NAME = 'shilpsetucache-v3';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/manifest.webmanifest',
+  '/app-logo.png',
   '/icon-192.png',
   '/icon-512.png',
   '/icon-maskable-512.png',
   '/launchericon-512.png',
+  '/launchericon-192.png',
   '/apple-touch-icon.png',
   '/favicon-32.png',
+  '/icon.svg',
 ];
 
 // Install: precache critical assets

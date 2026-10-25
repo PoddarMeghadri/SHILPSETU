@@ -1021,6 +1021,7 @@ export function App() {
           currentScreen={currentScreen}
           isDark={isDark}
           language={language}
+          onOpenShilpi={() => setIsVoiceModalOpen(true)}
           onNavigate={(scr) => {
             setCurrentScreen(scr);
             window.scrollTo({ top: 0, behavior: 'smooth' });

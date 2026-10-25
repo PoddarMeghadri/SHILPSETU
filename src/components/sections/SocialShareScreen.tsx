@@ -88,9 +88,12 @@ export const SocialShareScreen: React.FC<SocialShareScreenProps> = ({
                   onClick={() => {
                     sound.playTap();
                     setSelectedProduct(prod);
+                    const formattedTitle = prod.title.trim().toLowerCase().startsWith('handcrafted')
+                      ? prod.title.trim()
+                      : `Handcrafted ${prod.title.trim()}`;
                     setCaption(
                       `🏺 Directly from our workshop to your home.\n\n` +
-                        `Handcrafted ${prod.title}.\n\n` +
+                        `${formattedTitle}.\n\n` +
                         `✨ Price: ₹${prod.price} (Direct Artisan Price)\n` +
                         `📦 DM or WhatsApp to order direct from master artisan ${artisan.name}.\n\n` +
                         `#HandmadeInIndia #VocalForLocal #ShilpSetu #ArtisanDirect`

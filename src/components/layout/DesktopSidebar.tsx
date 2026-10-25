@@ -112,7 +112,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 <div className="flex items-center gap-1.5">
                   <h1
                     className={`font-serif font-black text-base lg:text-lg tracking-tight leading-none truncate ${
-                      isAdminMode ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#B5451B]'
+                      isAdminMode ? 'text-[#065f46] dark:text-emerald-400' : 'text-[#9a3412] dark:text-[#E8B84B]'
                     }`}
                     style={isAdminMode ? { color: isDark ? 'var(--admin-accent-dark-text)' : 'var(--admin-accent)' } : undefined}
                   >
@@ -233,7 +233,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         {/* Main Section */}
         <div className="space-y-1">
           {!isCollapsed && (
-            <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-[#B5451B] opacity-80 mb-2 font-sans">
+            <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-[#78350f] dark:text-[#E8B84B] opacity-90 mb-2 font-sans">
               {t('main_navigation', 'Main Navigation')}
             </p>
           )}
@@ -320,8 +320,8 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         {/* Secondary Artisan Toolkit Section */}
         <div className="space-y-1 pt-2 border-t border-current/10">
           {!isCollapsed ? (
-            <p className={`px-3 text-[10px] font-bold uppercase tracking-widest opacity-80 mb-2 font-sans ${
-              isAdminMode ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#B5451B]'
+            <p className={`px-3 text-[10px] font-bold uppercase tracking-widest opacity-90 mb-2 font-sans ${
+              isAdminMode ? 'text-[#065f46] dark:text-emerald-400' : 'text-[#78350f] dark:text-[#E8B84B]'
             }`}>
               {t('artisan_tools', 'Artisan Studio & Tools')}
             </p>
