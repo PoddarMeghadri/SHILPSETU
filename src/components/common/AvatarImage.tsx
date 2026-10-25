@@ -10,12 +10,6 @@ export function isInvalidAvatarUrl(url?: string | null): boolean {
   const trimmed = url.trim();
   if (!trimmed) return true;
   if (trimmed.startsWith('blob:')) return true;
-  if (
-    trimmed.includes('images.unsplash.com/photo-1544005313') ||
-    trimmed.includes('images.unsplash.com/photo-1534528741')
-  ) {
-    return true;
-  }
   if (trimmed === 'null' || trimmed === 'undefined' || trimmed === '[object Object]') {
     return true;
   }

@@ -96,25 +96,24 @@ export const Header: React.FC<HeaderProps> = ({
                 className="flex items-center gap-2 text-left group py-0.5"
               >
                 <ShilpSetuLogo size="xs" isDark={isDark} />
-                <span className="font-serif font-black text-base text-[#9a3412]">
-                  SHILPSETU
-                </span>
+                <div className="flex flex-col">
+                  <span className="font-serif font-black text-base text-[#9a3412] leading-tight">
+                    SHILPSETU
+                  </span>
+                  <span className="font-serif italic text-[10px] text-stone-600 dark:text-stone-300 leading-none">
+                    Every hand has a story
+                  </span>
+                </div>
               </button>
             )}
           </div>
 
-          {/* DESKTOP ONLY (md+): Page Title / Breadcrumbs (No duplicate logo or tagline!) */}
-          <div className="hidden md:flex items-center gap-2.5">
-            <nav className="flex items-center text-xs font-medium text-black/60 dark:text-white/60 space-x-1.5">
-              <span className="hover:text-black dark:hover:text-white cursor-pointer" onClick={() => onNavigate('home')}>
-                ShilpSetu
-              </span>
-              <span className="material-symbols-outlined text-xs opacity-40">chevron_right</span>
-              <span className="font-serif font-bold text-xs text-[#9a3412] dark:text-[#E8B84B]">
-                {breadcrumb.section}
-              </span>
-              <span className="material-symbols-outlined text-xs opacity-40">chevron_right</span>
-            </nav>
+          {/* DESKTOP ONLY (md+): Breadcrumbs (Workspace > SHILPSETU on home, section > title on all pages) */}
+          <div className="hidden md:flex items-center gap-2">
+            <span className="font-serif font-bold text-xs text-[#9a3412] dark:text-[#E8B84B]">
+              {breadcrumb.section}
+            </span>
+            <span className="material-symbols-outlined text-xs opacity-40">chevron_right</span>
             <h2 className="font-serif font-bold text-base lg:text-lg text-[#1A1815] dark:text-[#F4ECDE] leading-none">
               {breadcrumb.title}
             </h2>

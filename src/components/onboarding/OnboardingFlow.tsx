@@ -1388,7 +1388,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   id="btn-login-get-started"
                   onClick={() => {
                     sound.playTap();
-                    setAuthFlowMode('sign_in');
+                    setAuthFlowMode('sign_up');
                     setCurrentStep(1);
                   }}
                   className="w-full py-4 bg-[#059669] hover:bg-[#047857] text-white font-serif font-bold text-base rounded-full shadow-artisan active:scale-95 transition-all flex items-center justify-center gap-2 group cursor-pointer"

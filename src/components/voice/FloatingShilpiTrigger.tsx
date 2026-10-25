@@ -17,7 +17,7 @@ export const FloatingShilpiTrigger: React.FC<FloatingShilpiTriggerProps> = ({
 
   return (
     <div
-      className={`fixed bottom-24 right-4 md:bottom-6 md:right-6 z-40 pointer-events-auto select-none transition-all duration-300 ${className}`}
+      className={`hidden md:flex fixed md:bottom-6 md:right-6 z-40 pointer-events-auto select-none transition-all duration-300 ${className}`}
     >
       <button
         onClick={() => {

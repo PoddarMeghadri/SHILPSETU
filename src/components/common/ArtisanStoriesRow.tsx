@@ -3,6 +3,7 @@ import { StoryAvatar } from '../../types';
 import { sound } from '../../services/sound';
 import { useTranslation } from '../../services/translations';
 import { StoryModal, Story } from './StoryModal';
+import { AvatarImage } from './AvatarImage';
 
 export interface ArtisanStoriesRowProps {
   stories: StoryAvatar[];
@@ -83,10 +84,11 @@ export const ArtisanStoriesRow: React.FC<ArtisanStoriesRowProps> = ({
                   isDark ? 'border-[#1C221A]' : 'border-[#F4ECDE]'
                 }`}
               >
-                <img
+                <AvatarImage
                   src={story.avatarUrl}
                   alt={story.artisanName}
                   className="w-full h-full object-cover"
+                  fallbackSrc="https://images.unsplash.com/photo-1580489944761-15a19d654956?w=300&auto=format&fit=crop&q=80"
                 />
               </div>
             </div>

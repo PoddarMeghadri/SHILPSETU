@@ -91,6 +91,13 @@ export const StoryModal: React.FC<StoryModalProps> = ({
               src={story.artisanPhotoUrl}
               alt={story.artisanName}
               className="w-full h-full object-cover opacity-35 filter brightness-90 scale-105"
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (!target.dataset.fallback) {
+                  target.dataset.fallback = 'true';
+                  target.src = 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800&auto=format&fit=crop&q=80';
+                }
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#1A1815] via-[#1A1815]/80 to-black/80" />
           </div>
@@ -103,6 +110,13 @@ export const StoryModal: React.FC<StoryModalProps> = ({
                   src={story.avatarUrl}
                   alt={story.artisanName}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.dataset.fallback) {
+                      target.dataset.fallback = 'true';
+                      target.src = 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=300&auto=format&fit=crop&q=80';
+                    }
+                  }}
                 />
               </div>
               <div className="min-w-0">
